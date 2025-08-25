@@ -1,0 +1,11 @@
+[workspace]
+members = [
+    "anilist",
+    "common",
+    "server",
+]
+resolver = "3"
+
+[workspace.dependencies]
+anilist = { path = "anilist" }
+common = { path = "common" }

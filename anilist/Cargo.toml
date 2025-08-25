@@ -1,0 +1,11 @@
+[package]
+name = "anilist"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+graphql_client = "0.14"
+log = "0.4"
+reqwest = { version = "0.12", features = ["json"] }
+serde = "1"
+thiserror = "2.0"

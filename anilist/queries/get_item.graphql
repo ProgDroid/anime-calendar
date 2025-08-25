@@ -1,0 +1,19 @@
+query GetItem($id: Int) {
+    Media (id: $id) {
+		id
+        idMal
+		title {
+			romaji
+			english
+			native
+		}
+        duration
+        airingSchedule(notYetAired: true) {
+            nodes {
+                id
+                airingAt
+                episode
+            }
+        }
+	}
+}

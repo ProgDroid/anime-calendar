@@ -1,0 +1,32 @@
+schema {
+    query: Query
+}
+
+type Media {
+    id: Int!
+    idMal: Int
+    title: MediaTitle
+    airingSchedule: AiringScheduleConnection
+    duration: Int
+}
+
+type MediaTitle {
+    english: String
+    native: String
+    romaji: String
+}
+
+type AiringScheduleConnection {
+    nodes: [AiringSchedule]
+}
+
+type AiringSchedule {
+    id: Int!
+    airingAt: Int!
+    episode: Int!
+}
+
+type Query {
+    "Find media by ID"
+    Media (id: Int): Media
+}
