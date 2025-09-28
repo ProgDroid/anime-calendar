@@ -1,20 +1,27 @@
 mod config;
 mod controllers;
+mod error;
 mod mappers;
 mod server;
 mod services;
 
-use std::io::Result;
+use crate::{
+    config::{database::Database as DatabaseConfig, server::Server as ServerConfig},
+    error::Error,
+    mappers::{anilist::Anilist, database::Database},
+};
 
-use crate::{config::Server as ServerConfig, mappers::anilist::Anilist};
+pub type ServerResult<T> = std::result::Result<T, Error>;
+
+// TODO custom errors
 
 #[actix_web::main]
-async fn main() -> Result<()> {
+async fn main() -> ServerResult<()> {
     let anilist = Anilist::new();
-    // let database = Postgres::new();
+    let database = Database::new(DatabaseConfig::new()?).await?;
 
     let settings = ServerConfig::new().expect("Failed to load config");
 
-    server::start(&settings, anilist)?.await
+    Ok(server::start(&settings, anilist, database)?.await?)
 }
 // TODO add setting for adding specific episode times rather than all day settings

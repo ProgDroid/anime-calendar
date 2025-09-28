@@ -1,8 +1,9 @@
-use chrono::{NaiveDateTime, Utc};
+use chrono::NaiveDateTime;
 use common::{calendar::Calendar, language::Language};
 use icalendar::{Calendar as Ics, Component, Event, EventLike};
 use log::info;
 
+#[allow(deprecated, clippy::cast_possible_wrap)]
 pub fn generate_calendar_export(calendar: &Calendar) -> Ics {
     let events: Vec<Event> = calendar
         .items
@@ -13,7 +14,6 @@ pub fn generate_calendar_export(calendar: &Calendar) -> Ics {
             let items: Vec<Event> = item
                 .airing_schedule
                 .iter()
-                // .filter(|episode| episode.airing_at.to_int() as i64 >= Utc::now().timestamp()) // ? assumes we only fetched future episodes
                 .map(|episode| {
                     info!(
                         "Processing {} episode {} airing at {}",
