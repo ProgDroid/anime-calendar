@@ -1,7 +1,7 @@
 use anilist::{client::Client, ResponseItem};
 use common::{
     id::Id,
-    item::{Item, Repository as RepositoryItem},
+    item::{Item, Repository as RepositoryItem, Type},
     schedule::Schedule,
     timestamp::Timestamp,
     title::Title,
@@ -65,12 +65,22 @@ fn response_to_item(response: ResponseItem) -> Option<Item> {
                 },
             };
 
+            let media_type = match media.media_type {
+                Some(media_type) => match media_type {
+                    anilist::MediaType::ANIME => Type::Anime,
+                    anilist::MediaType::MANGA => Type::Manga,
+                    _ => Type::Anime,
+                },
+                None => Type::Anime, // TODO probably should do this differently
+            };
+
             Some(Item {
                 id: Id::new(media.id).unwrap(), // TODO handle
                 id_mal: media.id_mal,
                 title,
                 airing_schedule,
                 episode_duration: media.duration.unwrap_or_default(),
+                media_type,
             })
         }
         None => None,

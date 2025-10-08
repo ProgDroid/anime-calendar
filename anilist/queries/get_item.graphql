@@ -15,5 +15,6 @@ query GetItem($id: Int) {
                 episode
             }
         }
+        mediaType
 	}
 }

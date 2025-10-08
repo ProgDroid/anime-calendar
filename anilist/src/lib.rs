@@ -2,6 +2,7 @@ pub mod client;
 pub mod error;
 mod query;
 
+pub use query::get_item::get_item::MediaType;
 pub use query::get_item::get_item::ResponseData as ResponseItem;
 
 use crate::error::AnilistError;
