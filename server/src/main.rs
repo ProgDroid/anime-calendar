@@ -1,5 +1,6 @@
 mod config;
 mod controllers;
+mod entity;
 mod error;
 mod mappers;
 mod server;

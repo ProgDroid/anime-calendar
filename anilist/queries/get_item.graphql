@@ -1,4 +1,4 @@
-query GetItem($id: Int) {
+query GetItem($id: Int!) {
     Media (id: $id) {
 		id
         idMal
@@ -15,6 +15,6 @@ query GetItem($id: Int) {
                 episode
             }
         }
-        mediaType
+        mediaType: type
 	}
 }

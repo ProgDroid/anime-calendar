@@ -32,7 +32,11 @@ type AiringSchedule {
     episode: Int!
 }
 
+type Page {
+    media(id_in: [Int!]!): [Media!]
+}
+
 type Query {
-    "Find media by ID"
-    Media (id: Int!): Media
+    "Find media by IDs"
+    Page: Page!
 }

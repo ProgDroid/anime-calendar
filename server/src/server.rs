@@ -6,7 +6,7 @@ use log::LevelFilter;
 
 use crate::{
     config::server::Server as ServerConfig,
-    controllers::{calendar, item},
+    controllers::{calendar, item, items},
     mappers::{anilist::Anilist, database::Database},
     ServerResult,
 };
@@ -29,6 +29,7 @@ pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> Ser
             .wrap(Logger::default())
             .app_data(web::Data::new(repos.clone()))
             .service(item::get)
+            .service(items::get)
             .service(calendar::export)
     })
     .bind(format!("{}:{}", config.host, config.port))?

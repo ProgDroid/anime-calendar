@@ -35,4 +35,6 @@ pub struct Item {
 
 pub trait Repository {
     fn get_item(&self, id: u64) -> impl std::future::Future<Output = Option<Item>> + Send; // TODO should input here be Id type
+
+    fn get_items(&self, ids: Vec<u64>) -> impl std::future::Future<Output = Vec<Item>> + Send; // TODO should input here be Id types
 }
