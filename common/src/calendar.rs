@@ -1,6 +1,10 @@
+use serde::{Deserialize, Serialize};
+
 use crate::{id::Id, item::Item, language::Language};
 
+#[derive(Deserialize, Serialize)]
 pub struct Calendar {
+    #[serde(default)]
     pub id: Id,
     pub items: Vec<Item>,
     pub language: Language,

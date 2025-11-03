@@ -1,5 +1,9 @@
 use std::{convert::Infallible, str::FromStr};
 
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Language {
     English,
     Native,

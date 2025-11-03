@@ -1,5 +1,0 @@
-pub struct Calendar {
-    pub id: i32,
-    pub language: String,
-    pub name: String,
-}

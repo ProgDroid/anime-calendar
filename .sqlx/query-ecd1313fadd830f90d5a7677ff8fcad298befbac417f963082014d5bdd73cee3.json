@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendars\n            SET\n                language = $1,\n                name = $2\n            WHERE id = $3",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        {
+          "Custom": {
+            "name": "language",
+            "kind": {
+              "Enum": [
+                "english",
+                "romaji",
+                "native"
+              ]
+            }
+          }
+        },
+        "Varchar",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ecd1313fadd830f90d5a7677ff8fcad298befbac417f963082014d5bdd73cee3"
+}

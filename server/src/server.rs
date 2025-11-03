@@ -31,6 +31,8 @@ pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> Ser
             .service(item::get)
             .service(items::get)
             .service(calendar::export)
+            .service(calendar::put)
+            .service(calendar::get)
     })
     .bind(format!("{}:{}", config.host, config.port))?
     .run())
