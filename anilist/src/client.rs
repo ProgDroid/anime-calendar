@@ -5,7 +5,6 @@ use reqwest::Client as ReqwestClient;
 use crate::{
     error::AnilistError,
     query::{
-        get_item::{get_item, GetItem},
         get_items::{get_items, GetItems},
     },
     Result,
@@ -30,12 +29,8 @@ impl Client {
     /// Returns `ReqwestError` if request or response parsing fails
     /// Returns `GenericError` if response contains errors
     /// Returns `MissingData` if there's no errors or data in the response
-    /// # Panics
-    /// It won't, remove this // TODO
-    pub async fn get_item(&self, id: i64) -> Result<get_item::ResponseData> {
-        let request_body = GetItem::build_query(get_item::Variables { id });
-
-        debug!("{:?}", request_body.query);
+    pub async fn get_item(&self, id: i64) -> Result<get_items::ResponseData> {
+        let request_body = GetItems::build_query(get_items::Variables { ids: vec![id] });
 
         let res = self
             .client
@@ -46,7 +41,7 @@ impl Client {
             .send()
             .await?;
 
-        let response_body: Response<get_item::ResponseData> = res.json().await?;
+        let response_body: Response<get_items::ResponseData> = res.json().await?;
 
         if let Some(errors) = response_body.errors
             && !errors.is_empty() {
@@ -67,8 +62,6 @@ impl Client {
     /// Returns `ReqwestError` if request or response parsing fails
     /// Returns `GenericError` if response contains errors
     /// Returns `MissingData` if there's no errors or data in the response
-    /// # Panics
-    /// It won't, remove this // TODO
     pub async fn get_items(&self, ids: Vec<i64>) -> Result<get_items::ResponseData> {
         let request_body = GetItems::build_query(get_items::Variables { ids });
 

@@ -14,8 +14,6 @@ use crate::{
 
 pub type ServerResult<T> = std::result::Result<T, Error>;
 
-// TODO custom errors
-
 #[actix_web::main]
 async fn main() -> ServerResult<()> {
     let anilist = Anilist::new();

@@ -1,3 +1,4 @@
+use secrecy::ExposeSecret;
 use sqlx::{Pool, Postgres, QueryBuilder};
 
 use crate::{
@@ -17,7 +18,7 @@ impl Database {
             format!(
                 "postgres://{}:{}@{}/{}",
                 config.user,
-                config.pass,
+                config.pass.expose_secret(),
                 format_args!("{}:{}", config.host, config.port),
                 config.database
             )
@@ -28,7 +29,6 @@ impl Database {
         Ok(Self { client: pool })
     }
 
-    // TODO resolve these sign shenanigans
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     pub async fn get_calendar(&self, id: u64) -> ServerResult<Option<Calendar>> {
         let mut db_calendar = sqlx::query_as!(

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{error::Error, id::Id, schedule::Schedule, title::Title};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Type {
     Anime,
@@ -23,7 +23,7 @@ impl FromStr for Type {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct Item {
     pub id: Id,
     pub id_mal: Option<i64>,
@@ -34,7 +34,7 @@ pub struct Item {
 }
 
 pub trait Repository {
-    fn get_item(&self, id: u64) -> impl std::future::Future<Output = Option<Item>> + Send; // TODO should input here be Id type
+    fn get_item(&self, id: Id) -> impl std::future::Future<Output = Option<Item>> + Send;
 
-    fn get_items(&self, ids: Vec<u64>) -> impl std::future::Future<Output = Vec<Item>> + Send; // TODO should input here be Id types
+    fn get_items(&self, ids: Vec<Id>) -> impl std::future::Future<Output = Vec<Item>> + Send;
 }

@@ -1,6 +1,6 @@
 pub mod calendar;
-pub mod error;
-pub mod id; // TODO do all of these need to be pub
+mod error;
+pub mod id;
 pub mod item;
 pub mod language;
 pub mod schedule;

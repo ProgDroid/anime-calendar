@@ -38,12 +38,12 @@ pub struct Calendar {
 }
 
 impl Calendar {
-    #[allow(clippy::cast_possible_truncation)] // TODO fix
+    #[allow(clippy::cast_possible_truncation)]
     pub fn from_common(calendar: &CommonCalendar) -> Self {
         let item_ids: Vec<i32> = calendar
             .items
             .iter()
-            .map(|item| item.id.to_int() as i32)
+            .filter_map(|item| i32::try_from(item.id.to_int()).ok())
             .collect();
 
         Self {

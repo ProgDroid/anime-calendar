@@ -1,13 +1,14 @@
 use config::{Config, ConfigError, File};
+use secrecy::SecretString;
 use serde::Deserialize;
 
 const DATABASE_FILE: &str = "database.toml";
 
 #[allow(clippy::struct_field_names)]
-#[derive(Debug, Deserialize, Clone)]
+#[derive(Deserialize, Clone)]
 pub struct Database {
     pub user: String,
-    pub pass: String, // TODO secret?
+    pub pass: SecretString,
     pub host: String,
     pub port: String,
     pub database: String,

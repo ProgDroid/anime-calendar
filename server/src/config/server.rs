@@ -3,8 +3,6 @@ use serde::Deserialize;
 
 const CONFIG_FILE: &str = "config.toml";
 
-// TODO use secrets?
-
 #[derive(Debug, Deserialize, Clone)]
 pub struct Server {
     pub host: String,
