@@ -1,0 +1,14 @@
+export interface Title {
+  english: string;
+  native: string;
+  romaji: string;
+}
+
+export interface Item {
+  id: number;
+  id_mal: number | null;
+  title: Title;
+  media_type: 'ANIME' | 'MANGA';
+  episode_duration: number;
+  airing_schedule: any[];
+}

@@ -1,5 +1,6 @@
 use std::str::FromStr;
 
+use actix_cors::Cors;
 use actix_web::{dev::Server, middleware::Logger, web, App, HttpServer};
 use env_logger::Builder;
 use log::{error, LevelFilter};
@@ -33,6 +34,12 @@ pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> Ser
     Ok(HttpServer::new(move || {
         App::new()
             .wrap(Logger::default())
+            .wrap(
+                Cors::default()
+                    .allow_any_origin()
+                    .allow_any_method()
+                    .allow_any_header(),
+            )
             .app_data(web::Data::new(repos.clone()))
             .service(item::get)
             .service(items::get)

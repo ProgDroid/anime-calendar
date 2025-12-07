@@ -74,6 +74,9 @@ impl Database {
         .fetch_one(&self.client)
         .await?;
 
+        self.update_calendar_items(id, calendar.item_ids.clone())
+            .await?;
+
         Ok(Calendar { id, ..calendar })
     }
 
@@ -91,10 +94,18 @@ impl Database {
         .execute(&self.client)
         .await?;
 
-        let calendar_id = calendar.id;
+        self.update_calendar_items(calendar.id, calendar.item_ids.clone())
+            .await?;
 
-        let inserts: Vec<(i32, i32)> = calendar
-            .item_ids
+        Ok(calendar)
+    }
+
+    async fn update_calendar_items(
+        &self,
+        calendar_id: i32,
+        item_ids: Vec<i32>,
+    ) -> ServerResult<()> {
+        let inserts: Vec<(i32, i32)> = item_ids
             .iter()
             .map(|item_id| (calendar_id, *item_id))
             .collect();
@@ -110,6 +121,6 @@ impl Database {
 
         query_builder.build().execute(&self.client).await?;
 
-        Ok(calendar)
+        Ok(())
     }
 }

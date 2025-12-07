@@ -6,6 +6,7 @@ edition = "2024"
 [dependencies]
 actix-web = "4.11"
 actix-web-lab = "0.24"
+actix-cors = "0.7.1"
 anilist = { path = "../anilist" }
 chrono = "0.4"
 common = { path = "../common" }

@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Default, Serialize, Deserialize, Clone)]
+#[serde(transparent)]
 pub struct Id {
     value: i64,
 }
@@ -37,5 +38,12 @@ mod tests {
         let id = Id::new(1);
         assert!(id.is_some());
         assert!(id.unwrap().to_int() == 1);
+    }
+
+    #[test]
+    fn test_serialisation() {
+        let id = Id::new(1);
+
+        assert_eq!("1", serde_json::to_string(&id).unwrap().as_str());
     }
 }
