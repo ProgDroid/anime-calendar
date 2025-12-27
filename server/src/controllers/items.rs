@@ -2,7 +2,10 @@ use crate::server::Repos;
 
 use actix_web::{get, web, HttpResponse};
 use actix_web_lab::extract::Query;
-use common::{id::Id, item::Repository};
+use common::{
+    id::Id,
+    item::{Repository, Type},
+};
 use serde::Deserialize;
 
 #[derive(Deserialize)]
@@ -26,6 +29,28 @@ async fn get(data: web::Data<Repos>, ids: Query<Params>) -> HttpResponse {
     }
 
     let items = data.anilist.get_items(ids).await;
+
+    HttpResponse::Ok().json(items)
+}
+
+#[derive(Deserialize)]
+struct SearchParams {
+    name: String,
+    media_type: Option<Type>,
+}
+
+#[get("/search")]
+async fn search(data: web::Data<Repos>, name: Query<SearchParams>) -> HttpResponse {
+    let query = name.name.trim();
+
+    if query.is_empty() {
+        return HttpResponse::BadRequest().finish();
+    }
+
+    let items = data
+        .anilist
+        .search_items(query.to_string(), name.media_type.clone())
+        .await;
 
     HttpResponse::Ok().json(items)
 }

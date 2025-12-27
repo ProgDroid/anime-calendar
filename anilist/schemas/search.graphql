@@ -1,0 +1,42 @@
+schema {
+    query: Query
+}
+
+enum MediaType {
+    ANIME
+    MANGA
+}
+
+type Media {
+    id: Int!
+    idMal: Int
+    title: MediaTitle
+    airingSchedule: AiringScheduleConnection
+    duration: Int
+    type: MediaType
+}
+
+type MediaTitle {
+    english: String
+    native: String
+    romaji: String
+}
+
+type AiringScheduleConnection {
+    nodes: [AiringSchedule]
+}
+
+type AiringSchedule {
+    id: Int!
+    airingAt: Int!
+    episode: Int!
+}
+
+type Page {
+    media(search: String!): [Media!]
+}
+
+type Query {
+    "Find media by IDs"
+    Page: Page!
+}

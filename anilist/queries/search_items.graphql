@@ -1,0 +1,22 @@
+query SearchItems($name: String!) {
+    Page {
+        media(search: $name) {
+            id
+            idMal
+            title {
+                romaji
+                english
+                native
+            }
+            duration
+            airingSchedule(notYetAired: true) {
+                nodes {
+                    id
+                    airingAt
+                    episode
+                }
+            }
+            mediaType: type
+        }
+    }
+}

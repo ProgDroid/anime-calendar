@@ -37,4 +37,10 @@ pub trait Repository {
     fn get_item(&self, id: Id) -> impl std::future::Future<Output = Option<Item>> + Send;
 
     fn get_items(&self, ids: Vec<Id>) -> impl std::future::Future<Output = Vec<Item>> + Send;
+
+    fn search_items(
+        &self,
+        name: String,
+        media_type: Option<Type>,
+    ) -> impl std::future::Future<Output = Vec<Item>> + Send;
 }

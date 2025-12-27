@@ -43,6 +43,7 @@ pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> Ser
             .app_data(web::Data::new(repos.clone()))
             .service(item::get)
             .service(items::get)
+            .service(items::search)
             .service(calendar::export)
             .service(calendar::put)
             .service(calendar::get)
