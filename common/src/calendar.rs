@@ -1,3 +1,4 @@
+use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 use crate::{id::Id, item::Item, language::Language};
@@ -9,4 +10,6 @@ pub struct Calendar {
     pub items: Vec<Item>,
     pub language: Language,
     pub name: String, // TODO Name object?
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
 }

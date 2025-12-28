@@ -1,6 +1,6 @@
 use crate::{error::Error, server::Repos, services::calendar_export::generate_calendar_export};
 
-use actix_web::{get, put, web, HttpResponse, ResponseError};
+use actix_web::{delete, get, put, web, HttpResponse, ResponseError};
 use common::{calendar::Calendar, id::Id, item::Repository};
 use log::error;
 
@@ -33,6 +33,8 @@ async fn export(data: web::Data<Repos>, id: web::Path<u64>) -> HttpResponse {
                         items,
                         language: calendar_data.language.to_common_language(),
                         name: calendar_data.name,
+                        created_at: calendar_data.created_at,
+                        updated_at: calendar_data.updated_at,
                     };
 
                     let file = generate_calendar_export(&calendar);
@@ -77,8 +79,22 @@ async fn put(data: web::Data<Repos>, body: web::Json<Calendar>) -> HttpResponse 
     }
 }
 
-#[get("/calendar/{id}")]
-async fn get(data: web::Data<Repos>, id: web::Path<u64>) -> HttpResponse {
+#[get("/calendars")]
+async fn get_calendars(data: web::Data<Repos>) -> HttpResponse {
+    // TODO: Implement user-specific calendar retrieval
+    // For now, we'll return all calendars (this should be filtered by user)
+    // match data.database.get_calendars().await {
+    //     Ok(calendars) => HttpResponse::Ok().json(calendars),
+    //     Err(e) => {
+    //         error!("{e}");
+    //         Error::InternalServerError.error_response()
+    //     }
+    // }
+    HttpResponse::Ok().json("Not implemented yet")
+}
+
+#[get("/calendars/{id}")]
+async fn get_calendar(data: web::Data<Repos>, id: web::Path<u64>) -> HttpResponse {
     match data.database.get_calendar(*id).await {
         Ok(result) => match result {
             Some(calendar) => {
@@ -100,6 +116,8 @@ async fn get(data: web::Data<Repos>, id: web::Path<u64>) -> HttpResponse {
                         items,
                         language: calendar.language.to_common_language(),
                         name: calendar.name,
+                        created_at: calendar.created_at,
+                        updated_at: calendar.updated_at,
                     };
 
                     HttpResponse::Ok().json(web::Json(calendar))
@@ -114,4 +132,16 @@ async fn get(data: web::Data<Repos>, id: web::Path<u64>) -> HttpResponse {
             e.error_response()
         }
     }
+}
+
+#[delete("/calendars/{id}")]
+async fn delete_calendar(data: web::Data<Repos>, id: web::Path<u64>) -> HttpResponse {
+    // match data.database.delete_calendar(*id).await {
+    //     Ok(_) => HttpResponse::Ok().finish(),
+    //     Err(e) => {
+    //         error!("{e}");
+    //         e.error_response()
+    //     }
+    // }
+    HttpResponse::Ok().json("Not implemented yet")
 }

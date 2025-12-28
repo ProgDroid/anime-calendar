@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE calendars\n            SET\n                language = $1,\n                name = $2\n            WHERE id = $3",
+  "query": "UPDATE calendars\n            SET\n                language = $1,\n                name = $2,\n                user_id = $3\n            WHERE id = $4",
   "describe": {
     "columns": [],
     "parameters": {
@@ -18,10 +18,11 @@
           }
         },
         "Varchar",
+        "Int4",
         "Int4"
       ]
     },
     "nullable": []
   },
-  "hash": "ecd1313fadd830f90d5a7677ff8fcad298befbac417f963082014d5bdd73cee3"
+  "hash": "b01d0fa1adf22368d9094a0e87fa9fac36aebebba4fee685977d8f22a6e1285b"
 }

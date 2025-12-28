@@ -7,7 +7,7 @@ use log::{error, LevelFilter};
 
 use crate::{
     config::server::Server as ServerConfig,
-    controllers::{calendar, item, items},
+    controllers::{auth, calendar, item, items},
     mappers::{anilist::Anilist, database::Database},
     ServerResult,
 };
@@ -46,7 +46,14 @@ pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> Ser
             .service(items::search)
             .service(calendar::export)
             .service(calendar::put)
-            .service(calendar::get)
+            .service(calendar::get_calendar)
+            .service(calendar::get_calendars)
+            .service(calendar::delete_calendar)
+            .service(auth::login)
+            .service(auth::register)
+            .service(auth::get_current_user)
+            .service(auth::google_oauth)
+            .service(auth::github_oauth)
     })
     .bind(format!("{}:{}", config.host, config.port))?
     .run())

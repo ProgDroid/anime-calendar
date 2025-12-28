@@ -15,6 +15,20 @@ const itemsInCalendar = ref<Item[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 
+// Helper function to get title based on selected language
+const getSelectedItemTitle = (item: Item): string => {
+  switch (calendarLanguage.value) {
+    case 'english':
+      return item.title.english.length > 0 ? item.title.english : item.title.romaji
+    case 'romaji':
+      return item.title.romaji
+    case 'native':
+      return item.title.native
+    default:
+      return item.title.romaji
+  }
+}
+
 // Determine layout based on screen width (mobile: vertical, desktop/tablet: horizontal-cards)
 const isMobile = computed(() => {
   return window.innerWidth < 768
@@ -243,7 +257,7 @@ const clearCalendar = () => {
                 @click="!itemsInCalendar.some(calendarItem => calendarItem.id === item.id) && toggleItemSelection(item.id)"
               >
                 <div class="item-title-container">
-                  <p><strong>{{ item.title.romaji }}</strong></p>
+                  <p><strong>{{ getSelectedItemTitle(item) }}</strong></p>
                   <div class="item-type-pill">{{ item.media_type }}</div>
                 </div>
                 <p v-if="item.media_type === 'ANIME'">Episodes: {{ item.episode_duration }}</p>
@@ -309,7 +323,7 @@ const clearCalendar = () => {
               :key="item.id" 
               class="item-card"
             >
-              <p><strong>{{ item.title.romaji }}</strong></p>
+              <p><strong>{{ getSelectedItemTitle(item) }}</strong></p>
               <div class="item-type-pill">{{ item.media_type }}</div>
               <p v-if="item.media_type === 'ANIME'">Episodes: {{ item.episode_duration }}</p>
               <button @click="removeItemFromCalendar(item.id)" class="remove-button">Remove</button>
@@ -388,7 +402,7 @@ const clearCalendar = () => {
                     :key="item.id" 
                     class="item-card"
                   >
-                    <p><strong>{{ item.title.romaji }}</strong></p>
+                    <p><strong>{{ getSelectedItemTitle(item) }}</strong></p>
                     <div class="item-type-pill">{{ item.media_type }}</div>
                     <p v-if="item.media_type === 'ANIME'">Episodes: {{ item.episode_duration }}</p>
                     <button @click="removeItemFromCalendar(item.id)" class="remove-button">Remove</button>
@@ -469,7 +483,7 @@ const clearCalendar = () => {
                     }"
                     @click="!itemsInCalendar.some(calendarItem => calendarItem.id === item.id) && toggleItemSelection(item.id)"
                   >
-                    <p><strong>{{ item.title.romaji }}</strong></p>
+                    <p><strong>{{ getSelectedItemTitle(item) }}</strong></p>
                     <div class="item-type-pill">{{ item.media_type }}</div>
                     <p v-if="item.media_type === 'ANIME'">Episodes: {{ item.episode_duration }}</p>
                     <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="already-in-calendar-hint">
@@ -692,6 +706,10 @@ button:disabled {
 .add-button-container {
   padding: 10px;
   margin-top: 10px;
+}
+
+.add-button {
+  max-width: fit-content;
 }
 
 .already-in-calendar-hint {

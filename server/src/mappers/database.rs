@@ -4,6 +4,7 @@ use sqlx::{Pool, Postgres, QueryBuilder};
 use crate::{
     config::database::Database as Config,
     entity::calendar::{Calendar, Language},
+    entity::user::User,
     ServerResult,
 };
 
@@ -37,7 +38,10 @@ impl Database {
                 id,
                 ARRAY[]::INTEGER[] as \"item_ids!\",
                 language as \"language: Language\",
-                name
+                name,
+                user_id,
+                created_at,
+                updated_at
             FROM calendars WHERE id = $1",
             id as i32
         )
@@ -85,10 +89,12 @@ impl Database {
             "UPDATE calendars
             SET
                 language = $1,
-                name = $2
-            WHERE id = $3",
+                name = $2,
+                user_id = $3
+            WHERE id = $4",
             calendar.language.clone() as Language,
             calendar.name.clone(),
+            calendar.user_id,
             calendar.id.clone()
         )
         .execute(&self.client)
@@ -122,5 +128,49 @@ impl Database {
         query_builder.build().execute(&self.client).await?;
 
         Ok(())
+    }
+
+    // User methods
+    pub async fn get_user_by_id(&self, id: i32) -> ServerResult<Option<User>> {
+        let user = sqlx::query_as!(
+            User,
+            "SELECT id, username, email, password_hash, created_at, updated_at FROM users WHERE id = $1",
+            id
+        )
+        .fetch_optional(&self.client)
+        .await?;
+
+        Ok(user)
+    }
+
+    pub async fn get_user_by_email(&self, email: &str) -> ServerResult<Option<User>> {
+        let user = sqlx::query_as!(
+            User,
+            "SELECT id, username, email, password_hash, created_at, updated_at FROM users WHERE email = $1",
+            email
+        )
+        .fetch_optional(&self.client)
+        .await?;
+
+        Ok(user)
+    }
+
+    pub async fn create_user(
+        &self,
+        username: String,
+        email: String,
+        password_hash: Option<String>,
+    ) -> ServerResult<User> {
+        let user = sqlx::query_as!(
+            User,
+            "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, password_hash, created_at, updated_at",
+            username,
+            email,
+            password_hash
+        )
+        .fetch_one(&self.client)
+        .await?;
+
+        Ok(user)
     }
 }

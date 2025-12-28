@@ -10,6 +10,10 @@ pub enum Error {
     Config(#[from] config::ConfigError),
     #[error("Could not start server")] // TODO ?
     Server(#[from] std::io::Error),
+    #[error("Unauthorized")]
+    Unauthorised,
+    #[error("Invalid request data")]
+    InvalidRequest,
 }
 
 impl ResponseError for Error {
@@ -20,6 +24,8 @@ impl ResponseError for Error {
     fn status_code(&self) -> actix_web::http::StatusCode {
         match self {
             Self::NotFound => StatusCode::NOT_FOUND,
+            Self::Unauthorised => StatusCode::UNAUTHORIZED,
+            Self::InvalidRequest => StatusCode::BAD_REQUEST,
             Self::Database(_) | Self::Config(_) | Self::Server(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }

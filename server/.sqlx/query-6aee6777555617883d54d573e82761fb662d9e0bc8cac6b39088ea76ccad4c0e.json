@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                id,\n                ARRAY[]::INTEGER[] as \"item_ids!\",\n                language as \"language: Language\",\n                name\n            FROM calendars WHERE id = $1",
+  "query": "SELECT\n                id,\n                ARRAY[]::INTEGER[] as \"item_ids!\",\n                language as \"language: Language\",\n                name,\n                user_id,\n                created_at,\n                updated_at\n            FROM calendars WHERE id = $1",
   "describe": {
     "columns": [
       {
@@ -33,6 +33,21 @@
         "ordinal": 3,
         "name": "name",
         "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamp"
       }
     ],
     "parameters": {
@@ -44,8 +59,11 @@
       false,
       null,
       false,
+      false,
+      false,
+      false,
       false
     ]
   },
-  "hash": "d7d01609ce0e1d466406be4c85aa23b51b7f2d57567162ddd3d3b471fa0952f6"
+  "hash": "6aee6777555617883d54d573e82761fb662d9e0bc8cac6b39088ea76ccad4c0e"
 }

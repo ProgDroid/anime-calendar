@@ -35,6 +35,9 @@ pub struct Calendar {
     pub item_ids: Vec<i32>,
     pub language: Language,
     pub name: String,
+    pub user_id: Option<i32>, // Added user_id field for user-specific calendars
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
 }
 
 impl Calendar {
@@ -51,6 +54,9 @@ impl Calendar {
             item_ids,
             language: Language::from_common_language(&calendar.language),
             name: calendar.name.clone(),
+            user_id: None, // Default to None, will be set when creating user-specific calendars
+            created_at: calendar.created_at,
+            updated_at: calendar.updated_at,
         }
     }
 }
