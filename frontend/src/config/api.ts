@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import toml from 'toml'
+import axios from 'axios'
 
 // Default configuration
 const config = ref({
@@ -8,7 +9,14 @@ const config = ref({
   protocol: 'http'
 })
 
-// Load configuration from TOML file
+const api = axios.create({
+  baseURL: 'http://localhost:8080/api',
+})
+
+export const getApiUrl = (path: string): string => {
+  return `${api.defaults.baseURL}${path}`
+}
+
 export const loadConfig = async () => {
   try {
     const response = await fetch('/config.toml')
@@ -28,10 +36,4 @@ export const loadConfig = async () => {
   }
 }
 
-// Get the full API URL
-export const getApiUrl = (endpoint: string) => {
-  return `${config.value.protocol}://${config.value.host}:${config.value.port}${endpoint}`
-}
-
-// Export the config for use in other modules
-export default config.value
+export default api

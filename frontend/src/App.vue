@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
-import HomePage from '@/components/HomePage.vue'
-import CalendarPage from './components/CalendarPage.vue';
+import { onMounted } from 'vue'
+import { useAuthStore } from './stores/auth'
+
+const authStore = useAuthStore()
+
+onMounted(async () => {
+  await authStore.initAuth()
+})
 </script>
 
 <template>
