@@ -11,9 +11,7 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'Calendar',
-      component: CalendarPage,
-      meta: { requiresAuth: true }
+      redirect: '/my-calendars'
     },
     {
       path: '/login',

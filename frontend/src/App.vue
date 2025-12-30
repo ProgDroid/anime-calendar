@@ -12,7 +12,6 @@ onMounted(async () => {
 
 <template>
   <nav>
-    <RouterLink to="/">Anime Calendar</RouterLink>
     <RouterLink to="/my-calendars">My Calendars</RouterLink>
     <RouterLink v-if="authStore.isAuthenticated()" to="/login" @click="authStore.logout">Logout</RouterLink>
   </nav>

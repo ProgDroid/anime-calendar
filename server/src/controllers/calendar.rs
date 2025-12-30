@@ -35,12 +35,13 @@ async fn export(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims) -> H
     };
 
     // TODO * Calendar sharing? (with permissions)
-    // TODO * User management?
+    // TODO * User management? Let users manage themselves too
     // TODO * Calendar public/private visibility
     // TODO * Generate links, maybe endpoint to generate needs to be wildly different
     // TODO * gcal integration?
     // TODO * anilist list?
     // TODO * Calendar templates? (predefined items)
+    // TODO * config.toml in frontend is accessible via URL and downloadable. This needs to be changed
 
     match data.database.get_calendar_by_id(*id as i32, user.id).await {
         Ok(calendar_data) => {
