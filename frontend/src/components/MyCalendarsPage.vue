@@ -99,7 +99,7 @@ const deleteCalendar = async (id: number) => {
   }
   
   try {
-    await api.delete(`/calendar/${id}`)
+    await api.delete(`/calendars/${id}`)
     // Refresh the list
     await loadCalendars()
   } catch (err) {

@@ -196,7 +196,7 @@ impl Database {
     /// # Errors
     /// Returns an error if the query fails.
     pub async fn update_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
-        let calendar = sqlx::query!(
+        let updated_calendar = sqlx::query!(
             "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 RETURNING id, name, language as \"language: Language\", user_id, created_at, updated_at",
             calendar.name,
             calendar.language as Language,
@@ -206,24 +206,17 @@ impl Database {
         .fetch_one(&self.pool)
         .await?;
 
-        let item_ids: Vec<i32> = sqlx::query_scalar!(
-            "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
-            calendar.id
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        self.update_calendar_items(calendar.id, item_ids.clone())
+        self.update_calendar_items(updated_calendar.id, calendar.item_ids.clone())
             .await?;
 
         Ok(Calendar {
-            id: calendar.id,
-            name: calendar.name,
-            item_ids,
-            language: calendar.language,
-            user_id: calendar.user_id,
-            created_at: Some(calendar.created_at),
-            updated_at: Some(calendar.updated_at),
+            id: updated_calendar.id,
+            name: updated_calendar.name,
+            item_ids: calendar.item_ids,
+            language: updated_calendar.language,
+            user_id: updated_calendar.user_id,
+            created_at: Some(updated_calendar.created_at),
+            updated_at: Some(updated_calendar.updated_at),
         })
     }
 
@@ -246,7 +239,27 @@ impl Database {
 
         query_builder.push(" ON CONFLICT (calendar_id, item_id) DO NOTHING");
 
-        query_builder.build().execute(&self.pool).await?;
+        let query = query_builder.build();
+
+        let mut transaction = self.pool.begin().await?;
+
+        if let Err(e) = sqlx::query!(
+            "DELETE FROM calendar_items WHERE calendar_id = $1",
+            calendar_id
+        )
+        .execute(&mut *transaction)
+        .await
+        {
+            transaction.rollback().await?;
+            return Err(e.into());
+        }
+
+        if let Err(e) = query.execute(&mut *transaction).await {
+            transaction.rollback().await?;
+            return Err(e.into());
+        }
+
+        transaction.commit().await?;
 
         Ok(())
     }

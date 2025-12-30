@@ -363,10 +363,13 @@
 
 <script setup lang="ts">
 import { ref, onMounted, watch, computed, onBeforeMount, onBeforeUnmount } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import type { Item } from '@/types/item'
 import type { Calendar } from '@/types/calendar'
 import api from '@/config/api'
+
+// Router
+const router = useRouter()
 
 // State
 const nameInput = ref('')
@@ -459,28 +462,28 @@ onBeforeUnmount(() => {
     // Check if we're in edit mode (route contains calendar ID)
     const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
     if (calendarId && calendarId !== 'new') {
-    loading.value = true
-    error.value = null
-    
-    try {
-      const response = await api.get(`/calendars/${route.params.id}`)
-      const calendar: Calendar = response.data
+      loading.value = true
+      error.value = null
       
-      // Pre-populate form with calendar data
-      calendarName.value = calendar.name
-      calendarLanguage.value = calendar.language
-      
-      // Load items into the calendar
-      itemsInCalendar.value = calendar.items
-      currentCalendar.value = calendar
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Failed to load calendar'
-      console.error('Failed to load calendar:', err)
-    } finally {
-      loading.value = false
+      try {
+        const response = await api.get(`/calendars/${route.params.id}`)
+        const calendar: Calendar = response.data
+        
+        // Pre-populate form with calendar data
+        calendarName.value = calendar.name
+        calendarLanguage.value = calendar.language
+        
+        // Load items into the calendar
+        itemsInCalendar.value = calendar.items
+        currentCalendar.value = calendar
+      } catch (err) {
+        error.value = err instanceof Error ? err.message : 'Failed to load calendar'
+        console.error('Failed to load calendar:', err)
+      } finally {
+        loading.value = false
+      }
     }
-  }
-})
+  })
 
 // Fetch items by name
 const fetchItems = async () => {
@@ -561,8 +564,12 @@ const toggleItemSelection = (itemId: number) => {
       
 // Check if we're editing an existing calendar (has an ID)
       if (route.params.id && route.params.id !== 'new') {
+        // For editing an existing calendar, we should send the items that are currently in the calendar
+        const calendarId = parseInt(String(route.params.id))
+        
+        // When editing, we send the items that are currently in the calendar (which should include both existing and new items)
         const calendar: Omit<Calendar, 'created_at' | 'updated_at'> = {
-          id: parseInt(String(route.params.id)),
+          id: calendarId,
           name: calendarName.value,
           language: calendarLanguage.value,
           items: itemsInCalendar.value
@@ -584,6 +591,9 @@ const toggleItemSelection = (itemId: number) => {
       // Reset form
       calendarName.value = ''
       itemsInCalendar.value = []
+      
+      // Redirect to my-calendars page
+      router.push('/my-calendars')
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to submit calendar'
     } finally {
