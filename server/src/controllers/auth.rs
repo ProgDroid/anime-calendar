@@ -1,8 +1,8 @@
 use crate::error::Error;
-use crate::middleware::auth::Claims;
+use crate::middleware::auth::{get_user_from_claims, Claims};
 use crate::server::Repos;
 use crate::services::auth::{generate_token, hash_password, validate_password, verify_token};
-use actix_web::{get, post, web, HttpResponse, Result};
+use actix_web::{get, post, web, HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -18,11 +18,11 @@ pub struct LoginResponse {
 }
 
 #[post("/login")]
-pub async fn login(
-    db: web::Data<Repos>,
-    credentials: web::Json<LoginRequest>,
-) -> Result<HttpResponse, Error> {
-    let user = db.database.get_user_by_email(&credentials.email).await?;
+pub async fn login(db: web::Data<Repos>, credentials: web::Json<LoginRequest>) -> HttpResponse {
+    let user = match db.database.get_user_by_email(&credentials.email).await {
+        Ok(user) => user,
+        Err(e) => return e.error_response(),
+    };
 
     match user.password_hash {
         Some(hash) => {
@@ -32,12 +32,12 @@ pub async fn login(
                     token,
                     username: user.username,
                 };
-                Ok(HttpResponse::Ok().json(response))
+                HttpResponse::Ok().json(response)
             } else {
-                Err(Error::Unauthorised)
+                Error::Unauthorised.error_response()
             }
         }
-        None => Err(Error::NotImplemented),
+        None => Error::NotImplemented.error_response(),
     }
 }
 
@@ -49,21 +49,22 @@ pub struct RegisterRequest {
 }
 
 #[post("/register")]
-pub async fn register(
-    db: web::Data<Repos>,
-    user_data: web::Json<RegisterRequest>,
-) -> Result<HttpResponse, Error> {
+pub async fn register(db: web::Data<Repos>, user_data: web::Json<RegisterRequest>) -> HttpResponse {
     // Check if user already exists
     if (db.database.get_user_by_email(&user_data.email).await).is_ok() {
-        return Err(Error::UserAlreadyExists);
+        return Error::UserAlreadyExists.error_response();
     }
 
     let hashed_password = hash_password(&user_data.password);
 
-    let user = db
+    let user = match db
         .database
         .create_user(&user_data.username, &user_data.email, &hashed_password)
-        .await?;
+        .await
+    {
+        Ok(user) => user,
+        Err(e) => return e.error_response(),
+    };
 
     let token = generate_token(&user.id);
     let response = LoginResponse {
@@ -71,27 +72,34 @@ pub async fn register(
         username: user.username,
     };
 
-    Ok(HttpResponse::Ok().json(response))
+    HttpResponse::Ok().json(response)
 }
 
 #[get("/user")]
-pub async fn get_current_user(db: web::Data<Repos>, claims: Claims) -> Result<HttpResponse, Error> {
-    let user_id = claims.sub.parse::<i32>().map_err(|_| Error::Unauthorised)?;
-    let user = db.database.get_user_by_id(user_id).await?;
+pub async fn get_current_user(db: web::Data<Repos>, claims: Claims) -> HttpResponse {
+    let user = match get_user_from_claims(&claims, &db.database).await {
+        Ok(user) => user,
+        Err(e) => return e.error_response(),
+    };
 
     let response = LoginResponse {
         token: String::new(), // Not returning token for this endpoint
         username: user.username,
     };
 
-    Ok(HttpResponse::Ok().json(response))
+    HttpResponse::Ok().json(response)
+}
+
+#[derive(Deserialize)]
+struct AuthVerifyRequest {
+    token: String,
 }
 
 #[post("/auth/verify")]
-pub async fn verify_token_endpoint(token: web::Json<String>) -> Result<HttpResponse, Error> {
-    match verify_token(&token.0) {
-        Ok(_) => Ok(HttpResponse::Ok().json("Token is valid")),
-        Err(_) => Err(Error::Unauthorised),
+pub async fn verify_token_endpoint(token: web::Json<AuthVerifyRequest>) -> HttpResponse {
+    match verify_token(&token.token) {
+        Ok(_) => HttpResponse::Ok().finish(),
+        Err(_) => Error::Unauthorised.error_response(),
     }
 }
 

@@ -12,8 +12,9 @@ onMounted(async () => {
 
 <template>
   <nav>
-    <RouterLink to="/">Home</RouterLink>
-    <RouterLink to="/calendar">Calendar</RouterLink>
+    <RouterLink to="/">Anime Calendar</RouterLink>
+    <RouterLink to="/my-calendars">My Calendars</RouterLink>
+    <RouterLink v-if="authStore.isAuthenticated()" to="/login" @click="authStore.logout">Logout</RouterLink>
   </nav>
   <main>
     <RouterView />
@@ -31,6 +32,8 @@ onMounted(async () => {
 
 nav {
   padding: 30px;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #dee2e6;
 }
 
 nav a {

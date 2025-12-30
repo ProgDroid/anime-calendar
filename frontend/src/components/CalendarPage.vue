@@ -1,179 +1,3 @@
-<script setup lang="ts">
-import { ref, onMounted, watch, computed } from 'vue'
-import type { Item } from '@/types/item'
-import type { Calendar } from '@/types/calendar'
-import api from '@/config/api'
-
-// State
-const nameInput = ref('')
-const mediaType = ref<'ANIME' | 'MANGA' | ''>('') 
-const fetchedItems = ref<Item[]>([])
-const selectedItems = ref<number[]>([])
-const calendarName = ref('')
-const calendarLanguage = ref<'english' | 'romaji' | 'native'>('english')
-const itemsInCalendar = ref<Item[]>([])
-const loading = ref(false)
-const error = ref<string | null>(null) // TODO need calendar block error and search block error
-
-// Helper function to get title based on selected language
-const getSelectedItemTitle = (item: Item): string => {
-  switch (calendarLanguage.value) {
-    case 'english':
-      return item.title.english.length > 0 ? item.title.english : item.title.romaji
-    case 'romaji':
-      return item.title.romaji
-    case 'native':
-      return item.title.native
-    default:
-      return item.title.romaji
-  }
-}
-
-// Determine layout based on screen width (mobile: vertical, desktop/tablet: horizontal-cards)
-const isMobile = computed(() => {
-  return window.innerWidth < 768
-})
-
-// Load persisted state on component mount
-onMounted(() => {
-  try {
-    const persistedState = sessionStorage.getItem('calendarPageState')
-    if (persistedState) {
-      const state = JSON.parse(persistedState)
-      if (state.nameInput !== undefined) nameInput.value = state.nameInput
-      if (state.mediaType !== undefined) mediaType.value = state.mediaType
-      if (state.fetchedItems !== undefined) fetchedItems.value = state.fetchedItems
-      if (state.selectedItems !== undefined) selectedItems.value = state.selectedItems
-      if (state.itemsInCalendar !== undefined) itemsInCalendar.value = state.itemsInCalendar
-      if (state.calendarName !== undefined) calendarName.value = state.calendarName
-      if (state.calendarLanguage !== undefined) calendarLanguage.value = state.calendarLanguage
-    }
-  } catch (e) {
-    console.error('Failed to restore persisted state:', e)
-  }
-})
-
-// Watch for changes and save state to sessionStorage
-watch([nameInput, mediaType, fetchedItems, selectedItems, itemsInCalendar, calendarName, calendarLanguage], () => {
-  try {
-    const state = {
-      nameInput: nameInput.value,
-      mediaType: mediaType.value,
-      fetchedItems: fetchedItems.value,
-      selectedItems: selectedItems.value,
-      itemsInCalendar: itemsInCalendar.value,
-      calendarName: calendarName.value,
-      calendarLanguage: calendarLanguage.value
-    }
-    sessionStorage.setItem('calendarPageState', JSON.stringify(state))
-  } catch (e) {
-    console.error('Failed to save state:', e)
-  }
-})
-
-// Fetch items by name
-const fetchItems = async () => {
-  if (!nameInput.value) {
-    error.value = 'Please enter a name'
-    return
-  }
-
-  loading.value = true
-  error.value = null
-  
-  try {
-    // Build search URL with optional media type parameter
-    let url = `/search?name=${encodeURIComponent(nameInput.value)}`
-    if (mediaType.value) {
-      url += `&media_type=${mediaType.value}`
-    }
-    
-    const response = await api.get(url)
-    const items: Item[] = response.data
-    fetchedItems.value = items
-    selectedItems.value = [] // Reset selection when new search is performed
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to fetch items'
-  } finally {
-    loading.value = false
-  }
-}
-
-// Add item to calendar
-const addItemToCalendar = () => {
-  if (selectedItems.value.length > 0) {
-    const selectedItemsData = fetchedItems.value.filter(item => selectedItems.value.includes(item.id))
-    
-    // Filter out items that are already in the calendar
-    const newItems = selectedItemsData.filter(item => 
-      !itemsInCalendar.value.some(calendarItem => calendarItem.id === item.id)
-    )
-    
-    itemsInCalendar.value.push(...newItems)
-    selectedItems.value = []
-    nameInput.value = ''
-  }
-}
-
-// Remove item from calendar
-const removeItemFromCalendar = (itemId: number) => {
-  itemsInCalendar.value = itemsInCalendar.value.filter(item => item.id !== itemId)
-}
-
-// Toggle item selection
-const toggleItemSelection = (itemId: number) => {
-  const index = selectedItems.value.indexOf(itemId)
-  if (index > -1) {
-    selectedItems.value.splice(index, 1)
-  } else {
-    selectedItems.value.push(itemId)
-  }
-}
-
-// Submit calendar
-const submitCalendar = async () => {
-  if (!calendarName.value) {
-    error.value = 'Please enter a name for the calendar'
-    return
-  }
-
-  if (itemsInCalendar.value.length === 0) {
-    error.value = 'Please add at least one item to the calendar'
-    return
-  }
-
-  loading.value = true
-  error.value = null
-
-  try {
-    // Create calendar object to send to API
-    const calendar: Calendar = {
-      id: 0, // Will be set by the server
-      name: calendarName.value,
-      language: calendarLanguage.value,
-      items: itemsInCalendar.value
-    }
-    
-    const response = await api.put('/calendar', calendar)
-    
-    alert(`Calendar submitted successfully: ${response.data.name}`)
-    
-    // Reset form
-    calendarName.value = ''
-    itemsInCalendar.value = []
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to submit calendar'
-  } finally {
-    loading.value = false
-  }
-}
-
-// Clear all items from calendar
-const clearCalendar = () => {
-  itemsInCalendar.value = []
-}
-</script>
-
 <template>
   <div class="calendar-page">
     <h1>Calendar Manager</h1>
@@ -232,7 +56,7 @@ const clearCalendar = () => {
           <h3>Fetched Items</h3>
           <div class="scrollable-items">
             <div class="items-grid">
-<div 
+              <div 
                 v-for="item in fetchedItems" 
                 :key="item.id" 
                 class="item-card"
@@ -301,7 +125,7 @@ const clearCalendar = () => {
           </div>
         </div>
 
-<div v-if="itemsInCalendar.length > 0" class="items-grid">
+        <div v-if="itemsInCalendar.length > 0" class="items-grid">
           <h3>Items in Calendar</h3>
           <div class="grid">
             <div 
@@ -495,6 +319,239 @@ const clearCalendar = () => {
   </div>
 </template>
 
+<script setup lang="ts">
+import { ref, onMounted, watch, computed, onBeforeMount, onBeforeUnmount } from 'vue'
+import { useRoute } from 'vue-router'
+import type { Item } from '@/types/item'
+import type { Calendar } from '@/types/calendar'
+import api from '@/config/api'
+
+// State
+const nameInput = ref('')
+const mediaType = ref<'ANIME' | 'MANGA' | ''>('')
+const fetchedItems = ref<Item[]>([])
+const selectedItems = ref<number[]>([])
+const calendarName = ref('')
+const calendarLanguage = ref<'english' | 'romaji' | 'native'>('english')
+const itemsInCalendar = ref<Item[]>([])
+const loading = ref(false)
+const error = ref<string | null>(null) // TODO need calendar block error and search block error
+
+// Route
+const route = useRoute()
+
+// Helper function to get title based on selected language
+const getSelectedItemTitle = (item: Item): string => {
+  switch (calendarLanguage.value) {
+    case 'english':
+      return item.title.english.length > 0 ? item.title.english : item.title.romaji
+    case 'romaji':
+      return item.title.romaji
+    case 'native':
+      return item.title.native
+    default:
+      return item.title.romaji
+  }
+}
+
+// Determine layout based on screen width (mobile: vertical, desktop/tablet: horizontal-cards)
+const isMobile = computed(() => {
+  return window.innerWidth < 768
+})
+
+// Load persisted state on component mount
+onMounted(() => {
+  try {
+    const persistedState = sessionStorage.getItem('calendarPageState')
+    if (persistedState) {
+      const state = JSON.parse(persistedState)
+      if (state.nameInput !== undefined) nameInput.value = state.nameInput
+      if (state.mediaType !== undefined) mediaType.value = state.mediaType
+      if (state.fetchedItems !== undefined) fetchedItems.value = state.fetchedItems
+      if (state.selectedItems !== undefined) selectedItems.value = state.selectedItems
+      if (state.itemsInCalendar !== undefined) itemsInCalendar.value = state.itemsInCalendar
+      if (state.calendarName !== undefined) calendarName.value = state.calendarName
+      if (state.calendarLanguage !== undefined) calendarLanguage.value = state.calendarLanguage
+    }
+  } catch (e) {
+    console.error('Failed to restore persisted state:', e)
+  }
+})
+
+// Watch for changes and save state to sessionStorage
+watch([nameInput, mediaType, fetchedItems, selectedItems, itemsInCalendar, calendarName, calendarLanguage], () => {
+  try {
+    const state = {
+      nameInput: nameInput.value,
+      mediaType: mediaType.value,
+      fetchedItems: fetchedItems.value,
+      selectedItems: selectedItems.value,
+      itemsInCalendar: itemsInCalendar.value,
+      calendarName: calendarName.value,
+      calendarLanguage: calendarLanguage.value
+    }
+    sessionStorage.setItem('calendarPageState', JSON.stringify(state))
+  } catch (e) {
+    console.error('Failed to save state:', e)
+  }
+})
+
+// Clear persisted state when navigating away from the page (but not on refresh)
+onBeforeUnmount(() => {
+  // Only clear the state if we're not editing an existing calendar
+  // If we're editing an existing calendar, we want to preserve the state
+  // If we're creating a new calendar, we want to clear it when navigating away
+  if (route.params.id && route.params.id !== 'new') {
+    // We're editing an existing calendar, so don't clear the state
+    // This allows the user to refresh the page and retain their data
+  } else {
+    // We're creating a new calendar, so clear the state when navigating away
+    sessionStorage.removeItem('calendarPageState')
+  }
+})
+
+// Load calendar data when in edit mode
+  onBeforeMount(async () => {
+    // Check if we're in edit mode (route contains calendar ID)
+    const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
+    if (calendarId && calendarId !== 'new') {
+    loading.value = true
+    error.value = null
+    
+    try {
+      const response = await api.get(`/calendars/${route.params.id}`)
+      const calendar: Calendar = response.data
+      
+      // Pre-populate form with calendar data
+      calendarName.value = calendar.name
+      calendarLanguage.value = calendar.language
+      
+      // Load items into the calendar
+      itemsInCalendar.value = calendar.items
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to load calendar'
+      console.error('Failed to load calendar:', err)
+    } finally {
+      loading.value = false
+    }
+  }
+})
+
+// Fetch items by name
+const fetchItems = async () => {
+  if (!nameInput.value) {
+    error.value = 'Please enter a name'
+    return
+  }
+
+  loading.value = true
+  error.value = null
+  
+  try {
+    // Build search URL with optional media type parameter
+    let url = `/search?name=${encodeURIComponent(nameInput.value)}`
+    if (mediaType.value) {
+      url += `&media_type=${mediaType.value}`
+    }
+    
+    const response = await api.get(url)
+    const items: Item[] = response.data
+    fetchedItems.value = items
+    selectedItems.value = [] // Reset selection when new search is performed
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : 'Failed to fetch items'
+  } finally {
+    loading.value = false
+  }
+}
+
+// Add item to calendar
+const addItemToCalendar = () => {
+  if (selectedItems.value.length > 0) {
+    const selectedItemsData = fetchedItems.value.filter(item => selectedItems.value.includes(item.id))
+    
+    // Filter out items that are already in the calendar
+    const newItems = selectedItemsData.filter(item => 
+      !itemsInCalendar.value.some(calendarItem => calendarItem.id === item.id)
+    )
+    
+    itemsInCalendar.value.push(...newItems)
+    selectedItems.value = []
+    nameInput.value = ''
+  }
+}
+
+// Remove item from calendar
+const removeItemFromCalendar = (itemId: number) => {
+  itemsInCalendar.value = itemsInCalendar.value.filter(item => item.id !== itemId)
+}
+
+// Toggle item selection
+const toggleItemSelection = (itemId: number) => {
+  const index = selectedItems.value.indexOf(itemId)
+  if (index > -1) {
+    selectedItems.value.splice(index, 1)
+  } else {
+    selectedItems.value.push(itemId)
+  }
+}
+
+// Submit calendar
+  const submitCalendar = async () => {
+    if (!calendarName.value) {
+      error.value = 'Please enter a name for the calendar'
+      return
+    }
+
+    if (itemsInCalendar.value.length === 0) {
+      error.value = 'Please add at least one item to the calendar'
+      return
+    }
+
+    loading.value = true
+    error.value = null
+
+    try {      
+      let response
+      
+// Check if we're editing an existing calendar (has an ID)
+      if (route.params.id && route.params.id !== 'new') {
+        const calendar: Omit<Calendar, 'created_at' | 'updated_at'> = {
+          id: parseInt(String(route.params.id)),
+          name: calendarName.value,
+          language: calendarLanguage.value,
+          items: itemsInCalendar.value
+        }
+
+        response = await api.put('/calendar', calendar)
+      } else {
+        const calendar: Omit<Calendar, 'id' | 'created_at' | 'updated_at'> = {
+          name: calendarName.value,
+          language: calendarLanguage.value,
+          items: itemsInCalendar.value
+        }
+
+        response = await api.put('/calendar', calendar)
+      }
+      
+      alert(`Calendar submitted successfully: ${response.data.name}`)
+      
+      // Reset form
+      calendarName.value = ''
+      itemsInCalendar.value = []
+    } catch (err) {
+      error.value = err instanceof Error ? err.message : 'Failed to submit calendar'
+    } finally {
+      loading.value = false
+    }
+  }
+
+// Clear all items from calendar
+const clearCalendar = () => {
+  itemsInCalendar.value = []
+}
+</script>
+
 <style scoped>
 .calendar-page {
   max-width: 1200px;
@@ -570,6 +627,7 @@ button:disabled {
   font-size: 1em;
   width: 100%;
   max-width: fit-content;
+  align-self: flex-start;
 }
 
 .clear-button:not(:disabled) {

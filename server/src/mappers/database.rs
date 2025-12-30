@@ -7,7 +7,6 @@ use crate::{
         calendar::{Calendar, Language},
         user::User,
     },
-    error::Error,
     ServerResult,
 };
 
@@ -62,8 +61,7 @@ impl Database {
         username: &str,
         email: &str,
         password_hash: &str,
-    ) -> Result<User, sqlx::Error> {
-        // TODO fix error type
+    ) -> ServerResult<User> {
         let user = sqlx::query!(
             "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, password_hash, created_at, updated_at",
             username,
@@ -85,7 +83,7 @@ impl Database {
 
     /// # Errors
     /// Returns an error if the query fails
-    pub async fn get_calendar_by_id(&self, id: i32, user_id: i32) -> Result<Calendar, Error> {
+    pub async fn get_calendar_by_id(&self, id: i32, user_id: i32) -> ServerResult<Calendar> {
         let calendar = sqlx::query!(
             "SELECT
                 id,
@@ -255,8 +253,34 @@ impl Database {
 
     /// # Errors
     /// Returns an error if the query fails
-    pub async fn get_user_by_id(&self, id: i32) -> Result<User, sqlx::Error> {
-        // TODO fix error type
+    pub async fn delete_calendar(&self, id: i32, user_id: i32) -> ServerResult<()> {
+        sqlx::query!(
+            "DELETE FROM calendars WHERE id = $1 AND user_id = $2",
+            id,
+            user_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        self.delete_calendar_items(id).await?;
+
+        Ok(())
+    }
+
+    async fn delete_calendar_items(&self, calendar_id: i32) -> ServerResult<()> {
+        sqlx::query!(
+            "DELETE FROM calendar_items WHERE calendar_id = $1",
+            calendar_id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// # Errors
+    /// Returns an error if the query fails
+    pub async fn get_user_by_id(&self, id: i32) -> ServerResult<User> {
         let user = sqlx::query!(
             "SELECT id, username, email, password_hash, created_at, updated_at FROM users WHERE id = $1",
             id
@@ -276,13 +300,7 @@ impl Database {
 
     /// # Errors
     /// Returns an error if the query fails
-    pub async fn update_user(
-        &self,
-        id: i32,
-        username: &str,
-        email: &str,
-    ) -> Result<User, sqlx::Error> {
-        // TODO fix error type
+    pub async fn update_user(&self, id: i32, username: &str, email: &str) -> ServerResult<User> {
         let user = sqlx::query!(
             "UPDATE users SET username = $1, email = $2, updated_at = NOW() WHERE id = $3 RETURNING id, username, email, password_hash, created_at, updated_at",
             username,
@@ -304,8 +322,7 @@ impl Database {
 
     /// # Errors
     /// Returns an error if the query fails
-    pub async fn delete_user(&self, id: i32) -> Result<(), sqlx::Error> {
-        // TODO fix error type
+    pub async fn delete_user(&self, id: i32) -> ServerResult<()> {
         sqlx::query!("DELETE FROM users WHERE id = $1", id)
             .execute(&self.pool)
             .await?;

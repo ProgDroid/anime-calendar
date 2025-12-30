@@ -1,4 +1,4 @@
-#![allow(unused_variables)]
+#![allow(unused_variables, clippy::cast_possible_truncation)]
 use crate::{
     entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
     error::Error,
@@ -25,7 +25,6 @@ pub struct CalendarRequest {
     pub name: String, // TODO Name object?
 }
 
-#[allow(clippy::cast_possible_truncation)]
 #[get("/calendar/{id}/export")]
 async fn export(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims) -> HttpResponse {
     let user = match get_user_from_claims(&claims, &data.database).await {
@@ -169,16 +168,48 @@ async fn get_calendars(data: web::Data<Repos>, claims: Claims) -> HttpResponse {
         }
     };
 
-    // // Get calendars for the authenticated user
-    // match data.database.get_calendars_by_user(user.id).await {
-    //     Ok(calendars) => HttpResponse::Ok().json(calendars),
-    //     Err(e) => e.error_response(),
-    // }
-    HttpResponse::Ok().finish()
+    // Get calendars for the authenticated user
+    match data.database.get_calendars_by_user(user.id).await {
+        Ok(calendars) => {
+            let mut results: Vec<Calendar> = Vec::new();
+
+            for calendar in calendars {
+                let item_ids: Vec<Id> = calendar
+                    .item_ids
+                    .iter()
+                    .filter_map(|id| Id::new(i64::from(*id)))
+                    .collect();
+
+                let items = data.anilist.get_items(item_ids).await;
+
+                if items.is_empty() {
+                    return Error::NotFound.error_response();
+                }
+
+                if let Some(id) = Id::new(calendar.id.into()) {
+                    results.push(Calendar {
+                        id,
+                        items,
+                        language: calendar.language.to_common_language(),
+                        name: calendar.name,
+                        created_at: calendar
+                            .created_at
+                            .expect("Did not load created_at for calendar"), // TODO consider doing this differently
+                        updated_at: calendar
+                            .updated_at
+                            .expect("Did not load updated_at for calendar"), // TODO consider doing this differently
+                    });
+                }
+            }
+
+            HttpResponse::Ok().json(results)
+        }
+        Err(e) => e.error_response(),
+    }
 }
 
 #[get("/calendars/{id}")]
-async fn get_calendar(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims) -> HttpResponse {
+async fn get_calendar(data: web::Data<Repos>, id: web::Path<i64>, claims: Claims) -> HttpResponse {
     let user = match get_user_from_claims(&claims, &data.database).await {
         Ok(user) => user,
         Err(e) => {
@@ -187,18 +218,45 @@ async fn get_calendar(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims
     };
 
     // Check if the calendar belongs to the authenticated user
-    // match data.database.get_calendar_by_id(*id, user.id).await {
-    //     Ok(Some(calendar)) => HttpResponse::Ok().json(calendar),
-    //     Ok(None) => Error::Unauthorised.error_response(),
-    //     Err(e) => e.error_response(),
-    // }
-    HttpResponse::Ok().finish()
+    match data.database.get_calendar_by_id(*id as i32, user.id).await {
+        Ok(calendar) => {
+            let item_ids: Vec<Id> = calendar
+                .item_ids
+                .iter()
+                .filter_map(|id| Id::new(i64::from(*id)))
+                .collect();
+
+            let items = data.anilist.get_items(item_ids).await;
+
+            if items.is_empty() {
+                return Error::NotFound.error_response();
+            }
+
+            if let Some(id) = Id::new(calendar.id.into()) {
+                HttpResponse::Ok().json(Calendar {
+                    id,
+                    items,
+                    language: calendar.language.to_common_language(),
+                    name: calendar.name,
+                    created_at: calendar
+                        .created_at
+                        .expect("Did not load created_at for calendar"), // TODO consider doing this differently
+                    updated_at: calendar
+                        .updated_at
+                        .expect("Did not load updated_at for calendar"), // TODO consider doing this differently
+                })
+            } else {
+                Error::NotFound.error_response()
+            }
+        }
+        Err(e) => e.error_response(),
+    }
 }
 
 #[delete("/calendars/{id}")]
 async fn delete_calendar(
     data: web::Data<Repos>,
-    id: web::Path<u64>,
+    id: web::Path<i64>,
     claims: Claims,
 ) -> HttpResponse {
     let user = match get_user_from_claims(&claims, &data.database).await {
@@ -208,17 +266,8 @@ async fn delete_calendar(
         }
     };
 
-    // Check if the calendar belongs to the authenticated user
-    // match data.database.get_calendar_by_user(*id, user.id).await {
-    //     Ok(Some(_)) => {
-    //         // Calendar belongs to user, proceed with deletion
-    //         match data.database.delete_calendar(*id).await {
-    //             Ok(_) => HttpResponse::Ok().finish(),
-    //             Err(e) => e.error_response(),
-    //         }
-    //     }
-    //     Ok(None) => Error::Unauthorised.error_response(),
-    //     Err(e) => e.error_response(),
-    // }
-    HttpResponse::Ok().finish()
+    match data.database.delete_calendar(*id as i32, user.id).await {
+        Ok(()) => HttpResponse::Ok().finish(),
+        Err(e) => e.error_response(),
+    }
 }

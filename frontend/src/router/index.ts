@@ -1,31 +1,34 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomePage from '@/components/HomePage.vue'
-import CalendarPage from '@/components/CalendarPage.vue'
-import Login from '@/components/Login.vue'
-import Register from '@/components/Register.vue'
 import { useAuthStore } from '../stores/auth'
+
+// Lazy load components to improve performance
+const MyCalendarsPage = () => import('@/components/MyCalendarsPage.vue')
+const CalendarPage = () => import('@/components/CalendarPage.vue')
+const LoginPage = () => import('@/components/LoginPage.vue')
 
 const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
       path: '/',
-      name: 'Home',
-      component: HomePage
+      name: 'Calendar',
+      component: CalendarPage,
+      meta: { requiresAuth: true }
     },
     {
       path: '/login',
       name: 'Login',
-      component: Login
+      component: LoginPage
     },
     {
-      path: '/register',
-      name: 'Register',
-      component: Register
+      path: '/my-calendars',
+      name: 'MyCalendars',
+      component: MyCalendarsPage,
+      meta: { requiresAuth: true }
     },
     {
-      path: '/calendar',
-      name: 'Calendar',
+      path: '/calendar/:id',
+      name: 'CalendarDetail',
       component: CalendarPage,
       meta: { requiresAuth: true }
     }

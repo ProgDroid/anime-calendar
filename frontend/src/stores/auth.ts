@@ -66,7 +66,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
     
     try {
-      const response = await api.get('/me')
+      const response = await api.get('/user')
       user.value = response.data
       return response.data
     } catch (error: any) {
@@ -80,12 +80,43 @@ export const useAuthStore = defineStore('auth', () => {
     if (storedToken) {
       token.value = storedToken
       try {
-        await getCurrentUser()
+        // First verify the token is valid
+        const isValid = await checkAuth()
+        if (!isValid) {
+          // Token is invalid, clear it
+          logout()
+        } else {
+          // Token is valid, get user data
+          await getCurrentUser()
+        }
       } catch (error: any) {
-        // If we can't get the user, clear the token
+        // If we can't verify the token, clear it
         logout()
       }
     }
+  }
+
+  // Check if user is authenticated using the verify endpoint
+  const checkAuth = async () => {
+    const storedToken = localStorage.getItem('authToken')
+    
+    if (storedToken) {
+      try {
+        const response = await api.post('/auth/verify', {
+          token: storedToken
+        })
+        
+        token.value = storedToken
+        // Don't set user here, we'll get user data separately if needed
+        return true
+      } catch (error) {
+        // Token is invalid, remove it
+        localStorage.removeItem('authToken')
+        return false
+      }
+    }
+    
+    return false
   }
 
   return {
@@ -96,6 +127,7 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     logout,
     getCurrentUser,
-    initAuth
+    initAuth,
+    checkAuth
   }
 })

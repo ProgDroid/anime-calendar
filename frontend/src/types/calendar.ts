@@ -5,4 +5,6 @@ export interface Calendar {
   items: Item[];
   language: 'english' | 'romaji' | 'native';
   name: string;
+  created_at: string;
+  updated_at: string;
 }
