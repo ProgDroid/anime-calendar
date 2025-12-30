@@ -17,6 +17,13 @@ query GetItems($ids: [Int!]!) {
                 }
             }
             mediaType: type
+            coverImage {
+                extraLarge
+                large
+                medium
+                color
+            }
+            bannerImage
         }
     }
 }

@@ -27,6 +27,12 @@
         <p>Items: {{ calendar.items.length }}</p>
         <p>Created: {{ formatDate(calendar.created_at) }}</p>
         <p>Updated: {{ formatDate(calendar.updated_at) }}</p>
+        
+        <!-- Cascade of cover images for first 3 items -->
+        <div class="calendar-cascade">
+          <CalendarCoverCascade :items="calendar.items.slice(0, 3)" />
+        </div>
+        
         <div class="calendar-actions">
           <button @click.stop="editCalendar(calendar.id)" class="edit-button">Edit</button>
           <button @click.stop="deleteCalendar(calendar.id)" class="delete-button">Delete</button>
@@ -41,6 +47,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Calendar } from '@/types/calendar'
 import api from '@/config/api'
+import CalendarCoverCascade from './CalendarCoverCascade.vue'
 
 // State
 const calendars = ref<Calendar[]>([])
@@ -159,6 +166,7 @@ const formatDate = (dateString: string) => {
   border: 1px solid #ddd;
   cursor: pointer;
   transition: all 0.2s ease;
+  position: relative;
 }
 
 .calendar-card:hover {
@@ -174,6 +182,12 @@ const formatDate = (dateString: string) => {
 .calendar-card p {
   margin: 5px 0;
   color: #666;
+}
+
+.calendar-cascade {
+  margin: 15px 0;
+  display: flex;
+  justify-content: center;
 }
 
 .calendar-actions {

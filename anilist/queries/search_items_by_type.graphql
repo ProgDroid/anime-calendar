@@ -17,6 +17,13 @@ query SearchItemsByType($name: String!, $media_type: MediaType!) {
                 }
             }
             mediaType: type
+            coverImage {
+                extraLarge
+                large
+                medium
+                color
+            }
+            bannerImage
         }
     }
 }

@@ -66,10 +66,19 @@
                 }"
                 @click="!itemsInCalendar.some(calendarItem => calendarItem.id === item.id) && toggleItemSelection(item.id)"
               >
-                <div class="item-title-container">
+                <div class="item-header">
+                  <div class="item-image-container" v-if="item.cover_image?.medium">
+                    <img 
+                      :src="item.cover_image.medium" 
+                      :alt="item.title.romaji" 
+                      class="item-image"
+                      @error="onImageError"
+                      @load="onImageLoad"
+                    />
+                  </div>
                   <p><strong>{{ getSelectedItemTitle(item) }}</strong></p>
-                  <div class="item-type-pill">{{ item.media_type }}</div>
                 </div>
+                <div class="item-type-pill">{{ item.media_type }}</div>
                 <p v-if="item.media_type === 'ANIME'">Episodes: {{ item.episode_duration }}</p>
                 <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="already-in-calendar-hint">
                   Already in calendar
@@ -133,7 +142,18 @@
               :key="item.id" 
               class="item-card"
             >
-              <p><strong>{{ getSelectedItemTitle(item) }}</strong></p>
+              <div class="item-header">
+                <div class="item-image-container" v-if="item.cover_image?.medium">
+                  <img 
+                    :src="item.cover_image.medium" 
+                    :alt="item.title.romaji" 
+                    class="item-image"
+                    @error="onImageError"
+                    @load="onImageLoad"
+                  />
+                </div>
+                <p><strong>{{ getSelectedItemTitle(item) }}</strong></p>
+              </div>
               <div class="item-type-pill">{{ item.media_type }}</div>
               <p v-if="item.media_type === 'ANIME'">Episodes: {{ item.episode_duration }}</p>
               <button @click="removeItemFromCalendar(item.id)" class="remove-button">Remove</button>
@@ -212,7 +232,18 @@
                     :key="item.id" 
                     class="item-card"
                   >
-                    <p><strong>{{ getSelectedItemTitle(item) }}</strong></p>
+                    <div class="item-header">
+                      <div class="item-image-container" v-if="item.cover_image?.medium">
+                        <img 
+                          :src="item.cover_image.medium" 
+                          :alt="item.title.romaji" 
+                          class="item-image"
+                          @error="onImageError"
+                          @load="onImageLoad"
+                        />
+                      </div>
+                      <p><strong>{{ getSelectedItemTitle(item) }}</strong></p>
+                    </div>
                     <div class="item-type-pill">{{ item.media_type }}</div>
                     <p v-if="item.media_type === 'ANIME'">Episodes: {{ item.episode_duration }}</p>
                     <button @click="removeItemFromCalendar(item.id)" class="remove-button">Remove</button>
@@ -293,7 +324,18 @@
                     }"
                     @click="!itemsInCalendar.some(calendarItem => calendarItem.id === item.id) && toggleItemSelection(item.id)"
                   >
-                    <p><strong>{{ getSelectedItemTitle(item) }}</strong></p>
+                    <div class="item-header">
+                      <div class="item-image-container" v-if="item.cover_image?.medium">
+                        <img 
+                          :src="item.cover_image.medium" 
+                          :alt="item.title.romaji" 
+                          class="item-image"
+                          @error="onImageError"
+                          @load="onImageLoad"
+                        />
+                      </div>
+                      <p><strong>{{ getSelectedItemTitle(item) }}</strong></p>
+                    </div>
                     <div class="item-type-pill">{{ item.media_type }}</div>
                     <p v-if="item.media_type === 'ANIME'">Episodes: {{ item.episode_duration }}</p>
                     <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="already-in-calendar-hint">
@@ -411,6 +453,8 @@ onBeforeUnmount(() => {
 })
 
 // Load calendar data when in edit mode
+  const currentCalendar = ref<Calendar | null>(null)
+  
   onBeforeMount(async () => {
     // Check if we're in edit mode (route contains calendar ID)
     const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
@@ -428,6 +472,7 @@ onBeforeUnmount(() => {
       
       // Load items into the calendar
       itemsInCalendar.value = calendar.items
+      currentCalendar.value = calendar
     } catch (err) {
       error.value = err instanceof Error ? err.message : 'Failed to load calendar'
       console.error('Failed to load calendar:', err)
@@ -549,6 +594,16 @@ const toggleItemSelection = (itemId: number) => {
 // Clear all items from calendar
 const clearCalendar = () => {
   itemsInCalendar.value = []
+}
+
+const onImageError = (event: Event) => {
+  const img = event.target as HTMLImageElement
+  img.style.display = 'none'
+  console.error('Image failed to load:', (event.target as HTMLImageElement).src)
+}
+
+const onImageLoad = (event: Event) => {
+  console.log('Image loaded successfully', (event.target as HTMLImageElement).src)
 }
 </script>
 
@@ -690,34 +745,49 @@ button:disabled {
   position: relative;
   display: flex;
   flex-direction: column;
+  min-height: 100px;
+  overflow: hidden;
 }
 
-.item-card .item-title-container {
+.item-header {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
   width: 100%;
   margin-bottom: 5px;
   flex-direction: row;
   flex-wrap: nowrap;
+  position: relative;
+}
+
+.item-image-container {
+  flex-shrink: 0;
+  margin-right: 10px;
+  width: 60px;
+  height: 80px;
+  overflow: hidden;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f0f0f0;
+}
+
+.item-image {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
 }
 
 .item-card p {
   margin: 5px 0;
-}
-
-.item-title-container {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  margin-bottom: 5px;
-  flex-wrap: nowrap;
-  width: 100%;
-  flex-direction: row;
+  word-break: break-word;
 }
 
 .item-type-pill {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
   margin-left: auto;
   margin-right: 0;
 }
@@ -732,9 +802,6 @@ button:disabled {
   margin: 5px 0;
   min-width: fit-content;
   max-width: fit-content;
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
 }
 
 .scrollable-items {

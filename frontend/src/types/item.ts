@@ -4,6 +4,13 @@ export interface Title {
   romaji: string;
 }
 
+export interface CoverImage {
+  extraLarge: string;
+  large: string;
+  medium: string;
+  color: string;
+}
+
 export interface Item {
   id: number;
   id_mal: number | null;
@@ -11,4 +18,5 @@ export interface Item {
   media_type: 'ANIME' | 'MANGA';
   episode_duration: number;
   airing_schedule: any[];
+  cover_image?: CoverImage;
 }

@@ -1,10 +1,6 @@
 use anilist::{client::Client, GetItemsResponseItem, SearchItemsResponseItem, SearchItemsByTypeResponseItem, SearchItemsByTypeMediaType};
 use common::{
-    id::Id,
-    item::{Item, Repository as RepositoryItem, Type},
-    schedule::Schedule,
-    timestamp::Timestamp,
-    title::Title,
+    id::Id, item::{Item, Repository as RepositoryItem, Type}, media_cover::MediaCover, schedule::Schedule, timestamp::Timestamp, title::Title
 };
 use log::error;
 
@@ -138,6 +134,21 @@ fn response_to_items_get(response: GetItemsResponseItem) -> Vec<Item> {
                     _ => Type::Anime,
                 });
 
+            let cover_image = match media.cover_image {
+                Some(image) => MediaCover {
+                    extra_large: image.extra_large.unwrap_or_default(),
+                    large: image.large.unwrap_or_default(),
+                    medium: image.medium.unwrap_or_default(),
+                    color: image.color.unwrap_or_default(),
+                },
+                None => MediaCover {
+                    extra_large: String::default(),
+                    large: String::default(),
+                    medium: String::default(),
+                    color: String::default(),
+                }
+            };
+
             if let Some(id) = Id::new(media.id) {
                 items.push(Item {
                     id,
@@ -146,6 +157,8 @@ fn response_to_items_get(response: GetItemsResponseItem) -> Vec<Item> {
                     airing_schedule,
                     episode_duration: media.duration.unwrap_or_default(),
                     media_type,
+                    cover_image,
+                    banner_image: media.banner_image.unwrap_or_default(),
                 });
             }
         }
@@ -201,6 +214,21 @@ fn response_to_items_search(response: SearchItemsResponseItem) -> Vec<Item> {
                     _ => Type::Anime,
                 });
 
+            let cover_image = match media.cover_image {
+                Some(image) => MediaCover {
+                    extra_large: image.extra_large.unwrap_or_default(),
+                    large: image.large.unwrap_or_default(),
+                    medium: image.medium.unwrap_or_default(),
+                    color: image.color.unwrap_or_default(),
+                },
+                None => MediaCover {
+                    extra_large: String::default(),
+                    large: String::default(),
+                    medium: String::default(),
+                    color: String::default(),
+                }
+            };
+
             if let Some(id) = Id::new(media.id) {
                 items.push(Item {
                     id,
@@ -209,6 +237,8 @@ fn response_to_items_search(response: SearchItemsResponseItem) -> Vec<Item> {
                     airing_schedule,
                     episode_duration: media.duration.unwrap_or_default(),
                     media_type,
+                    cover_image,
+                    banner_image: media.banner_image.unwrap_or_default(),
                 });
             }
         }
@@ -264,6 +294,21 @@ fn response_to_items_search_by_type(response: SearchItemsByTypeResponseItem) -> 
                     _ => Type::Anime,
                 });
 
+            let cover_image = match media.cover_image {
+                Some(image) => MediaCover {
+                    extra_large: image.extra_large.unwrap_or_default(),
+                    large: image.large.unwrap_or_default(),
+                    medium: image.medium.unwrap_or_default(),
+                    color: image.color.unwrap_or_default(),
+                },
+                None => MediaCover {
+                    extra_large: String::default(),
+                    large: String::default(),
+                    medium: String::default(),
+                    color: String::default(),
+                }
+            };
+
             if let Some(id) = Id::new(media.id) {
                 items.push(Item {
                     id,
@@ -272,6 +317,8 @@ fn response_to_items_search_by_type(response: SearchItemsByTypeResponseItem) -> 
                     airing_schedule,
                     episode_duration: media.duration.unwrap_or_default(),
                     media_type,
+                    cover_image,
+                    banner_image: media.banner_image.unwrap_or_default(),
                 });
             }
         }

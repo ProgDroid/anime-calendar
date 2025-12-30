@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{error::Error, id::Id, schedule::Schedule, title::Title};
+use crate::{error::Error, id::Id, media_cover::MediaCover, schedule::Schedule, title::Title};
 
 #[derive(Serialize, Deserialize, Clone)]
 #[serde(rename_all = "UPPERCASE")]
@@ -31,6 +31,8 @@ pub struct Item {
     pub airing_schedule: Vec<Schedule>,
     pub episode_duration: i64,
     pub media_type: Type,
+    pub cover_image: MediaCover,
+    pub banner_image: String,
 }
 
 pub trait Repository {
