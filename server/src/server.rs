@@ -18,6 +18,8 @@ pub struct Repos {
     pub database: Database,
 }
 
+/// # Errors
+/// Returns an error if the server fails to start.
 pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> ServerResult<Server> {
     let repos = Repos { anilist, database };
 
@@ -52,8 +54,9 @@ pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> Ser
             .service(auth::login)
             .service(auth::register)
             .service(auth::get_current_user)
-            .service(auth::google_oauth)
-            .service(auth::github_oauth)
+            .service(auth::verify_token_endpoint)
+        // .service(auth::google_oauth)
+        // .service(auth::github_oauth)
     })
     .bind(format!("{}:{}", config.host, config.port))?
     .run())

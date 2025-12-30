@@ -4,6 +4,7 @@ use icalendar::{Calendar as Ics, Component, Event, EventLike};
 use log::info;
 
 #[allow(deprecated, clippy::cast_possible_wrap)]
+#[must_use]
 pub fn generate_calendar_export(calendar: &Calendar) -> Ics {
     let events: Vec<Event> = calendar
         .items

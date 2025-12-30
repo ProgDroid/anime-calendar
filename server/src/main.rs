@@ -1,16 +1,18 @@
-mod config;
-mod controllers;
-mod entity;
-mod error;
-mod mappers;
-mod server;
-mod services;
+pub mod config;
+pub mod controllers;
+pub mod entity;
+pub mod error;
+pub mod mappers;
+pub mod middleware;
+pub mod server;
+pub mod services;
 
 use crate::{
     config::{database::Database as DatabaseConfig, server::Server as ServerConfig},
     error::Error,
-    mappers::{anilist::Anilist, database::Database},
+    mappers::anilist::Anilist,
 };
+use mappers::database::Database;
 
 pub type ServerResult<T> = std::result::Result<T, Error>;
 

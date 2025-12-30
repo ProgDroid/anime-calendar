@@ -1,19 +1,24 @@
 use secrecy::ExposeSecret;
-use sqlx::{Pool, Postgres, QueryBuilder};
+use sqlx::{PgPool, Pool, Postgres, QueryBuilder};
 
 use crate::{
     config::database::Database as Config,
-    entity::calendar::{Calendar, Language},
-    entity::user::User,
+    entity::{
+        calendar::{Calendar, Language},
+        user::User,
+    },
+    error::Error,
     ServerResult,
 };
 
 #[derive(Clone)]
 pub struct Database {
-    client: Pool<Postgres>,
+    pool: PgPool,
 }
 
 impl Database {
+    /// # Errors
+    /// Returns an error if the connection to the database fails
     pub async fn new(config: Config) -> ServerResult<Self> {
         let pool = Pool::connect(
             format!(
@@ -27,12 +32,96 @@ impl Database {
         )
         .await?;
 
-        Ok(Self { client: pool })
+        Ok(Self { pool })
     }
 
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    pub async fn get_calendar(&self, id: u64) -> ServerResult<Option<Calendar>> {
-        let mut db_calendar = sqlx::query_as!(
+    /// # Errors
+    /// Returns an error if the query fails
+    pub async fn get_user_by_email(&self, email: &str) -> ServerResult<User> {
+        let user = sqlx::query!(
+            "SELECT id, username, email, password_hash, created_at, updated_at FROM users WHERE email = $1",
+            email
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(User {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            password_hash: user.password_hash,
+            created_at: user.created_at,
+            updated_at: user.updated_at,
+        })
+    }
+
+    /// # Errors
+    /// Returns an error if the query fails
+    pub async fn create_user(
+        &self,
+        username: &str,
+        email: &str,
+        password_hash: &str,
+    ) -> Result<User, sqlx::Error> {
+        // TODO fix error type
+        let user = sqlx::query!(
+            "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, password_hash, created_at, updated_at",
+            username,
+            email,
+            password_hash
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(User {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            password_hash: user.password_hash,
+            created_at: user.created_at,
+            updated_at: user.updated_at,
+        })
+    }
+
+    /// # Errors
+    /// Returns an error if the query fails
+    pub async fn get_calendar_by_id(&self, id: i32, user_id: i32) -> Result<Calendar, Error> {
+        let calendar = sqlx::query!(
+            "SELECT
+                id,
+                language as \"language: Language\",
+                name,
+                user_id,
+                created_at,
+                updated_at FROM calendars WHERE id = $1 AND user_id = $2",
+            id,
+            user_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let item_ids: Vec<i32> = sqlx::query_scalar!(
+            "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
+            id
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(Calendar {
+            id: calendar.id,
+            name: calendar.name,
+            item_ids,
+            language: calendar.language,
+            user_id: calendar.user_id,
+            created_at: Some(calendar.created_at),
+            updated_at: Some(calendar.updated_at),
+        })
+    }
+
+    /// # Errors
+    /// Returns an error if the query fails
+    pub async fn get_calendars_by_user(&self, user_id: i32) -> ServerResult<Vec<Calendar>> {
+        let calendars: Vec<Calendar> = sqlx::query_as!(
             Calendar,
             "SELECT
                 id,
@@ -41,23 +130,38 @@ impl Database {
                 name,
                 user_id,
                 created_at,
-                updated_at
-            FROM calendars WHERE id = $1",
-            id as i32
+                updated_at FROM calendars WHERE user_id = $1",
+            user_id
         )
-        .fetch_one(&self.client)
+        .fetch_all(&self.pool)
         .await?;
 
-        db_calendar.item_ids = sqlx::query_scalar!(
-            "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
-            id as i32
-        )
-        .fetch_all(&self.client)
-        .await?;
+        let mut result: Vec<Calendar> = Vec::new();
 
-        Ok(Some(db_calendar))
+        for calendar_entity in calendars {
+            let item_ids: Vec<i32> = sqlx::query_scalar!(
+                "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
+                calendar_entity.id
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+            result.push(Calendar {
+                id: calendar_entity.id,
+                name: calendar_entity.name,
+                item_ids,
+                language: calendar_entity.language,
+                user_id: calendar_entity.user_id,
+                created_at: calendar_entity.created_at,
+                updated_at: calendar_entity.updated_at,
+            });
+        }
+
+        Ok(result)
     }
 
+    /// # Errors
+    /// Returns an error if the query fails
     pub async fn save_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
         match calendar.id {
             0 => self.insert_calendar(calendar).await,
@@ -65,45 +169,64 @@ impl Database {
         }
     }
 
-    async fn insert_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
-        let id = sqlx::query_scalar!(
-            "INSERT INTO calendars (
-                language,
-                name
-            ) VALUES ($1, $2)
-            RETURNING id",
-            calendar.language.clone() as Language,
-            calendar.name.clone()
+    /// # Errors
+    /// Returns an error if the query fails
+    pub async fn insert_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
+        let inserted_calendar = sqlx::query!(
+            "INSERT INTO calendars (name, language, user_id) VALUES ($1, $2, $3) RETURNING id, name, language as \"language: Language\", user_id, created_at, updated_at",
+            calendar.name,
+            calendar.language as Language,
+            calendar.user_id,
         )
-        .fetch_one(&self.client)
+        .fetch_one(&self.pool)
         .await?;
 
-        self.update_calendar_items(id, calendar.item_ids.clone())
+        self.update_calendar_items(inserted_calendar.id, calendar.item_ids.clone())
             .await?;
 
-        Ok(Calendar { id, ..calendar })
+        Ok(Calendar {
+            id: inserted_calendar.id,
+            name: inserted_calendar.name,
+            item_ids: calendar.item_ids,
+            language: inserted_calendar.language,
+            user_id: inserted_calendar.user_id,
+            created_at: Some(inserted_calendar.created_at),
+            updated_at: Some(inserted_calendar.updated_at),
+        })
     }
 
-    async fn update_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
-        sqlx::query!(
-            "UPDATE calendars
-            SET
-                language = $1,
-                name = $2,
-                user_id = $3
-            WHERE id = $4",
-            calendar.language.clone() as Language,
-            calendar.name.clone(),
+    /// # Errors
+    /// Returns an error if the query fails.
+    pub async fn update_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
+        let calendar = sqlx::query!(
+            "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 RETURNING id, name, language as \"language: Language\", user_id, created_at, updated_at",
+            calendar.name,
+            calendar.language as Language,
+            calendar.id,
             calendar.user_id,
-            calendar.id.clone()
         )
-        .execute(&self.client)
+        .fetch_one(&self.pool)
         .await?;
 
-        self.update_calendar_items(calendar.id, calendar.item_ids.clone())
+        let item_ids: Vec<i32> = sqlx::query_scalar!(
+            "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
+            calendar.id
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        self.update_calendar_items(calendar.id, item_ids.clone())
             .await?;
 
-        Ok(calendar)
+        Ok(Calendar {
+            id: calendar.id,
+            name: calendar.name,
+            item_ids,
+            language: calendar.language,
+            user_id: calendar.user_id,
+            created_at: Some(calendar.created_at),
+            updated_at: Some(calendar.updated_at),
+        })
     }
 
     async fn update_calendar_items(
@@ -125,52 +248,67 @@ impl Database {
 
         query_builder.push(" ON CONFLICT (calendar_id, item_id) DO NOTHING");
 
-        query_builder.build().execute(&self.client).await?;
+        query_builder.build().execute(&self.pool).await?;
 
         Ok(())
     }
 
-    // User methods
-    pub async fn get_user_by_id(&self, id: i32) -> ServerResult<Option<User>> {
-        let user = sqlx::query_as!(
-            User,
+    /// # Errors
+    /// Returns an error if the query fails
+    pub async fn get_user_by_id(&self, id: i32) -> Result<User, sqlx::Error> {
+        // TODO fix error type
+        let user = sqlx::query!(
             "SELECT id, username, email, password_hash, created_at, updated_at FROM users WHERE id = $1",
             id
         )
-        .fetch_optional(&self.client)
+        .fetch_one(&self.pool)
         .await?;
 
-        Ok(user)
+        Ok(User {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            password_hash: user.password_hash,
+            created_at: user.created_at,
+            updated_at: user.updated_at,
+        })
     }
 
-    pub async fn get_user_by_email(&self, email: &str) -> ServerResult<Option<User>> {
-        let user = sqlx::query_as!(
-            User,
-            "SELECT id, username, email, password_hash, created_at, updated_at FROM users WHERE email = $1",
-            email
-        )
-        .fetch_optional(&self.client)
-        .await?;
-
-        Ok(user)
-    }
-
-    pub async fn create_user(
+    /// # Errors
+    /// Returns an error if the query fails
+    pub async fn update_user(
         &self,
-        username: String,
-        email: String,
-        password_hash: Option<String>,
-    ) -> ServerResult<User> {
-        let user = sqlx::query_as!(
-            User,
-            "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, password_hash, created_at, updated_at",
+        id: i32,
+        username: &str,
+        email: &str,
+    ) -> Result<User, sqlx::Error> {
+        // TODO fix error type
+        let user = sqlx::query!(
+            "UPDATE users SET username = $1, email = $2, updated_at = NOW() WHERE id = $3 RETURNING id, username, email, password_hash, created_at, updated_at",
             username,
             email,
-            password_hash
+            id
         )
-        .fetch_one(&self.client)
+        .fetch_one(&self.pool)
         .await?;
 
-        Ok(user)
+        Ok(User {
+            id: user.id,
+            username: user.username,
+            email: user.email,
+            password_hash: user.password_hash,
+            created_at: user.created_at,
+            updated_at: user.updated_at,
+        })
+    }
+
+    /// # Errors
+    /// Returns an error if the query fails
+    pub async fn delete_user(&self, id: i32) -> Result<(), sqlx::Error> {
+        // TODO fix error type
+        sqlx::query!("DELETE FROM users WHERE id = $1", id)
+            .execute(&self.pool)
+            .await?;
+        Ok(())
     }
 }

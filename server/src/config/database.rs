@@ -15,6 +15,8 @@ pub struct Database {
 }
 
 impl Database {
+    /// # Errors
+    /// Returns `ConfigError` if config is invalid or not found
     pub fn new() -> std::result::Result<Self, ConfigError> {
         let database_config = Config::builder()
             .add_source(File::with_name(DATABASE_FILE))

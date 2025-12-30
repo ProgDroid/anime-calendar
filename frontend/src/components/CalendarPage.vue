@@ -2,7 +2,7 @@
 import { ref, onMounted, watch, computed } from 'vue'
 import type { Item } from '@/types/item'
 import type { Calendar } from '@/types/calendar'
-import { getApiUrl } from '@/config/api'
+import api from '@/config/api'
 
 // State
 const nameInput = ref('')
@@ -13,7 +13,7 @@ const calendarName = ref('')
 const calendarLanguage = ref<'english' | 'romaji' | 'native'>('english')
 const itemsInCalendar = ref<Item[]>([])
 const loading = ref(false)
-const error = ref<string | null>(null)
+const error = ref<string | null>(null) // TODO need calendar block error and search block error
 
 // Helper function to get title based on selected language
 const getSelectedItemTitle = (item: Item): string => {
@@ -88,11 +88,8 @@ const fetchItems = async () => {
       url += `&media_type=${mediaType.value}`
     }
     
-    const response = await fetch(getApiUrl(url))
-    if (!response.ok) {
-      throw new Error(`Failed to fetch items: ${response.status} ${response.statusText}`)
-    }
-    const items: Item[] = await response.json()
+    const response = await api.get(url)
+    const items: Item[] = response.data
     fetchedItems.value = items
     selectedItems.value = [] // Reset selection when new search is performed
   } catch (err) {
@@ -157,20 +154,9 @@ const submitCalendar = async () => {
       items: itemsInCalendar.value
     }
     
-    const response = await fetch(getApiUrl('/calendar'), {
-      method: 'PUT',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(calendar)
-    })
+    const response = await api.put('/calendar', calendar)
     
-    if (!response.ok) {
-      throw new Error(`Failed to submit calendar: ${response.status} ${response.statusText}`)
-    }
-    
-    const result = await response.json()
-    alert(`Calendar submitted successfully: ${result.name}`)
+    alert(`Calendar submitted successfully: ${response.data.name}`)
     
     // Reset form
     calendarName.value = ''

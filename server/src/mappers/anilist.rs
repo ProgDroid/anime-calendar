@@ -14,10 +14,17 @@ pub struct Anilist {
 }
 
 impl Anilist {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             client: Client::new(),
         }
+    }
+}
+
+impl Default for Anilist {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

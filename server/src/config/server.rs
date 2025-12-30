@@ -21,6 +21,8 @@ impl Default for Server {
 }
 
 impl Server {
+    /// # Errors
+    /// Returns `ConfigError` if config file is invalid or not found
     pub fn new() -> std::result::Result<Self, ConfigError> {
         let server_config = Config::builder()
             .add_source(File::with_name(CONFIG_FILE))

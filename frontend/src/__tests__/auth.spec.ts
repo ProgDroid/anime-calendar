@@ -47,7 +47,7 @@ describe('Auth Store', () => {
     expect(result).toEqual(mockResponse.data)
     expect(store.token).toBe('mock-jwt-token')
     expect(store.user).toEqual(mockResponse.data.user)
-    expect(api.post).toHaveBeenCalledWith('/auth/login', {
+    expect(api.post).toHaveBeenCalledWith('/login', {
       email: 'test@example.com',
       password: 'password123'
     })
@@ -92,7 +92,7 @@ describe('Auth Store', () => {
     expect(result).toEqual(mockResponse.data)
     expect(store.token).toBe('mock-jwt-token')
     expect(store.user).toEqual(mockResponse.data.user)
-    expect(api.post).toHaveBeenCalledWith('/auth/register', {
+    expect(api.post).toHaveBeenCalledWith('/register', {
       username: 'testuser',
       email: 'test@example.com',
       password: 'password123'
@@ -127,7 +127,7 @@ describe('Auth Store', () => {
     const result = await store.getCurrentUser()
     
     expect(result).toEqual(mockResponse.data)
-    expect(api.get).toHaveBeenCalledWith('/auth/me')
+    expect(api.get).toHaveBeenCalledWith('/me')
   })
 
   it('should handle get current user failure', async () => {
