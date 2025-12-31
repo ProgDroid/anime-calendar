@@ -27,6 +27,7 @@
   },
   "devDependencies": {
     "@prettier/plugin-oxc": "^0.0.5",
+    "@tailwindcss/vite": "^4.1.18",
     "@tsconfig/node24": "^24.0.3",
     "@types/jsdom": "^27.0.0",
     "@types/node": "^24.10.1",
@@ -36,6 +37,7 @@
     "@vue/eslint-config-typescript": "^14.6.0",
     "@vue/test-utils": "^2.4.6",
     "@vue/tsconfig": "^0.8.1",
+    "daisyui": "^5.5.14",
     "eslint": "^9.39.1",
     "eslint-plugin-oxlint": "~1.29.0",
     "eslint-plugin-vue": "~10.5.1",
@@ -44,6 +46,7 @@
     "npm-run-all2": "^8.0.4",
     "oxlint": "~1.29.0",
     "prettier": "3.6.2",
+    "tailwindcss": "^4.1.18",
     "typescript": "~5.9.0",
     "vite": "npm:rolldown-vite@latest",
     "vite-plugin-vue-devtools": "^8.0.5",

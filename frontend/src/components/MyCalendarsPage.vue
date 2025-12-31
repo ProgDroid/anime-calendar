@@ -1,41 +1,51 @@
 <template>
-  <div class="my-calendars-page">
-    <h1>My Calendars</h1>
+  <div class="min-h-screen bg-base-200 p-4">
+    <h1 class="text-2xl font-bold mb-6">My Calendars</h1>
     
-    <div class="actions">
-      <button @click="createNewCalendar" class="new-calendar-button">
+    <div class="flex justify-center mb-6">
+      <button @click="createNewCalendar" class="btn btn-primary">
         Create New Calendar
       </button>
     </div>
     
-    <div v-if="loading" class="loading">Loading calendars...</div>
-    
-    <div v-else-if="error" class="error">{{ error }}</div>
-    
-    <div v-else-if="calendars.length === 0" class="no-calendars">
-      No calendars found. <button @click="createNewCalendar">Create your first calendar</button>
+    <div v-if="loading" class="alert alert-info">
+      Loading calendars...
     </div>
     
-    <div v-else class="calendars-grid">
+    <div v-else-if="error" class="alert alert-error">
+      {{ error }}
+    </div>
+    
+    <div v-else-if="calendars.length === 0" class="alert alert-info">
+      No calendars found. <button @click="createNewCalendar" class="btn btn-sm btn-primary">Create your first calendar</button>
+    </div>
+    
+    <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       <div 
         v-for="calendar in calendars" 
         :key="calendar.id" 
-        class="calendar-card"
+        class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow duration-300 cursor-pointer"
         @click="viewCalendar(calendar.id)"
       >
-        <h2>{{ calendar.name }}</h2>
-        <p>Items: {{ calendar.items.length }}</p>
-        <p>Created: {{ formatDate(calendar.created_at) }}</p>
-        <p>Updated: {{ formatDate(calendar.updated_at) }}</p>
-        
-        <!-- Cascade of cover images for first 3 items -->
-        <div class="calendar-cascade">
-          <CalendarCoverCascade :items="calendar.items.slice(0, 3)" />
-        </div>
-        
-        <div class="calendar-actions">
-          <button @click.stop="editCalendar(calendar.id)" class="edit-button">Edit</button>
-          <button @click.stop="deleteCalendar(calendar.id)" class="delete-button">Delete</button>
+        <div class="card-body">
+          <h2 class="card-title">{{ calendar.name }}</h2>
+          <p class="text-sm">Items: {{ calendar.items.length }}</p>
+          <p class="text-sm">Created: {{ formatDate(calendar.created_at) }}</p>
+          <p class="text-sm">Updated: {{ formatDate(calendar.updated_at) }}</p>
+          
+          <!-- Cascade of cover images for first 3 items -->
+          <div class="calendar-cascade mt-3">
+            <CalendarCoverCascade :items="calendar.items.slice(0, 3)" />
+          </div>
+          
+          <div class="card-actions justify-end mt-4">
+            <button @click.stop="editCalendar(calendar.id)" class="btn btn-sm btn-primary">
+              Edit
+            </button>
+            <button @click.stop="deleteCalendar(calendar.id)" class="btn btn-sm btn-error">
+              Delete
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -115,50 +125,6 @@ const formatDate = (dateString: string) => {
 </script>
 
 <style scoped>
-.my-calendars-page {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 20px;
-}
-
-.actions {
-  margin-bottom: 20px;
-}
-
-.new-calendar-button {
-  padding: 10px 15px;
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 1em;
-}
-
-.new-calendar-button:hover {
-  background-color: #218838;
-}
-
-.loading, .error, .no-calendars {
-  text-align: center;
-  padding: 20px;
-  margin: 20px 0;
-}
-
-.error {
-  color: #dc3545;
-  background-color: #f8d7da;
-  border: 1px solid #f5c6cb;
-  border-radius: 4px;
-}
-
-.calendars-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
-}
-
 .calendar-card {
   background-color: #f8f9fa;
   padding: 20px;

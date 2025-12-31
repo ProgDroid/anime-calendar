@@ -11,13 +11,26 @@ onMounted(async () => {
 </script>
 
 <template>
-  <nav>
-    <RouterLink to="/my-calendars">My Calendars</RouterLink>
-    <RouterLink v-if="authStore.isAuthenticated()" to="/login" @click="authStore.logout">Logout</RouterLink>
-  </nav>
-  <main>
-    <RouterView />
-  </main>
+  <div class="min-h-screen bg-base-200">
+    <div class="navbar bg-base-100 shadow">
+      <div class="flex-1">
+        <RouterLink to="/my-calendars" class="btn btn-ghost text-xl">Anime Calendar</RouterLink>
+      </div>
+      <div class="flex-none">
+        <ul class="menu menu-horizontal px-1">
+          <li>
+            <RouterLink to="/my-calendars">My Calendars</RouterLink>
+          </li>
+          <li v-if="authStore.isAuthenticated()">
+            <RouterLink to="/login" @click="authStore.logout">Logout</RouterLink>
+          </li>
+        </ul>
+      </div>
+    </div>
+    <main class="container mx-auto p-4">
+      <RouterView />
+    </main>
+  </div>
 </template>
 
 <style scoped>
@@ -27,22 +40,5 @@ onMounted(async () => {
   -moz-osx-font-smoothing: grayscale;
   text-align: center;
   color: #2c3e50;
-}
-
-nav {
-  padding: 30px;
-  background-color: #f8f9fa;
-  border-bottom: 1px solid #dee2e6;
-}
-
-nav a {
-  font-weight: bold;
-  color: #2c3e50;
-  margin-right: 10px;
-  text-decoration: none;
-}
-
-nav a.router-link-exact-active {
-  color: #42b983;
 }
 </style>

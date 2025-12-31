@@ -18,12 +18,12 @@ describe('Auth Store', () => {
     const store = useAuthStore()
     // Manually reset the store state
     store.token = ''
-    store.user = null
+    store.user = ''
   })
 
   it('should initialize with empty user and token', () => {
     const store = useAuthStore()
-    expect(store.user).toBeNull()
+    expect(store.user).toBe('')
     expect(store.token).toBe('')
   })
 
@@ -76,11 +76,7 @@ describe('Auth Store', () => {
     const mockResponse = {
       data: {
         token: 'mock-jwt-token',
-        user: {
-          id: 1,
-          username: 'testuser',
-          email: 'test@example.com'
-        }
+        username: 'testuser'
       }
     }
     
@@ -91,7 +87,7 @@ describe('Auth Store', () => {
     
     expect(result).toEqual(mockResponse.data)
     expect(store.token).toBe('mock-jwt-token')
-    expect(store.user).toEqual(mockResponse.data.user)
+    expect(store.user).toEqual(mockResponse.data.username)
     expect(api.post).toHaveBeenCalledWith('/register', {
       username: 'testuser',
       email: 'test@example.com',
@@ -101,8 +97,9 @@ describe('Auth Store', () => {
 
   it('should logout correctly', () => {
     const store = useAuthStore()
+    store.register('testuser', 'test@example.com', 'password123')
     store.token = 'mock-token'
-    store.user = { id: 1, username: 'testuser', email: 'test@example.com' }
+    store.user = 'username'
     
     store.logout()
     
@@ -145,7 +142,7 @@ describe('Auth Store', () => {
       expect.fail('Should have thrown an error')
     } catch (error: any) {
       expect(store.token).toBe('')
-      expect(store.user).toBeNull()
+      expect(store.user).toBe('')
     }
   })
 })

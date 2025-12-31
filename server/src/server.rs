@@ -61,3 +61,4 @@ pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> Ser
     .bind(format!("{}:{}", config.host, config.port))?
     .run())
 }
+// TODO refactor frontend components

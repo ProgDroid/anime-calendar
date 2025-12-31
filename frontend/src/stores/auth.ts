@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import api from '../config/api'
 
 export const useAuthStore = defineStore('auth', () => {
-  const user = ref(null)
+  const user = ref('')
   const token = ref('')
   const router = useRouter()
 
@@ -55,7 +55,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   const logout = () => {
     token.value = ''
-    user.value = null
+    user.value = ''
     localStorage.removeItem('authToken')
     router.push('/login')
   }
