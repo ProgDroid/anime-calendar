@@ -42,6 +42,8 @@ async fn export(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims) -> H
     // TODO * anilist list?
     // TODO * Calendar templates? (predefined items)
     // TODO * config.toml in frontend is accessible via URL and downloadable. This needs to be changed
+    // TODO * search calendar
+    // TODO * calendar pagination
 
     match data.database.get_calendar_by_id(*id as i32, user.id).await {
         Ok(calendar_data) => {
