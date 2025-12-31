@@ -468,25 +468,23 @@
                       Already in calendar
                     </div>
                     <!-- Background image for selected items -->
-                    <!-- <div class="overflow-hidden"> -->
-                      <div 
-                        v-if="item.banner_image"
-                        class="absolute inset-0 transition-all duration-300 ease-in-out"
-                        :class="{ 
-                          'opacity-0': !selectedItems.includes(item.id),
-                          'opacity-100': selectedItems.includes(item.id)
-                        }"
-                        :style="{ 
-                          'background-image': `url(${item.banner_image})`,
-                          'background-size': 'cover',
-                          'background-position': 'center',
-                          'background-repeat': 'no-repeat',
-                          'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 65%, rgba(0,0,0,1) 95%)',
-                          'border-radius': '8px 8px 8px 8px'
-                        }"
-                      >
-                      </div>
-                    <!-- </div> -->
+                    <div 
+                      v-if="item.banner_image"
+                      class="absolute inset-0 transition-all duration-300 ease-in-out"
+                      :class="{ 
+                        'opacity-0': !selectedItems.includes(item.id),
+                        'opacity-100': selectedItems.includes(item.id)
+                      }"
+                      :style="{ 
+                        'background-image': `url(${item.banner_image})`,
+                        'background-size': 'cover',
+                        'background-position': 'center',
+                        'background-repeat': 'no-repeat',
+                        'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 65%, rgba(0,0,0,1) 95%)',
+                        'border-radius': '8px 8px 8px 8px'
+                      }"
+                    >
+                    </div>
                     <div
                       v-if="!item.banner_image && item.cover_image?.medium"
                       class="absolute inset-0 transition-all duration-300 ease-in-out"
@@ -526,6 +524,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { Item } from '@/types/item'
 import type { Calendar } from '@/types/calendar'
 import api from '@/config/api'
+import { toastService } from '@/services/toastService'
 
 // Router
 const router = useRouter()
@@ -616,34 +615,34 @@ onBeforeUnmount(() => {
 })
 
 // Load calendar data when in edit mode
-  const currentCalendar = ref<Calendar | null>(null)
+const currentCalendar = ref<Calendar | null>(null)
   
-  onBeforeMount(async () => {
-    // Check if we're in edit mode (route contains calendar ID)
-    const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
-    if (calendarId && calendarId !== 'new') {
-      loading.value = true
-      calendarError.value = null
+onBeforeMount(async () => {
+  // Check if we're in edit mode (route contains calendar ID)
+  const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
+  if (calendarId && calendarId !== 'new') {
+    loading.value = true
+    calendarError.value = null
+    
+    try {
+      const response = await api.get(`/calendars/${route.params.id}`)
+      const calendar: Calendar = response.data
       
-      try {
-        const response = await api.get(`/calendars/${route.params.id}`)
-        const calendar: Calendar = response.data
-        
-        // Pre-populate form with calendar data
-        calendarName.value = calendar.name
-        calendarLanguage.value = calendar.language
-        
-        // Load items into the calendar
-        itemsInCalendar.value = calendar.items
-        currentCalendar.value = calendar
-      } catch (err) {
-        calendarError.value = err instanceof Error ? err.message : 'Failed to load calendar'
-        console.error('Failed to load calendar:', err)
-      } finally {
-        loading.value = false
-      }
+      // Pre-populate form with calendar data
+      calendarName.value = calendar.name
+      calendarLanguage.value = calendar.language
+      
+      // Load items into the calendar
+      itemsInCalendar.value = calendar.items
+      currentCalendar.value = calendar
+    } catch (err) {
+      calendarError.value = err instanceof Error ? err.message : 'Failed to load calendar'
+      console.error('Failed to load calendar:', err)
+    } finally {
+      loading.value = false
     }
-  })
+  }
+})
 
 // Fetch items by name
 const fetchItems = async () => {
@@ -747,7 +746,7 @@ const submitCalendar = async () => {
       response = await api.put('/calendar', calendar)
     }
     
-    alert(`Calendar submitted successfully: ${response.data.name}`)
+    toastService.success(`${response.data.name} updated`)
     
     // Reset form
     calendarName.value = ''

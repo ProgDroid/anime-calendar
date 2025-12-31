@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/config/api'
+import { toastService } from '@/services/toastService'
 
 interface User {
   username: string
@@ -52,9 +53,7 @@ const handleUpdate = async (e: Event) => {
     authStore.user = response.data
     
     // Show success notification
-    if (typeof window !== 'undefined') {
-      alert('User details updated successfully!')
-    }
+    toastService.success('User details updated successfully!')
   } catch (err) {
     error.value = 'Failed to update user details'
     console.error('Error updating user:', err)
