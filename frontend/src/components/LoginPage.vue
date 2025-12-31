@@ -39,7 +39,7 @@ const toggleMode = () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-base-200 flex items-center justify-center p-4">
+  <div class="min-h-[calc(100vh-6rem)] md:min-h-[calc(100vh-7rem)] bg-base-200 flex items-center justify-center">
     <div class="card bg-base-100 w-full max-w-md shadow-xl">
       <div class="card-body">
         <h2 class="card-title">{{ isRegistering ? 'Register' : 'Login' }}</h2>
