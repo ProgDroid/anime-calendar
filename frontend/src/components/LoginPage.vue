@@ -94,7 +94,7 @@ const toggleMode = () => {
             {{ loading ? (isRegistering ? 'Registering...' : 'Logging in...') : (isRegistering ? 'Register' : 'Login') }}
           </button>
           
-          <div v-if="error" class="alert alert-error mt-4">
+          <div v-if="error" class="alert alert-error mt-2">
             {{ error }}
           </div>
         </form>
