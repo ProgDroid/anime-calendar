@@ -9,7 +9,7 @@ pub struct Calendar {
     pub id: Id,
     pub items: Vec<Item>,
     pub language: Language,
-    pub name: String, // TODO Name object?
+    pub name: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }

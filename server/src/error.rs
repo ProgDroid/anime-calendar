@@ -4,11 +4,11 @@ use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 pub enum Error {
     #[error("Requested resource not found")]
     NotFound,
-    #[error("An unhandled database error occurred")] // TODO more granular DB errors
+    #[error("An unhandled database error occurred")]
     Database(#[from] sqlx::Error),
-    #[error("An unhandled config error occurred")] // TODO more granular/specific
+    #[error("An unhandled config error occurred")]
     Config(#[from] config::ConfigError),
-    #[error("Could not start server")] // TODO ?
+    #[error("Could not start server")]
     Server(#[from] std::io::Error),
     #[error("Unauthorized")]
     Unauthorised,
@@ -22,7 +22,7 @@ pub enum Error {
 
 impl ResponseError for Error {
     fn error_response(&self) -> actix_web::HttpResponse<actix_web::body::BoxBody> {
-        HttpResponse::build(self.status_code()).body(self.to_string()) // TODO also return original error?
+        HttpResponse::build(self.status_code()).body(self.to_string())
     }
 
     fn status_code(&self) -> actix_web::http::StatusCode {
@@ -36,46 +36,3 @@ impl ResponseError for Error {
         }
     }
 }
-
-// // server/src/error.rs
-// use actix_web::{error, HttpResponse, Result};
-// use serde::{Deserialize, Serialize};
-
-// #[derive(Debug, Serialize, Deserialize)]
-// pub struct ServiceError {
-//     pub message: String,
-//     pub status_code: u16,
-// }
-
-// impl error::ResponseError for ServiceError {
-//     fn status_code(&self) -> actix_web::http::StatusCode {
-//         actix_web::http::StatusCode::from_u16(self.status_code).unwrap()
-//     }
-
-//     fn error_response(&self) -> HttpResponse {
-//         HttpResponse::build(self.status_code()).json(self)
-//     }
-// }
-
-// impl ServiceError {
-//     pub fn Unauthorized() -> Self {
-//         ServiceError {
-//             message: "Unauthorized".to_string(),
-//             status_code: 401,
-//         }
-//     }
-
-//     pub fn InternalServerError() -> Self {
-//         ServiceError {
-//             message: "Internal Server Error".to_string(),
-//             status_code: 500,
-//         }
-//     }
-
-//     pub fn NotFound() -> Self {
-//         ServiceError {
-//             message: "Not Found".to_string(),
-//             status_code: 404,
-//         }
-//     }
-// }

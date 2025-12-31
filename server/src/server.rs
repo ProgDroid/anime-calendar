@@ -7,7 +7,7 @@ use log::{error, LevelFilter};
 
 use crate::{
     config::server::Server as ServerConfig,
-    controllers::{auth, calendar, item, items},
+    controllers::{auth, calendar, item, items, user},
     mappers::{anilist::Anilist, database::Database},
     ServerResult,
 };
@@ -55,6 +55,9 @@ pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> Ser
             .service(auth::register)
             .service(auth::get_current_user)
             .service(auth::verify_token_endpoint)
+            .service(user::get_user_details)
+            .service(user::update_user)
+            .service(user::delete_user)
         // .service(auth::google_oauth)
         // .service(auth::github_oauth)
     })

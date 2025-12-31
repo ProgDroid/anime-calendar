@@ -45,7 +45,7 @@ pub async fn login(db: web::Data<Repos>, credentials: web::Json<LoginRequest>) -
 pub struct RegisterRequest {
     pub username: String,
     pub email: String,
-    pub password: String,
+    pub password: String, // TODO secret?
 }
 
 #[post("/register")]

@@ -22,6 +22,9 @@ onMounted(async () => {
             <RouterLink to="/my-calendars">My Calendars</RouterLink>
           </li>
           <li v-if="authStore.isAuthenticated()">
+            <RouterLink to="/user/details">My Account</RouterLink>
+          </li>
+          <li v-if="authStore.isAuthenticated()">
             <RouterLink to="/login" @click="authStore.logout">Logout</RouterLink>
           </li>
         </ul>

@@ -22,7 +22,7 @@ pub struct CalendarRequest {
     pub id: Id,
     pub items: Vec<Item>,
     pub language: Language,
-    pub name: String, // TODO Name object?
+    pub name: String,
 }
 
 #[get("/calendar/{id}/export")]

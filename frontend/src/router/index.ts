@@ -5,6 +5,7 @@ import { useAuthStore } from '../stores/auth'
 const MyCalendarsPage = () => import('@/components/MyCalendarsPage.vue')
 const CalendarPage = () => import('@/components/CalendarPage.vue')
 const LoginPage = () => import('@/components/LoginPage.vue')
+const UserDetailsPage = () => import('@/components/UserDetailsPage.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -28,6 +29,12 @@ const router = createRouter({
       path: '/calendar/:id',
       name: 'CalendarDetail',
       component: CalendarPage,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/user/details',
+      name: 'UserDetails',
+      component: UserDetailsPage,
       meta: { requiresAuth: true }
     }
   ]
