@@ -1,6 +1,6 @@
 <template>
   <div class="min-h-screen bg-base-200 p-4">
-    <h1 class="text-2xl font-bold mb-6">Calendar Manager</h1>
+    <h1 class="text-2xl font-bold mb-6">Edit Calendar</h1>
     
     <!-- Vertical Layout (for mobile) -->
     <div v-if="isMobile" class="flex flex-col gap-6">
@@ -63,9 +63,9 @@
             {{ searchError }}
           </div>
           
-          <div v-if="fetchedItems.length > 0" class="mt-4">
+          <div class="mt-4">
             <h3 class="font-bold mb-2">Fetched Items</h3>
-            <div class="overflow-y-auto max-h-96 p-2 border rounded">
+            <div class="overflow-y-auto max-h-96 p-2 border rounded max-h-[250px] min-h-[250px]">
               <div class="flex flex-col gap-1">
                 <div 
                   v-for="item in fetchedItems" 
@@ -99,7 +99,7 @@
                         <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">Episodes: {{ item.episode_duration }}</p>
                       </div>
                     </div>
-                    <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="absolute top-2 right-2 bg-success text-white text-xs px-2 py-1 rounded">
+                    <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="bg-success text-white text-xs px-2 py-1 rounded">
                       Already in calendar
                     </div>
                     <!-- Background image for selected items -->
@@ -115,7 +115,25 @@
                         'background-size': 'cover',
                         'background-position': 'center',
                         'background-repeat': 'no-repeat',
-                        'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 65%, rgba(0,0,0,1) 100%)',
+                        'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 70%, rgba(0,0,0,1) 100%)',
+                      }"
+                    >
+                    </div>
+                    <div
+                      v-if="!item.banner_image && item.cover_image?.medium"
+                      class="absolute inset-0 transition-all duration-300 ease-in-out"
+                      :class="{ 
+                        'opacity-0': !selectedItems.includes(item.id),
+                        'opacity-100': selectedItems.includes(item.id)
+                      }"
+                      :style="{ 
+                        'background-image': `url(${item.cover_image?.medium})`,
+                        'background-size': 'fit',
+                        'background-position': 'right',
+                        'background-repeat': 'no-repeat',
+                        'float': 'right',
+                        'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.0) 70%, rgba(0,0,0,1) 100%)',
+                        'border-radius': '8px 8px 8px 8px'
                       }"
                     >
                     </div>
@@ -450,19 +468,40 @@
                       Already in calendar
                     </div>
                     <!-- Background image for selected items -->
-                    <div 
-                      v-if="item.banner_image"
+                    <!-- <div class="overflow-hidden"> -->
+                      <div 
+                        v-if="item.banner_image"
+                        class="absolute inset-0 transition-all duration-300 ease-in-out"
+                        :class="{ 
+                          'opacity-0': !selectedItems.includes(item.id),
+                          'opacity-100': selectedItems.includes(item.id)
+                        }"
+                        :style="{ 
+                          'background-image': `url(${item.banner_image})`,
+                          'background-size': 'cover',
+                          'background-position': 'center',
+                          'background-repeat': 'no-repeat',
+                          'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 65%, rgba(0,0,0,1) 95%)',
+                          'border-radius': '8px 8px 8px 8px'
+                        }"
+                      >
+                      </div>
+                    <!-- </div> -->
+                    <div
+                      v-if="!item.banner_image && item.cover_image?.medium"
                       class="absolute inset-0 transition-all duration-300 ease-in-out"
                       :class="{ 
                         'opacity-0': !selectedItems.includes(item.id),
                         'opacity-100': selectedItems.includes(item.id)
                       }"
                       :style="{ 
-                        'background-image': `url(${item.banner_image})`,
-                        'background-size': 'cover',
-                        'background-position': 'center',
+                        'background-image': `url(${item.cover_image?.medium})`,
+                        'background-size': 'fit',
+                        'background-position': 'right',
                         'background-repeat': 'no-repeat',
-                        'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 45%, rgba(0,0,0,1) 100%)',
+                        'float': 'right',
+                        'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.0) 83.5%, rgba(0,0,0,1) 95%)',
+                        'border-radius': '8px 8px 8px 8px'
                       }"
                     >
                     </div>
