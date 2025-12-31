@@ -44,7 +44,11 @@ const router = createRouter({
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   
-  if (to.meta.requiresAuth && !authStore.isAuthenticated()) {
+  if (to.path === '/login' && authStore.isAuthenticated()) {
+    // If user is already logged in and tries to access /login, redirect to /my-calendars
+    next('/my-calendars')
+  } else if (to.meta.requiresAuth && !authStore.isAuthenticated()) {
+    // If route requires auth and user is not authenticated, redirect to /login
     next('/login')
   } else {
     next()

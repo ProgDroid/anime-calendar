@@ -58,7 +58,7 @@ const handleLogout = () => {
             <RouterLink to="/user/details" active-class="active">My Account</RouterLink>
           </li>
           <li v-if="authStore.isAuthenticated()">
-            <button @click="handleLogout" class="btn btn-ghost">Logout</button>
+            <button @click="handleLogout">Logout</button>
           </li>
         </ul>
       </div>
