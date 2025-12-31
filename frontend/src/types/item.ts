@@ -19,4 +19,5 @@ export interface Item {
   episode_duration: number;
   airing_schedule: any[];
   cover_image?: CoverImage;
+  banner_image?: string;
 }

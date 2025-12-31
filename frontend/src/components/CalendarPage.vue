@@ -77,7 +77,7 @@
                   }"
                   @click="!itemsInCalendar.some(calendarItem => calendarItem.id === item.id) && toggleItemSelection(item.id)"
                 >
-                  <div class="card-body p-3">
+                  <div class="card-body p-3 relative overflow-hidden">
                     <div class="flex items-start gap-2">
                       <div class="flex-shrink-0">
                         <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
@@ -101,6 +101,23 @@
                     </div>
                     <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="absolute top-2 right-2 bg-success text-white text-xs px-2 py-1 rounded">
                       Already in calendar
+                    </div>
+                    <!-- Background image for selected items -->
+                    <div 
+                      v-if="selectedItems.includes(item.id) && item.banner_image"
+                      class="absolute inset-0 transition-all duration-300 ease-in-out"
+                      :class="{ 
+                        'opacity-0': !selectedItems.includes(item.id),
+                        'opacity-100': selectedItems.includes(item.id)
+                      }"
+                      :style="{ 
+                        'background-image': `url(${item.banner_image})`,
+                        'background-size': 'cover',
+                        'background-position': 'center',
+                        'background-repeat': 'no-repeat',
+                        'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 65%, rgba(0,0,0,1) 100%)',
+                      }"
+                    >
                     </div>
                   </div>
                 </div>
@@ -431,6 +448,23 @@
                     </div>
                     <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="absolute top-2 right-2 bg-success text-white text-xs px-2 py-1 rounded">
                       Already in calendar
+                    </div>
+                    <!-- Background image for selected items -->
+                    <div 
+                      v-if="item.banner_image"
+                      class="absolute inset-0 transition-all duration-300 ease-in-out"
+                      :class="{ 
+                        'opacity-0': !selectedItems.includes(item.id),
+                        'opacity-100': selectedItems.includes(item.id)
+                      }"
+                      :style="{ 
+                        'background-image': `url(${item.banner_image})`,
+                        'background-size': 'cover',
+                        'background-position': 'center',
+                        'background-repeat': 'no-repeat',
+                        'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 45%, rgba(0,0,0,1) 100%)',
+                      }"
+                    >
                     </div>
                   </div>
                 </div>
