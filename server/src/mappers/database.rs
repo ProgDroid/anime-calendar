@@ -335,6 +335,20 @@ impl Database {
 
     /// # Errors
     /// Returns an error if the query fails
+    pub async fn update_user_password(&self, id: i32, password_hash: &str) -> ServerResult<()> {
+        sqlx::query!(
+            "UPDATE users SET password_hash = $1, updated_at = NOW() WHERE id = $2",
+            password_hash,
+            id
+        )
+        .execute(&self.pool)
+        .await?;
+
+        Ok(())
+    }
+
+    /// # Errors
+    /// Returns an error if the query fails
     pub async fn delete_user(&self, id: i32) -> ServerResult<()> {
         sqlx::query!("DELETE FROM users WHERE id = $1", id)
             .execute(&self.pool)

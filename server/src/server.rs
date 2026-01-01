@@ -58,6 +58,7 @@ pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> Ser
             .service(user::get_user_details)
             .service(user::update_user)
             .service(user::delete_user)
+            .service(user::update_password)
         // .service(auth::google_oauth)
         // .service(auth::github_oauth)
     })

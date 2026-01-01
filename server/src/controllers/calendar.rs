@@ -1,4 +1,4 @@
-#![allow(unused_variables, clippy::cast_possible_truncation)]
+#![allow(clippy::cast_possible_truncation)]
 use crate::{
     entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
     error::Error,

@@ -1,10 +1,12 @@
 #![allow(unused_variables)]
 use crate::{
+    error::Error,
     middleware::auth::{get_user_from_claims, Claims},
     server::Repos,
+    services::auth::{hash_password, validate_password},
 };
 
-use actix_web::{delete, get, put, web, HttpResponse, ResponseError};
+use actix_web::{delete, get, post, put, web, HttpResponse, ResponseError};
 use log::error;
 use serde::{Deserialize, Serialize};
 
@@ -25,6 +27,12 @@ pub struct UserResponse {
 pub struct UpdateUserRequest {
     pub username: String,
     pub email: String,
+}
+
+#[derive(Deserialize)]
+pub struct UpdatePasswordRequest {
+    pub current_password: String,
+    pub new_password: String,
 }
 
 #[get("/user/details")]
@@ -73,6 +81,54 @@ pub async fn update_user(
 
             HttpResponse::Ok().json(response)
         }
+        Err(e) => {
+            error!("{e}");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+#[post("/user/password")]
+pub async fn update_password(
+    data: web::Data<Repos>,
+    claims: Claims,
+    password_data: web::Json<UpdatePasswordRequest>,
+) -> HttpResponse {
+    let user = match get_user_from_claims(&claims, &data.database).await {
+        Ok(user) => user,
+        Err(e) => {
+            return e.error_response();
+        }
+    };
+
+    // Check that new password is different from current password
+    if password_data.new_password == password_data.current_password {
+        return Error::InvalidRequest.error_response();
+    }
+
+    // Verify current password
+    match user.password_hash {
+        Some(hash) => {
+            if !validate_password(&password_data.current_password, &hash) {
+                return Error::Unauthorised.error_response();
+            }
+        }
+        None => {
+            // TODO Oauth user, how to handle
+            return Error::NotImplemented.error_response();
+        }
+    }
+
+    // Hash new password
+    let hashed_password = hash_password(&password_data.new_password);
+
+    // Update password in database
+    match data
+        .database
+        .update_user_password(user.id, &hashed_password)
+        .await
+    {
+        Ok(()) => HttpResponse::Ok().finish(),
         Err(e) => {
             error!("{e}");
             HttpResponse::InternalServerError().finish()

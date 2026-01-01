@@ -40,6 +40,36 @@ pub fn validate_password(password: &str, hash: &str) -> bool {
 }
 
 #[must_use]
+pub fn validate_password_strength(password: &str) -> bool {
+    // Password must be at least 12 characters long
+    if password.len() < 12 {
+        return false;
+    }
+
+    // Password must contain at least one uppercase letter
+    if !password.chars().any(char::is_uppercase) {
+        return false;
+    }
+
+    // Password must contain at least one lowercase letter
+    if !password.chars().any(char::is_lowercase) {
+        return false;
+    }
+
+    // Password must contain at least one digit
+    if !password.chars().any(|c| c.is_ascii_digit()) {
+        return false;
+    }
+
+    // Password must contain at least one special character
+    if !password.chars().any(|c| !c.is_alphanumeric()) {
+        return false;
+    }
+
+    true
+}
+
+#[must_use]
 pub fn generate_token(id: &i32) -> String {
     let secret = env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
     let claims = Claims {

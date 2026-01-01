@@ -1,7 +1,9 @@
 use crate::error::Error;
 use crate::middleware::auth::{get_user_from_claims, Claims};
 use crate::server::Repos;
-use crate::services::auth::{generate_token, hash_password, validate_password, verify_token};
+use crate::services::auth::{
+    generate_token, hash_password, validate_password, validate_password_strength, verify_token,
+};
 use actix_web::{get, post, web, HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 
@@ -53,6 +55,11 @@ pub async fn register(db: web::Data<Repos>, user_data: web::Json<RegisterRequest
     // Check if user already exists
     if (db.database.get_user_by_email(&user_data.email).await).is_ok() {
         return Error::UserAlreadyExists.error_response();
+    }
+
+    // Validate password strength
+    if !validate_password_strength(&user_data.password) {
+        return Error::InvalidPassword.error_response();
     }
 
     let hashed_password = hash_password(&user_data.password);

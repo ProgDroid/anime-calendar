@@ -16,6 +16,8 @@ pub enum Error {
     InvalidRequest,
     #[error("User already exists")]
     UserAlreadyExists,
+    #[error("Invalid password")]
+    InvalidPassword,
     #[error("Not Implemented Yet")] // TODO remove once done
     NotImplemented,
 }
@@ -29,7 +31,9 @@ impl ResponseError for Error {
         match self {
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Unauthorised => StatusCode::UNAUTHORIZED,
-            Self::InvalidRequest | Self::UserAlreadyExists => StatusCode::BAD_REQUEST,
+            Self::InvalidRequest | Self::UserAlreadyExists | Self::InvalidPassword => {
+                StatusCode::BAD_REQUEST
+            }
             Self::Database(_) | Self::Config(_) | Self::Server(_) | Self::NotImplemented => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
