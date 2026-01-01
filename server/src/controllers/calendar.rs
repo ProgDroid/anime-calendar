@@ -25,6 +25,22 @@ pub struct CalendarRequest {
     pub name: String,
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct PaginationParams {
+    #[serde(default = "default_page")]
+    pub page: usize,
+    #[serde(default = "default_page_size")]
+    pub page_size: usize,
+}
+
+const fn default_page() -> usize {
+    1
+}
+
+const fn default_page_size() -> usize {
+    6
+}
+
 #[get("/calendar/{id}/export")]
 async fn export(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims) -> HttpResponse {
     let user = match get_user_from_claims(&claims, &data.database).await {
@@ -35,7 +51,6 @@ async fn export(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims) -> H
     };
 
     // TODO * Calendar sharing? (with permissions)
-    // TODO * User management? Let users manage themselves too
     // TODO * Calendar public/private visibility
     // TODO * Generate links, maybe endpoint to generate needs to be wildly different
     // TODO * gcal integration?
@@ -43,7 +58,6 @@ async fn export(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims) -> H
     // TODO * Calendar templates? (predefined items)
     // TODO * config.toml in frontend is accessible via URL and downloadable. This needs to be changed
     // TODO * search calendar
-    // TODO * calendar pagination
 
     match data.database.get_calendar_by_id(*id as i32, user.id).await {
         Ok(calendar_data) => {
@@ -162,8 +176,26 @@ async fn put(
     }
 }
 
+#[derive(Serialize)]
+struct PaginatedResponse {
+    data: Vec<Calendar>,
+    pagination: PaginationInfo,
+}
+
+#[derive(Serialize)]
+struct PaginationInfo {
+    page: usize,
+    page_size: usize,
+    total: usize,
+    total_pages: usize,
+}
+
 #[get("/calendars")]
-async fn get_calendars(data: web::Data<Repos>, claims: Claims) -> HttpResponse {
+async fn get_calendars(
+    data: web::Data<Repos>,
+    claims: Claims,
+    params: web::Query<PaginationParams>,
+) -> HttpResponse {
     let user = match get_user_from_claims(&claims, &data.database).await {
         Ok(user) => user,
         Err(e) => {
@@ -171,9 +203,19 @@ async fn get_calendars(data: web::Data<Repos>, claims: Claims) -> HttpResponse {
         }
     };
 
-    // Get calendars for the authenticated user
-    match data.database.get_calendars_by_user(user.id).await {
-        Ok(calendars) => {
+    // TODO parallelise, otherwise takes too long
+    // TODO alternatively, ask for all items at once for all calendars, then distribute them
+    // TODO CACHING
+    // TODO not getting the actual items for this and only when loading the actual calendar, then I can do everything off of my own DB
+    // TODO OR load everything here and just pass it when you go into the edit page.
+
+    // Get calendars for the authenticated user with pagination
+    match data
+        .database
+        .get_calendars_by_user_paginated(user.id, params.page, params.page_size)
+        .await
+    {
+        Ok((calendars, total_count)) => {
             let mut results: Vec<Calendar> = Vec::new();
 
             for calendar in calendars {
@@ -205,7 +247,18 @@ async fn get_calendars(data: web::Data<Repos>, claims: Claims) -> HttpResponse {
                 }
             }
 
-            HttpResponse::Ok().json(results)
+            // Return paginated response with metadata
+            let total_pages = total_count.div_ceil(params.page_size);
+
+            HttpResponse::Ok().json(PaginatedResponse {
+                data: results,
+                pagination: PaginationInfo {
+                    page: params.page,
+                    page_size: params.page_size,
+                    total: total_count,
+                    total_pages,
+                },
+            })
         }
         Err(e) => e.error_response(),
     }

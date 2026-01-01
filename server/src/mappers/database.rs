@@ -7,6 +7,7 @@ use crate::{
         calendar::{Calendar, Language},
         user::User,
     },
+    error::Error,
     ServerResult,
 };
 
@@ -116,9 +117,30 @@ impl Database {
         })
     }
 
+    #[allow(
+        clippy::cast_possible_wrap,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
     /// # Errors
     /// Returns an error if the query fails
-    pub async fn get_calendars_by_user(&self, user_id: i32) -> ServerResult<Vec<Calendar>> {
+    pub async fn get_calendars_by_user_paginated(
+        &self,
+        user_id: i32,
+        page: usize,
+        page_size: usize,
+    ) -> ServerResult<(Vec<Calendar>, usize)> {
+        // First get the total count
+        let total_count: i64 =
+            match sqlx::query_scalar!("SELECT COUNT(*) FROM calendars WHERE user_id = $1", user_id)
+                .fetch_one(&self.pool)
+                .await?
+            {
+                Some(count) => count,
+                None => return Err(Error::NotFound),
+            };
+
+        // Then get the paginated results
         let calendars: Vec<Calendar> = sqlx::query_as!(
             Calendar,
             "SELECT
@@ -128,8 +150,10 @@ impl Database {
                 name,
                 user_id,
                 created_at,
-                updated_at FROM calendars WHERE user_id = $1",
-            user_id
+                updated_at FROM calendars WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+            user_id,
+            page_size as i64,
+            ((page - 1) * page_size) as i64
         )
         .fetch_all(&self.pool)
         .await?;
@@ -155,7 +179,7 @@ impl Database {
             });
         }
 
-        Ok(result)
+        Ok((result, total_count as usize))
     }
 
     /// # Errors

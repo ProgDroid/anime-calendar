@@ -63,11 +63,46 @@
         </div>
       </div>
     </div>
+    
+    <!-- Pagination Controls -->
+    <div v-if="pagination.total_pages > 1" class="join mt-8 flex justify-center">
+      <button 
+        @click="onPageChange(pagination.page - 1)" 
+        :disabled="pagination.page === 1"
+        class="join-item btn"
+      >
+        Previous
+      </button>
+      
+      <button 
+        v-for="page in getPaginationRange()" 
+        :key="page"
+        @click="onPageChange(page)"
+        :class="{
+          'join-item btn btn-primary': page === pagination.page,
+          'join-item btn': page !== pagination.page
+        }"
+      >
+        {{ page }}
+      </button>
+      
+      <button 
+        @click="onPageChange(pagination.page + 1)" 
+        :disabled="pagination.page === pagination.total_pages"
+        class="join-item btn"
+      >
+        Next
+      </button>
+    </div>
+    
+    <div v-if="pagination.total_pages > 1" class="text-center mt-4 text-sm text-gray">
+      Showing {{ (pagination.page - 1) * pagination.page_size + 1 }} to {{ Math.min(pagination.page * pagination.page_size, pagination.total) }} of {{ pagination.total }} calendars
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Calendar } from '@/types/calendar'
 import api from '@/config/api'
@@ -76,6 +111,12 @@ import api from '@/config/api'
 const calendars = ref<Calendar[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
+const pagination = ref({
+  page: 1,
+  page_size: 6,
+  total: 0,
+  total_pages: 0
+})
 
 // Router
 const router = useRouter()
@@ -86,17 +127,36 @@ onMounted(() => {
 })
 
 // Load calendars from API
-const loadCalendars = async () => {
+const loadCalendars = async (page: number = 1) => {
   loading.value = true
   error.value = null
   
   try {
-    const response = await api.get('/calendars')
-    calendars.value = response.data
+    const response = await api.get('/calendars', {
+      params: {
+        page,
+        page_size: pagination.value.page_size
+      }
+    })
+    
+    calendars.value = response.data.data
+    pagination.value = {
+      page: response.data.pagination.page,
+      page_size: response.data.pagination.page_size,
+      total: response.data.pagination.total,
+      total_pages: response.data.pagination.total_pages
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load calendars'
   } finally {
     loading.value = false
+  }
+}
+
+// Handle page change
+const onPageChange = (newPage: number) => {
+  if (newPage >= 1 && newPage <= pagination.value.total_pages) {
+    loadCalendars(newPage)
   }
 }
 
@@ -167,6 +227,20 @@ const exportCalendar = async (id: number) => {
     console.error('Failed to export calendar:', err)
     // Optionally show an error message to the user
   }
+}
+
+// Get pagination range for display
+const getPaginationRange = () => {
+  const range = []
+  const delta = 2 // Number of pages to show around current page
+  const start = Math.max(1, pagination.value.page - delta)
+  const end = Math.min(pagination.value.total_pages, pagination.value.page + delta)
+  
+  for (let i = start; i <= end; i++) {
+    range.push(i)
+  }
+  
+  return range
 }
 </script>
 
