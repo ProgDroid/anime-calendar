@@ -20,6 +20,8 @@ pub enum Error {
     InvalidPassword,
     #[error("Not Implemented Yet")] // TODO remove once done
     NotImplemented,
+    #[error("Invalid token")]
+    InvalidToken(#[from] google_oauth::Error),
 }
 
 impl ResponseError for Error {
@@ -30,7 +32,7 @@ impl ResponseError for Error {
     fn status_code(&self) -> actix_web::http::StatusCode {
         match self {
             Self::NotFound => StatusCode::NOT_FOUND,
-            Self::Unauthorised => StatusCode::UNAUTHORIZED,
+            Self::Unauthorised | Self::InvalidToken(_) => StatusCode::UNAUTHORIZED,
             Self::InvalidRequest | Self::UserAlreadyExists | Self::InvalidPassword => {
                 StatusCode::BAD_REQUEST
             }

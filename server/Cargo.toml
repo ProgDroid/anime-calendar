@@ -16,6 +16,7 @@ config = "0.15"
 env_logger = "0.11"
 futures = "0.3"
 futures-util = "0.3"
+google-oauth = { version = "1.11" }
 icalendar = "0.17.3"
 jsonwebtoken = { version = "10.2", features = [ "aws_lc_rs" ] }
 log = "0.4"

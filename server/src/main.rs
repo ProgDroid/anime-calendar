@@ -10,7 +10,7 @@ pub mod services;
 use crate::{
     config::{database::Database as DatabaseConfig, server::Server as ServerConfig},
     error::Error,
-    mappers::anilist::Anilist,
+    mappers::{anilist::Anilist, google_oauth::GoogleOauth},
 };
 use mappers::database::Database;
 
@@ -23,6 +23,8 @@ async fn main() -> ServerResult<()> {
 
     let settings = ServerConfig::new().expect("Failed to load config");
 
-    Ok(server::start(&settings, anilist, database)?.await?)
+    let google_oauth = GoogleOauth::new(&settings.google_client_id);
+
+    Ok(server::start(&settings, anilist, database, google_oauth)?.await?)
 }
 // TODO add setting for adding specific episode times rather than all day settings

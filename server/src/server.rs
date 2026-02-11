@@ -7,8 +7,8 @@ use log::{error, LevelFilter};
 
 use crate::{
     config::server::Server as ServerConfig,
-    controllers::{auth, calendar, item, items, user},
-    mappers::{anilist::Anilist, database::Database},
+    controllers::{auth, calendar, item, items, oauth, user},
+    mappers::{anilist::Anilist, database::Database, google_oauth::GoogleOauth},
     ServerResult,
 };
 
@@ -16,12 +16,22 @@ use crate::{
 pub struct Repos {
     pub anilist: Anilist,
     pub database: Database,
+    pub google_oauth: GoogleOauth,
 }
 
 /// # Errors
 /// Returns an error if the server fails to start.
-pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> ServerResult<Server> {
-    let repos = Repos { anilist, database };
+pub fn start(
+    config: &ServerConfig,
+    anilist: Anilist,
+    database: Database,
+    google_oauth: GoogleOauth,
+) -> ServerResult<Server> {
+    let repos = Repos {
+        anilist,
+        database,
+        google_oauth,
+    };
 
     let level_filter = match LevelFilter::from_str(&config.log_level) {
         Ok(filter) => filter,
@@ -59,8 +69,7 @@ pub fn start(config: &ServerConfig, anilist: Anilist, database: Database) -> Ser
             .service(user::update_user)
             .service(user::delete_user)
             .service(user::update_password)
-        // .service(auth::google_oauth)
-        // .service(auth::github_oauth)
+            .service(oauth::google_oauth)
     })
     .bind(format!("{}:{}", config.host, config.port))?
     .run())

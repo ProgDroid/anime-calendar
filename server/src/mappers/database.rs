@@ -61,7 +61,7 @@ impl Database {
         &self,
         username: &str,
         email: &str,
-        password_hash: &str,
+        password_hash: Option<&str>,
     ) -> ServerResult<User> {
         let user = sqlx::query!(
             "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, password_hash, created_at, updated_at",

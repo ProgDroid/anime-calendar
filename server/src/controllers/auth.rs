@@ -66,7 +66,11 @@ pub async fn register(db: web::Data<Repos>, user_data: web::Json<RegisterRequest
 
     let user = match db
         .database
-        .create_user(&user_data.username, &user_data.email, &hashed_password)
+        .create_user(
+            &user_data.username,
+            &user_data.email,
+            Some(&hashed_password),
+        )
         .await
     {
         Ok(user) => user,

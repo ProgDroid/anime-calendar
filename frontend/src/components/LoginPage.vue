@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import GoogleLoginButton from './GoogleLoginButton.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -39,7 +40,7 @@ const toggleMode = () => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-6rem)] md:min-h-[calc(100vh-7rem)] bg-base-200 flex items-center justify-center">
+  <div class="min-h-[calc(100vh-6rem)] bg-base-200 flex items-center justify-center">
     <div class="card bg-base-100 w-full max-w-md shadow-xl">
       <div class="card-body">
         <h2 class="card-title">{{ isRegistering ? 'Register' : 'Login' }}</h2>
@@ -98,6 +99,12 @@ const toggleMode = () => {
             {{ error }}
           </div>
         </form>
+        
+        <div class="divider">Or continue with</div>
+        <div class="flex flex-col gap-3">
+          <GoogleLoginButton />
+        </div>
+        
         <div class="card-actions justify-center mt-4">
           <p class="text-center">
             {{ isRegistering ? 'Already have an account?' : "Don't have an account?" }}

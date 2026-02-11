@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-base-200 p-4">
+  <div class="min-h-[calc(100vh-6rem)] bg-base-200 p-4">
     <h1 class="text-2xl font-bold mb-6">Edit Calendar</h1>
     
     <!-- Mobile Layout -->

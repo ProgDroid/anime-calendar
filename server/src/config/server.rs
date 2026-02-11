@@ -8,6 +8,7 @@ pub struct Server {
     pub host: String,
     pub port: u16,
     pub log_level: String,
+    pub google_client_id: String,
 }
 
 impl Default for Server {
@@ -16,6 +17,7 @@ impl Default for Server {
             host: "127.0.0.1".to_string(),
             port: 8080,
             log_level: "debug".to_string(),
+            google_client_id: String::new(),
         }
     }
 }

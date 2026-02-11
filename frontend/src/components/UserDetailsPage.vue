@@ -148,7 +148,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-base-200 p-4">
+  <div class="min-h-[calc(100vh-6.2rem)] bg-base-200 p-4">
     <div class="max-w-2xl mx-auto">
       <div class="card bg-base-100 shadow-xl">
         <div class="card-body">

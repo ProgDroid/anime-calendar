@@ -13,6 +13,4 @@ yarn-error.log*
 pnpm-debug.log*
 
 .vscode
-.clinerules
-.disabledrules
 RefactoringPlan.md

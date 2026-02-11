@@ -53,6 +53,26 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
+  // Add OAuth login function
+  const oauthLogin = async (provider: 'google', token_string: string) => {
+    try {
+      const response = await api.post(`/auth/${provider}`, {
+        token: token_string
+      })
+      
+      const { token: authToken, user: userData } = response.data
+      token.value = authToken
+      user.value = userData
+      
+      // Store token in localStorage
+      localStorage.setItem('authToken', authToken)
+      
+      return response.data
+    } catch (error: any) {
+      throw new Error(error.response?.data?.message || `${provider} login failed`)
+    }
+  }
+
   const logout = () => {
     token.value = ''
     user.value = ''
@@ -125,6 +145,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     login,
     register,
+    oauthLogin,
     logout,
     getCurrentUser,
     initAuth,

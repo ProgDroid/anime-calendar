@@ -16,7 +16,7 @@ const handleLogout = () => {
 </script>
 
 <template>
-  <div class="min-h-screen bg-base-200">
+  <div class="min-h-[calc(100vh-6rem)] bg-base-200">
     <div class="navbar bg-base-100 shadow">
       <div class="flex-1">
         <RouterLink to="/my-calendars" class="btn btn-ghost text-xl">Anime Calendar</RouterLink>
