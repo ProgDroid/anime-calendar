@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/config/api'
@@ -8,6 +8,7 @@ import { toastService } from '@/services/toastService'
 interface User {
   username: string
   email: string
+  is_oauth: boolean
 }
 
 const router = useRouter()
@@ -25,6 +26,15 @@ const currentPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const isUpdatingPassword = ref(false)
+
+// Computed properties to handle localStorage access safely
+const userAvatar = computed(() => {
+  return window.localStorage.getItem('avatar') || ''
+})
+
+const userName = computed(() => {
+  return localStorage.getItem('name') || ''
+})
 
 const fetchUserDetails = async () => {
   try {
@@ -164,17 +174,26 @@ onMounted(() => {
           </div>
           
           <div v-if="user" class="space-y-6">
+            <!-- User Avatar for OAuth users -->
+            <div v-if="user.is_oauth" class="flex justify-center mb-6">
+              <div class="avatar">
+                <div class="w-24 h-24 rounded-full">
+                  <img :src="userAvatar" :alt="userName + ' avatar'" />
+                </div>
+              </div>
+            </div>
+            
             <div v-if="!isEditing">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="form-control">
                   <label class="label mb-2">
-                    <span class="label-text">Username</span>
+                    <span class="label-text">Name</span>
                   </label>
                   <input 
                     type="text" 
                     class="input input-bordered"
-                    :value="user.username"
-                    disabled
+                    :value="user.is_oauth ? userName : user.username"
+                    :disabled="user.is_oauth"
                   />
                 </div>
                 
@@ -186,12 +205,13 @@ onMounted(() => {
                     type="email" 
                     class="input input-bordered"
                     :value="user.email"
-                    disabled
+                    :disabled="user.is_oauth"
                   />
                 </div>
               </div>
               
-              <div class="flex justify-end space-x-3 mt-6">
+              <!-- Edit button only for non-OAuth users -->
+              <div v-if="!user.is_oauth" class="flex justify-end space-x-3 mt-6">
                 <button 
                   @click="isEditing = true"
                   class="btn btn-primary w-full"
@@ -215,7 +235,7 @@ onMounted(() => {
                       required
                     />
                   </div>
-                  
+
                   <div class="form-control">
                     <label class="label">
                       <span class="label-text">Email</span>
@@ -247,10 +267,11 @@ onMounted(() => {
               </form>
             </div>
             
-            <div class="divider"></div>
+            <div v-if="!user.is_oauth" class="divider"></div>
           
             <div class="space-y-6">
-              <div class="flex justify-between items-center">
+              <!-- Password update section hidden for OAuth users -->
+              <div v-if="!user.is_oauth" class="flex justify-between items-center">
                 <h2 class="card-title">Update Password</h2>
                 <button 
                   @click="showPasswordUpdate = !showPasswordUpdate"
@@ -260,7 +281,7 @@ onMounted(() => {
                 </button>
               </div>
               
-              <div v-if="showPasswordUpdate" class="card bg-base-200 p-6 rounded-lg shadow-md">
+              <div v-if="!user.is_oauth && showPasswordUpdate" class="card bg-base-200 p-6 rounded-lg shadow-md">
                 <form @submit="handleUpdatePassword" class="space-y-6">
                   <div class="form-control">
                     <label class="label mb-2">
@@ -273,7 +294,7 @@ onMounted(() => {
                       required
                     />
                   </div>
-   	   	  
+
                   <div class="form-control">
                     <label class="label mb-2">
                       <span class="label-text">New Password</span>
@@ -288,7 +309,7 @@ onMounted(() => {
                       <span class="label-text text-sm text-wrap text-center">Password must be at least 12 characters with uppercase, lowercase, digit, and special character</span>
                     </label>
                   </div>
-   	   	  
+
                   <div class="form-control">
                     <label class="label mb-2">
                       <span class="label-text">Confirm New Password</span>
@@ -300,7 +321,7 @@ onMounted(() => {
                       required
                     />
                   </div>
-   	   	  
+
                   <div class="flex justify-end space-x-3 mt-4">
                     <button 
                       type="button"

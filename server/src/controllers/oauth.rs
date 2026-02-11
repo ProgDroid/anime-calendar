@@ -14,6 +14,7 @@ pub struct GoogleOAuthResponse {
     pub token: String,
     pub username: String,
     pub email: String,
+    pub avatar: String,
 }
 
 /// Google OAuth callback endpoint
@@ -46,8 +47,9 @@ pub async fn google_oauth(
             let token = generate_token(&user.id);
             let response = GoogleOAuthResponse {
                 token,
-                username: user.username,
+                username: google_user.full_name,
                 email: user.email,
+                avatar: google_user.avatar_url,
             };
 
             HttpResponse::Ok().json(response)
@@ -58,3 +60,5 @@ pub async fn google_oauth(
         }
     }
 }
+
+// TODO prevent oauth users from editing their details

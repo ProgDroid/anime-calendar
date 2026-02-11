@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 import { useAuthStore } from './stores/auth'
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 
 const authStore = useAuthStore()
 const drawerToggle = ref<HTMLInputElement | null>(null)

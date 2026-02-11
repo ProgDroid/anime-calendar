@@ -6,6 +6,8 @@ import api from '../config/api'
 export const useAuthStore = defineStore('auth', () => {
   const user = ref('')
   const token = ref('')
+  const name = ref('')
+  const user_avatar = ref('')
   const router = useRouter()
 
   const isAuthenticated = () => {
@@ -19,7 +21,7 @@ export const useAuthStore = defineStore('auth', () => {
         password
       })
       
-      const { token: authToken, user: userData } = response.data
+      const { token: authToken, username: userData } = response.data
       token.value = authToken
       user.value = userData
       
@@ -39,14 +41,14 @@ export const useAuthStore = defineStore('auth', () => {
         email,
         password
       })
-      
-      const { token: authToken, user: userData } = response.data
+
+      const { token: authToken, username: userData } = response.data
       token.value = authToken
       user.value = userData
-      
+
       // Store token in localStorage
       localStorage.setItem('authToken', authToken)
-      
+
       return response.data
     } catch (error: any) {
       throw new Error(error.response?.data?.message || 'Registration failed')
@@ -58,14 +60,18 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await api.post(`/auth/${provider}`, {
         token: token_string
-      })
+      }) // TODO add cookie for forgery prevention
       
-      const { token: authToken, user: userData } = response.data
+      const { token: authToken, username: userData, avatar: avatarUrl} = response.data
       token.value = authToken
       user.value = userData
+      name.value = userData
+      user_avatar.value = avatarUrl
       
       // Store token in localStorage
       localStorage.setItem('authToken', authToken)
+      localStorage.setItem('name', userData)
+      localStorage.setItem('avatar', avatarUrl)
       
       return response.data
     } catch (error: any) {
@@ -77,6 +83,8 @@ export const useAuthStore = defineStore('auth', () => {
     token.value = ''
     user.value = ''
     localStorage.removeItem('authToken')
+    localStorage.removeItem('name')
+    localStorage.removeItem('avatar')
     router.push('/login')
   }
 
@@ -142,6 +150,8 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user,
     token,
+    user_avatar,
+    name,
     isAuthenticated,
     login,
     register,

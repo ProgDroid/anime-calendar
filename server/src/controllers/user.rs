@@ -7,7 +7,7 @@ use crate::{
 };
 
 use actix_web::{delete, get, post, put, web, HttpResponse, ResponseError};
-use log::error;
+use log::{error, info};
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
@@ -21,6 +21,7 @@ pub struct UserRequest {
 pub struct UserResponse {
     pub username: String,
     pub email: String,
+    pub is_oauth: bool,
 }
 
 #[derive(Deserialize)]
@@ -40,8 +41,13 @@ pub async fn get_user_details(data: web::Data<Repos>, claims: Claims) -> HttpRes
     match get_user_from_claims(&claims, &data.database).await {
         Ok(user) => {
             let response = UserResponse {
-                username: user.username,
+                username: if user.password_hash.is_none() {
+                    String::new()
+                } else {
+                    user.username
+                },
                 email: user.email,
+                is_oauth: user.password_hash.is_none(),
             };
 
             HttpResponse::Ok().json(response)
@@ -75,8 +81,13 @@ pub async fn update_user(
     match user {
         Ok(user) => {
             let response = UserResponse {
-                username: user.username,
+                username: if user.password_hash.is_none() {
+                    String::new()
+                } else {
+                    user.username
+                },
                 email: user.email,
+                is_oauth: user.password_hash.is_none(),
             };
 
             HttpResponse::Ok().json(response)
@@ -107,16 +118,13 @@ pub async fn update_password(
     }
 
     // Verify current password
-    match user.password_hash {
-        Some(hash) => {
-            if !validate_password(&password_data.current_password, &hash) {
-                return Error::Unauthorised.error_response();
-            }
+    if let Some(hash) = user.password_hash {
+        if !validate_password(&password_data.current_password, &hash) {
+            return Error::Unauthorised.error_response();
         }
-        None => {
-            // TODO Oauth user, how to handle
-            return Error::NotImplemented.error_response();
-        }
+    } else {
+        info!("OAuth user attempted to change password: {}", user.id);
+        return Error::InvalidRequest.error_response();
     }
 
     // Hash new password
