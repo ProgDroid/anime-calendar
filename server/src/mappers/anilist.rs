@@ -1,6 +1,12 @@
 use anilist::{client::Client, GetItemsResponseItem, SearchItemsResponseItem, SearchItemsByTypeResponseItem, SearchItemsByTypeMediaType};
 use common::{
-    id::Id, item::{Item, Repository as RepositoryItem, Type}, media_cover::MediaCover, schedule::Schedule, timestamp::Timestamp, title::Title
+    id::Id,
+    item::{Item, Repository as RepositoryItem, Type},
+    media_cover::MediaCover,
+    schedule::Schedule,
+    timestamp::Timestamp,
+    title::Title,
+    recommendation::{Recommendation, RecommendationMedia},
 };
 use log::error;
 
@@ -120,11 +126,7 @@ fn response_to_items_get(response: GetItemsResponseItem) -> Vec<Item> {
                     native: title.native.unwrap_or_default(),
                     romaji: title.romaji.unwrap_or_default(),
                 },
-                None => Title {
-                    english: String::default(),
-                    native: String::default(),
-                    romaji: String::default(),
-                },
+                None => Title::default(),
             };
 
             let media_type = media
@@ -141,12 +143,29 @@ fn response_to_items_get(response: GetItemsResponseItem) -> Vec<Item> {
                     medium: image.medium.unwrap_or_default(),
                     color: image.color.unwrap_or_default(),
                 },
-                None => MediaCover {
-                    extra_large: String::default(),
-                    large: String::default(),
-                    medium: String::default(),
-                    color: String::default(),
-                }
+                None => MediaCover::default()
+            };
+
+            let recommendations = match media.recommendations {
+                Some(connection) => connection.edges.map_or_else(Vec::new, |edges| edges.iter().flatten().map(|edge| Recommendation {
+                    rating: edge.node.rating.unwrap_or_default(),
+                    media: edge.node.media_recommendation.as_ref().map_or_else(RecommendationMedia::default, |inner| RecommendationMedia {
+                        id: Id::new(inner.id).unwrap(),
+                        id_mal: inner.id_mal,
+                        title: inner.title.as_ref().map_or_else(Title::default, |title| Title {
+                            english: title.english.clone().unwrap_or_default(),
+                            native: title.native.clone().unwrap_or_default(),
+                            romaji: title.romaji.clone().unwrap_or_default(),
+                        }),
+                        cover_image: inner.cover_image.as_ref().map_or_else(MediaCover::default, |image| MediaCover {
+                            extra_large: image.extra_large.clone().unwrap_or_default(),
+                            large: image.large.clone().unwrap_or_default(),
+                            medium: image.medium.clone().unwrap_or_default(),
+                            color: image.color.clone().unwrap_or_default(),
+                        })
+                    })
+                }).filter(|rec| rec.media.id.to_int() > 0).collect()),
+                None => Vec::new()
             };
 
             if let Some(id) = Id::new(media.id) {
@@ -159,6 +178,7 @@ fn response_to_items_get(response: GetItemsResponseItem) -> Vec<Item> {
                     media_type,
                     cover_image,
                     banner_image: media.banner_image.unwrap_or_default(),
+                    recommendations,
                 });
             }
         }
@@ -200,11 +220,7 @@ fn response_to_items_search(response: SearchItemsResponseItem) -> Vec<Item> {
                     native: title.native.unwrap_or_default(),
                     romaji: title.romaji.unwrap_or_default(),
                 },
-                None => Title {
-                    english: String::default(),
-                    native: String::default(),
-                    romaji: String::default(),
-                },
+                None => Title::default(),
             };
 
             let media_type = media
@@ -221,12 +237,7 @@ fn response_to_items_search(response: SearchItemsResponseItem) -> Vec<Item> {
                     medium: image.medium.unwrap_or_default(),
                     color: image.color.unwrap_or_default(),
                 },
-                None => MediaCover {
-                    extra_large: String::default(),
-                    large: String::default(),
-                    medium: String::default(),
-                    color: String::default(),
-                }
+                None => MediaCover::default()
             };
 
             if let Some(id) = Id::new(media.id) {
@@ -239,6 +250,7 @@ fn response_to_items_search(response: SearchItemsResponseItem) -> Vec<Item> {
                     media_type,
                     cover_image,
                     banner_image: media.banner_image.unwrap_or_default(),
+                    recommendations: Vec::new(),
                 });
             }
         }
@@ -280,11 +292,7 @@ fn response_to_items_search_by_type(response: SearchItemsByTypeResponseItem) -> 
                     native: title.native.unwrap_or_default(),
                     romaji: title.romaji.unwrap_or_default(),
                 },
-                None => Title {
-                    english: String::default(),
-                    native: String::default(),
-                    romaji: String::default(),
-                },
+                None => Title::default(),
             };
 
             let media_type = media
@@ -301,12 +309,7 @@ fn response_to_items_search_by_type(response: SearchItemsByTypeResponseItem) -> 
                     medium: image.medium.unwrap_or_default(),
                     color: image.color.unwrap_or_default(),
                 },
-                None => MediaCover {
-                    extra_large: String::default(),
-                    large: String::default(),
-                    medium: String::default(),
-                    color: String::default(),
-                }
+                None => MediaCover::default()
             };
 
             if let Some(id) = Id::new(media.id) {
@@ -319,6 +322,7 @@ fn response_to_items_search_by_type(response: SearchItemsByTypeResponseItem) -> 
                     media_type,
                     cover_image,
                     banner_image: media.banner_image.unwrap_or_default(),
+                    recommendations: Vec::new(),
                 });
             }
         }

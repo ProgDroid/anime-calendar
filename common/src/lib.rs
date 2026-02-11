@@ -4,6 +4,7 @@ pub mod id;
 pub mod item;
 pub mod language;
 pub mod media_cover;
+pub mod recommendation;
 pub mod schedule;
 pub mod timestamp;
 pub mod title;

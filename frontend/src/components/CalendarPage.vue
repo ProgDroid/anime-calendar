@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-[calc(100vh-6rem)] bg-base-200 p-4">
+  <div class="min-h-[calc(100vh-6.1rem)] bg-base-200 p-4">
     <h1 class="text-2xl font-bold mb-6">Edit Calendar</h1>
     
     <!-- Mobile Layout -->
@@ -249,6 +249,44 @@
                 </div>
               </div>
             </div>
+            
+            <!-- Recommendations Section -->
+            <div v-if="recommendations.length > 0" class="mt-6">
+              <h3 class="font-bold mb-2">Recommended Items</h3>
+              <div class="overflow-y-auto max-h-[300px] p-2 border rounded">
+                <div class="flex flex-col gap-1">
+                  <div 
+                    v-for="item in recommendations" 
+                    :key="item.id" 
+                    class="card bg-base-100 shadow-sm border"
+                  >
+                    <div class="card-body p-3">
+                      <div class="flex items-start gap-2">
+                        <div class="flex-shrink-0">
+                          <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
+                            <img 
+                              :src="item.cover_image.medium" 
+                              :alt="item.title.romaji" 
+                              class="w-full h-full object-cover"
+                              @error="onImageError"
+                              @load="onImageLoad"
+                            />
+                          </div>
+                          <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
+                            <span class="text-xs">No image</span>
+                          </div>
+                        </div>
+                        <div class="flex-grow">
+                          <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
+                          <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <div class="mt-4">
               <button @click="clearCalendar" class="btn btn-warning w-full" :disabled="itemsInCalendar.length === 0">
                 Clear Calendar
@@ -369,6 +407,44 @@
                 </div>
               </div>
             </div>
+            
+            <!-- Recommendations Section -->
+            <div v-if="recommendations.length > 0" class="mt-4">
+              <h3 class="font-bold">Recommended Items</h3>
+              <div class="overflow-y-auto max-h-[300px] p-2 border rounded">
+                <div class="flex flex-col gap-1">
+                  <div 
+                    v-for="item in recommendations" 
+                    :key="item.id" 
+                    class="card bg-base-100 shadow-sm border"
+                  >
+                    <div class="card-body p-3">
+                      <div class="flex items-start gap-2">
+                        <div class="flex-shrink-0">
+                          <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
+                            <img 
+                              :src="item.cover_image.medium" 
+                              :alt="item.title.romaji" 
+                              class="w-full h-full object-cover"
+                              @error="onImageError"
+                              @load="onImageLoad"
+                            />
+                          </div>
+                          <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
+                            <span class="text-xs">No image</span>
+                          </div>
+                        </div>
+                        <div class="flex-grow">
+                          <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
+                          <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
             <button @click="clearCalendar" class="btn btn-warning w-full" :disabled="itemsInCalendar.length === 0">
               Clear Calendar
             </button>
@@ -551,6 +627,7 @@ const itemsInCalendar = ref<Item[]>([])
 const loading = ref(false)
 const searchError = ref<string | null>(null)
 const calendarError = ref<string | null>(null)
+const recommendations = ref<Item[]>([])
 
 // Route
 const route = useRoute()
@@ -646,6 +723,9 @@ onBeforeMount(async () => {
       // Load items into the calendar
       itemsInCalendar.value = calendar.items
       currentCalendar.value = calendar
+      
+      // Calculate recommendations when loading an existing calendar
+      calculateRecommendations()
     } catch (err) {
       calendarError.value = err instanceof Error ? err.message : 'Failed to load calendar'
       console.error('Failed to load calendar:', err)
@@ -654,6 +734,67 @@ onBeforeMount(async () => {
     }
   }
 })
+
+// Calculate recommendations from items in calendar
+const calculateRecommendations = () => {
+  if (itemsInCalendar.value.length === 0) {
+    recommendations.value = []
+    return
+  }
+
+  // Create a map to count frequency of each recommended item
+  const recommendationCounts: Map<number, { count: number; totalRating: number; item: Item }> = new Map()
+
+  // Iterate through all items in the calendar
+  itemsInCalendar.value.forEach(item => {
+    if (item.recommendations && item.recommendations.length > 0) {
+      item.recommendations.forEach(recommendation => {
+        const mediaId = recommendation.media.id
+        // Skip if this recommendation is already in the calendar
+        if (!itemsInCalendar.value.some(calendarItem => calendarItem.id === mediaId)) {
+          if (recommendationCounts.has(mediaId)) {
+            const existing = recommendationCounts.get(mediaId)!
+            existing.count += 1
+            existing.totalRating += recommendation.rating
+          } else {
+            recommendationCounts.set(mediaId, {
+              count: 1,
+              totalRating: recommendation.rating,
+              item: {
+                id: recommendation.media.id,
+                id_mal: recommendation.media.id_mal,
+                title: recommendation.media.title,
+                media_type: item.media_type, // Use the same type as the source item
+                episode_duration: 0, // Default value, could be improved
+                airing_schedule: [],
+                cover_image: recommendation.media.cover_image,
+                banner_image: '', // Default value
+                recommendations: [] // No nested recommendations
+              }
+            })
+          }
+        }
+      })
+    }
+  })
+
+  // Convert map to array and sort by frequency (descending), then by average rating (descending)
+  const sortedRecommendations = Array.from(recommendationCounts.values())
+    .sort((a, b) => {
+      // First sort by frequency (count) descending
+      if (b.count !== a.count) {
+        return b.count - a.count
+      }
+      // Then sort by average rating descending
+      const avgRatingA = a.totalRating / a.count
+      const avgRatingB = b.totalRating / b.count
+      return avgRatingB - avgRatingA
+    })
+    .slice(0, 5) // Take top 5
+    .map(item => item.item)
+
+  recommendations.value = sortedRecommendations
+}
 
 // Fetch items by name
 const fetchItems = async () => {
@@ -697,12 +838,24 @@ const addItemToCalendar = () => {
     itemsInCalendar.value.push(...newItems)
     selectedItems.value = []
     nameInput.value = ''
+    
+    // Recalculate recommendations when items are added
+    if (itemsInCalendar.value.length > 0) {
+      calculateRecommendations()
+    }
   }
 }
 
 // Remove item from calendar
 const removeItemFromCalendar = (itemId: number) => {
   itemsInCalendar.value = itemsInCalendar.value.filter(item => item.id !== itemId)
+  
+  // Recalculate recommendations when items are removed
+  if (itemsInCalendar.value.length > 0) {
+    calculateRecommendations()
+  } else {
+    recommendations.value = []
+  }
 }
 
 // Toggle item selection
@@ -775,6 +928,7 @@ const submitCalendar = async () => {
 // Clear all items from calendar
 const clearCalendar = () => {
   itemsInCalendar.value = []
+  recommendations.value = []
 }
 
 const onImageError = (event: Event) => {

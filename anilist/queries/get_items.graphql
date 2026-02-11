@@ -24,6 +24,28 @@ query GetItems($ids: [Int!]!) {
                 color
             }
             bannerImage
+            recommendations(sort: RATING_DESC, page: 1, perPage: 5) {
+                edges {
+                    node {
+                        rating
+                        mediaRecommendation {
+                            id
+                            idMal
+                            title {
+                                romaji
+                                english
+                                native
+                            }
+                            coverImage {
+                                extraLarge
+                                large
+                                medium
+                                color
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }

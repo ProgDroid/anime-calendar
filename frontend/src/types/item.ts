@@ -11,6 +11,18 @@ export interface CoverImage {
   color: string;
 }
 
+export interface RecommendationMedia {
+  id: number;
+  id_mal: number | null;
+  title: Title;
+  cover_image: CoverImage;
+}
+
+export interface Recommendation {
+  rating: number;
+  media: RecommendationMedia;
+}
+
 export interface Item {
   id: number;
   id_mal: number | null;
@@ -20,4 +32,5 @@ export interface Item {
   airing_schedule: any[];
   cover_image?: CoverImage;
   banner_image?: string;
+  recommendations?: Recommendation[];
 }
