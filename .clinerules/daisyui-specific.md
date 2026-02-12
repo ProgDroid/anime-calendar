@@ -184,21 +184,23 @@ People can use https://daisyui.com/theme-generator/ visual tool to create their 
 
 ## daisyUI 5 components
 
-### pagination
-Pagination is a group of buttons
+### carousel
+Carousel show images or content in a scrollable area
 
-[pagination docs](https://daisyui.com/components/pagination/)
+[carousel docs](https://daisyui.com/components/carousel/)
 
 #### Class names
-- component: `join`
-- part: `join-item`
-- direction: `join-vertical`, `join-horizontal`
+- component: `carousel`
+- part: `carousel-item`
+- modifier: `carousel-start`, `carousel-center`, `carousel-end`
+- direction: `carousel-horizontal`, `carousel-vertical`
 
 #### Syntax
 ```html
-<div class="join">{CONTENT}</div>
+<div class="carousel {MODIFIER}">{CONTENT}</div>
 ```
 
 #### Rules
-- Use `join-item` for each button or link inside the pagination
-- Use `btn` class for styling pagination items
+- {MODIFIER} is optional and can have one of the modifier/direction class names
+- Content is a list of `carousel-item` divs: `<div class="carousel-item"></div>`
+- To create a full-width carousel, add `w-full` to each carousel item

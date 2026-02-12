@@ -72,78 +72,78 @@
           <h3 class="font-bold mb-2">Fetched Items</h3>
           <div class="overflow-y-auto max-h-96 p-2 border rounded max-h-[250px] min-h-[250px]">
             <div class="flex flex-col gap-1">
-              <div 
-                v-for="item in fetchedItems" 
-                :key="item.id" 
-                class="card bg-base-100 shadow-sm border"
-                :class="{ 
-                  'border-primary': selectedItems.includes(item.id),
-                  'border-success': itemsInCalendar.some(calendarItem => calendarItem.id === item.id)
-                }"
-                @click="!itemsInCalendar.some(calendarItem => calendarItem.id === item.id) && toggleItemSelection(item.id)"
-              >
-                <div class="card-body p-3 relative overflow-hidden">
-                  <div class="flex items-start gap-2">
-                    <div class="flex-shrink-0">
-                      <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
-                        <img 
-                          :src="item.cover_image.medium" 
-                          :alt="item.title.romaji" 
-                          class="w-full h-full object-cover"
-                          @error="onImageError"
-                          @load="onImageLoad"
-                        />
-                      </div>
-                      <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                        <span class="text-xs">No image</span>
-                      </div>
-                    </div>
-                    <div class="flex-grow">
-                      <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
-                      <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
-                      <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">Episodes: {{ item.episode_duration }}</p>
-                    </div>
-                  </div>
-                  <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="bg-success text-white text-xs px-2 py-1 rounded">
-                    Already in calendar
-                  </div>
-                  <!-- Background image for selected items -->
                   <div 
-                    v-if="selectedItems.includes(item.id) && item.banner_image"
-                    class="absolute inset-0 transition-all duration-300 ease-in-out"
+                    v-for="item in fetchedItems" 
+                    :key="item.id" 
+                    class="card bg-base-100 shadow-sm border"
                     :class="{ 
-                      'opacity-0': !selectedItems.includes(item.id),
-                      'opacity-100': selectedItems.includes(item.id)
+                      'border-primary': selectedItems.includes(item.id),
+                      'border-success': itemsInCalendar.some(calendarItem => calendarItem.id === item.id)
                     }"
-                    :style="{ 
-                      'background-image': `url(${item.banner_image})`,
-                      'background-size': 'cover',
-                      'background-position': 'center',
-                      'background-repeat': 'no-repeat',
-                      'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 70%, rgba(0,0,0,1) 100%)',
-                      'border-radius': '8px 8px 8px 8px'
-                    }"
+                    @click="!itemsInCalendar.some(calendarItem => calendarItem.id === item.id) && toggleItemSelection(item.id)"
                   >
+                    <div class="card-body p-3 relative overflow-hidden">
+                      <div class="flex items-start gap-2">
+                        <div class="flex-shrink-0">
+                          <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
+                            <img 
+                              :src="item.cover_image.medium" 
+                              :alt="item.title.romaji" 
+                              class="w-full h-full object-cover"
+                              @error="onImageError"
+                              @load="onImageLoad"
+                            />
+                          </div>
+                          <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
+                            <span class="text-xs">No image</span>
+                          </div>
+                        </div>
+                        <div class="flex-grow">
+                          <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
+                          <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
+                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">Episodes: {{ item.episode_duration }}</p>
+                        </div>
+                      </div>
+                      <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="absolute top-2 right-2 bg-success text-white text-xs px-2 py-1 rounded">
+                        Already in calendar
+                      </div>
+                      <!-- Background image for selected items -->
+                      <div 
+                        v-if="selectedItems.includes(item.id) && item.banner_image"
+                        class="absolute inset-0 transition-all duration-300 ease-in-out"
+                        :class="{ 
+                          'opacity-0': !selectedItems.includes(item.id),
+                          'opacity-100': selectedItems.includes(item.id)
+                        }"
+                        :style="{ 
+                          'background-image': `url(${item.banner_image})`,
+                          'background-size': 'cover',
+                          'background-position': 'center',
+                          'background-repeat': 'no-repeat',
+                          'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 65%, rgba(0,0,0,1) 95%)',
+                          'border-radius': '8px 8px 8px 8px'
+                        }"
+                      >
+                      </div>
+                      <div
+                        v-if="!item.banner_image && item.cover_image?.medium && selectedItems.includes(item.id)"
+                        class="absolute inset-0 transition-all duration-300 ease-in-out"
+                        :class="{ 
+                          'opacity-0': !selectedItems.includes(item.id),
+                          'opacity-100': selectedItems.includes(item.id)
+                        }"
+                        :style="{ 
+                          'background-image': `url(${item.cover_image?.medium})`,
+                          'background-size': 'fit',
+                          'background-position': 'right',
+                          'background-repeat': 'no-repeat',
+                          'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.0) 83.5%, rgba(0,0,0,1) 95%)',
+                          'border-radius': '8px 8px 8px 8px'
+                        }"
+                      >
+                      </div>
+                    </div>
                   </div>
-                  <div
-                    v-if="!item.banner_image && item.cover_image?.medium && selectedItems.includes(item.id)"
-                    class="absolute inset-0 transition-all duration-300 ease-in-out"
-                    :class="{ 
-                      'opacity-0': !selectedItems.includes(item.id),
-                      'opacity-100': selectedItems.includes(item.id)
-                    }"
-                    :style="{ 
-                      'background-image': `url(${item.cover_image?.medium})`,
-                      'background-size': 'fit',
-                      'background-position': 'right',
-                      'background-repeat': 'no-repeat',
-                      'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.0) 70%, rgba(0,0,0,1) 100%)',
-                      'border-radius': '8px 8px 8px 8px'
-                    }"
-                  >
-                  </div>
-                </div>
-              </div>
             </div>
           </div>
           
@@ -253,32 +253,38 @@
             <!-- Recommendations Section -->
             <div v-if="recommendations.length > 0" class="mt-6">
               <h3 class="font-bold mb-2">Recommended Items</h3>
-              <div class="overflow-y-auto max-h-[300px] p-2 border rounded">
-                <div class="flex flex-col gap-1">
-                  <div 
-                    v-for="item in recommendations" 
-                    :key="item.id" 
-                    class="card bg-base-100 shadow-sm border"
-                  >
-                    <div class="card-body p-3">
-                      <div class="flex items-start gap-2">
-                        <div class="flex-shrink-0">
-                          <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
-                            <img 
-                              :src="item.cover_image.medium" 
-                              :alt="item.title.romaji" 
-                              class="w-full h-full object-cover"
-                              @error="onImageError"
-                              @load="onImageLoad"
-                            />
-                          </div>
-                          <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                            <span class="text-xs">No image</span>
-                          </div>
+              <div class="carousel w-full gap-4">
+                <div 
+                  v-for="item in recommendations" 
+                  :key="item.id" 
+                  class="card bg-base-100 shadow-sm border carousel-item w-64"
+                >
+                  <div class="card-body p-3">
+                    <div class="flex items-start gap-2">
+                      <div class="flex-shrink-0">
+                        <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
+                          <img 
+                            :src="item.cover_image.medium" 
+                            :alt="item.title.romaji" 
+                            class="w-full h-full object-cover"
+                            @error="onImageError"
+                            @load="onImageLoad"
+                          />
                         </div>
-                        <div class="flex-grow">
-                          <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
-                          <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
+                        <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
+                          <span class="text-xs">No image</span>
+                        </div>
+                      </div>
+                      <div class="flex-grow">
+                        <h4 class="font-bold line-clamp-1 text-sm">{{ getSelectedItemTitle(item) }}</h4>
+                        <div class="badge badge-secondary mt-1 text-xs">{{ item.media_type }}</div>
+                        <div class="mt-1">
+                          <button 
+                            @click.stop="addItemToCalendarSingle(item)"
+                            class="btn btn-primary btn-xs absolute bottom-2 right-2"
+                          >
+                            Add
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -286,7 +292,7 @@
                 </div>
               </div>
             </div>
-            
+
             <div class="mt-4">
               <button @click="clearCalendar" class="btn btn-warning w-full" :disabled="itemsInCalendar.length === 0">
                 Clear Calendar
@@ -303,118 +309,78 @@
       </div>
     </div>
 
-    <!-- Desktop/Tablet Layout -->
-    <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl mx-auto">
-      <!-- Calendar Block -->
-      <div class="card bg-base-100 shadow-md">
-        <div class="card-body">
-          <h2 class="card-title">Calendar</h2>
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Calendar Name:</span>
-            </label>
-            <input 
-              id="calendarName" 
-              v-model="calendarName" 
-              type="text" 
-              placeholder="Enter calendar name"
-              class="input input-bordered ml-2"
-            />
-          </div>
-
-          <div class="form-control">
-            <label class="label mb-2">
-              <span class="label-text">Language:</span>
-            </label>
-            <div class="flex gap-4">
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="calendarLanguage" 
-                  type="radio" 
-                  value="english" 
-                  class="radio radio-primary"
-                />
-                <span class="label-text">English</span>
+      <!-- Desktop/Tablet Layout -->
+      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl mx-auto">
+        <!-- Calendar Block -->
+        <div class="card bg-base-100 shadow-md">
+          <div class="card-body">
+            <h2 class="card-title">Calendar</h2>
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Calendar Name:</span>
               </label>
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="calendarLanguage" 
-                  type="radio" 
-                  value="romaji" 
-                  class="radio radio-primary"
-                />
-                <span class="label-text">Romaji</span>
-              </label>
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="calendarLanguage" 
-                  type="radio" 
-                  value="native" 
-                  class="radio radio-primary"
-                />
-                <span class="label-text">Native</span>
-              </label>
+              <input 
+                id="calendarName" 
+                v-model="calendarName" 
+                type="text" 
+                placeholder="Enter calendar name"
+                class="input input-bordered ml-2"
+              />
             </div>
-          </div>
 
-          <div class="mt-4">
-            <button @click="submitCalendar" :disabled="loading || itemsInCalendar.length === 0" class="btn btn-success">
-              {{ loading ? 'Submitting...' : 'Submit Calendar' }}
-            </button>
-          </div>
-
-          <div v-if="calendarError" class="alert alert-error mt-4">
-            {{ calendarError }}
-          </div>
-        </div>
-        
-        <div class="card-body">
-          <div class="flex flex-col gap-4">
-            <h3 class="font-bold">Items in Calendar</h3>
-            <div class="overflow-y-auto max-h-[400px] min-h-[400px] p-2 border rounded">
-              <div class="flex flex-col gap-1">
-                <div 
-                  v-for="item in itemsInCalendar" 
-                  :key="item.id" 
-                  class="card bg-base-100 shadow-sm border"
-                >
-                  <div class="card-body p-3">
-                    <div class="flex items-start gap-2">
-                      <div class="flex-shrink-0">
-                        <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
-                          <img 
-                            :src="item.cover_image.medium" 
-                            :alt="item.title.romaji" 
-                            class="w-full h-full object-cover"
-                            @error="onImageError"
-                            @load="onImageLoad"
-                          />
-                        </div>
-                        <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                          <span class="text-xs">No image</span>
-                        </div>
-                      </div>
-                      <div class="flex-grow">
-                        <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
-                        <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
-                        <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">Episodes: {{ item.episode_duration }}</p>
-                      </div>
-                    </div>
-                    <button @click="removeItemFromCalendar(item.id)" class="btn btn-sm btn-error mt-2">
-                      Remove
-                    </button>
-                  </div>
-                </div>
+            <div class="form-control">
+              <label class="label mb-2">
+                <span class="label-text">Language:</span>
+              </label>
+              <div class="flex gap-4">
+                <label class="label cursor-pointer">
+                  <input 
+                    v-model="calendarLanguage" 
+                    type="radio" 
+                    value="english" 
+                    class="radio radio-primary"
+                  />
+                  <span class="label-text">English</span>
+                </label>
+                <label class="label cursor-pointer">
+                  <input 
+                    v-model="calendarLanguage" 
+                    type="radio" 
+                    value="romaji" 
+                    class="radio radio-primary"
+                  />
+                  <span class="label-text">Romaji</span>
+                </label>
+                <label class="label cursor-pointer">
+                  <input 
+                    v-model="calendarLanguage" 
+                    type="radio" 
+                    value="native" 
+                    class="radio radio-primary"
+                  />
+                  <span class="label-text">Native</span>
+                </label>
               </div>
             </div>
-            
-            <!-- Recommendations Section -->
-            <div v-if="recommendations.length > 0" class="mt-4">
-              <h3 class="font-bold">Recommended Items</h3>
-              <div class="overflow-y-auto max-h-[300px] p-2 border rounded">
+
+            <div class="mt-4">
+              <button @click="submitCalendar" :disabled="loading || itemsInCalendar.length === 0" class="btn btn-success">
+                {{ loading ? 'Submitting...' : 'Submit Calendar' }}
+              </button>
+            </div>
+
+            <div v-if="calendarError" class="alert alert-error mt-4">
+              {{ calendarError }}
+            </div>
+          </div>
+          
+          <div class="card-body">
+            <div class="flex flex-col gap-4">
+              <h3 class="font-bold">Items in Calendar</h3>
+              <div class="overflow-y-auto max-h-[400px] min-h-[400px] p-2 border rounded">
                 <div class="flex flex-col gap-1">
                   <div 
-                    v-for="item in recommendations" 
+                    v-for="item in itemsInCalendar" 
                     :key="item.id" 
                     class="card bg-base-100 shadow-sm border"
                   >
@@ -437,98 +403,186 @@
                         <div class="flex-grow">
                           <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
                           <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
+                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">Episodes: {{ item.episode_duration }}</p>
                         </div>
+                      </div>
+                      <button @click="removeItemFromCalendar(item.id)" class="btn btn-sm btn-error mt-2">
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <button @click="clearCalendar" class="btn btn-warning w-full" :disabled="itemsInCalendar.length === 0">
+                Clear Calendar
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Search Block -->
+        <div class="card bg-base-100 shadow-md">
+          <div class="card-body">
+            <h2 class="card-title">Search</h2>
+            <div class="form-control">
+              <label class="label">
+                <span class="label-text">Item Name:</span>
+              </label>
+              <input 
+                id="nameInput" 
+                v-model="nameInput" 
+                type="text" 
+                placeholder="Enter item name"
+                class="input input-bordered ml-2"
+              />
+            </div>
+            
+            <div class="form-control">
+              <label class="label mb-2">
+                <span class="label-text">Media Type:</span>
+              </label>
+              <div class="flex gap-4">
+                <label class="label cursor-pointer">
+                  <input 
+                    v-model="mediaType" 
+                    type="radio" 
+                    value="" 
+                    class="radio radio-primary"
+                  />
+                  <span class="label-text">Any</span>
+                </label>
+                <label class="label cursor-pointer">
+                  <input 
+                    v-model="mediaType" 
+                    type="radio" 
+                    value="ANIME" 
+                    class="radio radio-primary"
+                  />
+                  <span class="label-text">Anime</span>
+                </label>
+                <label class="label cursor-pointer">
+                  <input 
+                    v-model="mediaType" 
+                    type="radio" 
+                    value="MANGA" 
+                    class="radio radio-primary"
+                  />
+                  <span class="label-text">Manga</span>
+                </label>
+              </div>
+            </div>
+            
+            <div class="mt-4">
+              <button @click="fetchItems" :disabled="loading" class="btn btn-primary">
+                {{ loading ? 'Fetching...' : 'Fetch Items' }}
+              </button>
+            </div>
+            
+            <div v-if="searchError" class="alert alert-error mt-4">
+              {{ searchError }}
+            </div>
+          </div>
+          
+          <div class="card-body">
+            <div class="flex flex-col gap-4">
+              <h3 class="font-bold">Fetched Items</h3>
+              <div class="overflow-y-auto max-h-[400px] min-h-[400px] p-2 border rounded">
+                <div class="flex flex-col gap-1">
+                  <div 
+                    v-for="item in fetchedItems" 
+                    :key="item.id" 
+                    class="card bg-base-100 shadow-sm border"
+                    :class="{ 
+                      'border-primary': selectedItems.includes(item.id),
+                      'border-success': itemsInCalendar.some(calendarItem => calendarItem.id === item.id)
+                    }"
+                    @click="!itemsInCalendar.some(calendarItem => calendarItem.id === item.id) && toggleItemSelection(item.id)"
+                  >
+                    <div class="card-body p-3">
+                      <div class="flex items-start gap-2">
+                        <div class="flex-shrink-0">
+                          <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
+                            <img 
+                              :src="item.cover_image.medium" 
+                              :alt="item.title.romaji" 
+                              class="w-full h-full object-cover"
+                              @error="onImageError"
+                              @load="onImageLoad"
+                            />
+                          </div>
+                          <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
+                            <span class="text-xs">No image</span>
+                          </div>
+                        </div>
+                        <div class="flex-grow">
+                          <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
+                          <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
+                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">Episodes: {{ item.episode_duration }}</p>
+                        </div>
+                      </div>
+                      <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="absolute top-2 right-2 bg-success text-white text-xs px-2 py-1 rounded">
+                        Already in calendar
+                      </div>
+                      <!-- Background image for selected items -->
+                      <div 
+                        v-if="selectedItems.includes(item.id) && item.banner_image"
+                        class="absolute inset-0 transition-all duration-300 ease-in-out"
+                        :class="{ 
+                          'opacity-0': !selectedItems.includes(item.id),
+                          'opacity-100': selectedItems.includes(item.id)
+                        }"
+                        :style="{ 
+                          'background-image': `url(${item.banner_image})`,
+                          'background-size': 'cover',
+                          'background-position': 'center',
+                          'background-repeat': 'no-repeat',
+                          'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 65%, rgba(0,0,0,1) 95%)',
+                          'border-radius': '8px 8px 8px 8px'
+                        }"
+                      >
+                      </div>
+                      <div
+                        v-if="!item.banner_image && item.cover_image?.medium && selectedItems.includes(item.id)"
+                        class="absolute inset-0 transition-all duration-300 ease-in-out"
+                        :class="{ 
+                          'opacity-0': !selectedItems.includes(item.id),
+                          'opacity-100': selectedItems.includes(item.id)
+                        }"
+                        :style="{ 
+                          'background-image': `url(${item.cover_image?.medium})`,
+                          'background-size': 'fit',
+                          'background-position': 'right',
+                          'background-repeat': 'no-repeat',
+                          'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.0) 83.5%, rgba(0,0,0,1) 95%)',
+                          'border-radius': '8px 8px 8px 8px'
+                        }"
+                      >
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
+              <button @click="addItemToCalendar" :disabled="selectedItems.length === 0" class="btn btn-primary w-full">
+                Add Selected Items to Calendar
+              </button>
             </div>
-            
-            <button @click="clearCalendar" class="btn btn-warning w-full" :disabled="itemsInCalendar.length === 0">
-              Clear Calendar
-            </button>
           </div>
         </div>
       </div>
-
-      <!-- Search Block -->
-      <div class="card bg-base-100 shadow-md">
+    <div class="max-w-6xl mx-auto">
+      <div v-if="!isMobile && recommendations.length > 0" class="card bg-base-100 shadow-md mt-4">
         <div class="card-body">
-          <h2 class="card-title">Search</h2>
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">Item Name:</span>
-            </label>
-            <input 
-              id="nameInput" 
-              v-model="nameInput" 
-              type="text" 
-              placeholder="Enter item name"
-              class="input input-bordered ml-2"
-            />
-          </div>
-          
-          <div class="form-control">
-            <label class="label mb-2">
-              <span class="label-text">Media Type:</span>
-            </label>
-            <div class="flex gap-4">
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="mediaType" 
-                  type="radio" 
-                  value="" 
-                  class="radio radio-primary"
-                />
-                <span class="label-text">Any</span>
-              </label>
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="mediaType" 
-                  type="radio" 
-                  value="ANIME" 
-                  class="radio radio-primary"
-                />
-                <span class="label-text">Anime</span>
-              </label>
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="mediaType" 
-                  type="radio" 
-                  value="MANGA" 
-                  class="radio radio-primary"
-                />
-                <span class="label-text">Manga</span>
-              </label>
-            </div>
-          </div>
-          
-          <div class="mt-4">
-            <button @click="fetchItems" :disabled="loading" class="btn btn-primary">
-              {{ loading ? 'Fetching...' : 'Fetch Items' }}
-            </button>
-          </div>
-          
-          <div v-if="searchError" class="alert alert-error mt-4">
-            {{ searchError }}
-          </div>
-        </div>
-        
-        <div class="card-body">
-          <div class="flex flex-col gap-4">
-            <h3 class="font-bold">Fetched Items</h3>
-            <div class="overflow-y-auto max-h-[400px] min-h-[400px] p-2 border rounded">
-              <div class="flex flex-col gap-1">
+          <h2 class="card-title">Recommended Items</h2>
+          <!-- Recommendations Section -->
+          <div v-if="recommendations.length > 0" class="mt-4">
+            <!-- DaisyUI Carousel for Desktop Layout Only -->
+            <div class="hidden lg:block">
+              <div class="carousel carousel-center w-full gap-1">
                 <div 
-                  v-for="item in fetchedItems" 
+                  v-for="item in recommendations" 
                   :key="item.id" 
-                  class="card bg-base-100 shadow-sm border"
-                  :class="{ 
-                    'border-primary': selectedItems.includes(item.id),
-                    'border-success': itemsInCalendar.some(calendarItem => calendarItem.id === item.id)
-                  }"
-                  @click="!itemsInCalendar.some(calendarItem => calendarItem.id === item.id) && toggleItemSelection(item.id)"
+                  class="card bg-base-100 shadow-sm border carousel-item w-[calc(20%-6px)]"
                 >
                   <div class="card-body p-3">
                     <div class="flex items-start gap-2">
@@ -547,61 +601,24 @@
                         </div>
                       </div>
                       <div class="flex-grow">
-                        <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
-                        <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
-                        <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">Episodes: {{ item.episode_duration }}</p>
+                        <h4 class="font-bold line-clamp-1 text-sm">{{ getSelectedItemTitle(item) }}</h4>
+                        <div class="badge badge-secondary mt-1 text-xs">{{ item.media_type }}</div>
                       </div>
-                    </div>
-                    <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="absolute top-2 right-2 bg-success text-white text-xs px-2 py-1 rounded">
-                      Already in calendar
-                    </div>
-                    <!-- Background image for selected items -->
-                    <div 
-                      v-if="selectedItems.includes(item.id) && item.banner_image"
-                      class="absolute inset-0 transition-all duration-300 ease-in-out"
-                      :class="{ 
-                        'opacity-0': !selectedItems.includes(item.id),
-                        'opacity-100': selectedItems.includes(item.id)
-                      }"
-                      :style="{ 
-                        'background-image': `url(${item.banner_image})`,
-                        'background-size': 'cover',
-                        'background-position': 'center',
-                        'background-repeat': 'no-repeat',
-                        'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 65%, rgba(0,0,0,1) 95%)',
-                        'border-radius': '8px 8px 8px 8px'
-                      }"
-                    >
-                    </div>
-                    <div
-                      v-if="!item.banner_image && item.cover_image?.medium && selectedItems.includes(item.id)"
-                      class="absolute inset-0 transition-all duration-300 ease-in-out"
-                      :class="{ 
-                        'opacity-0': !selectedItems.includes(item.id),
-                        'opacity-100': selectedItems.includes(item.id)
-                      }"
-                      :style="{ 
-                        'background-image': `url(${item.cover_image?.medium})`,
-                        'background-size': 'fit',
-                        'background-position': 'right',
-                        'background-repeat': 'no-repeat',
-                        'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.0) 83.5%, rgba(0,0,0,1) 95%)',
-                        'border-radius': '8px 8px 8px 8px'
-                      }"
-                    >
+                      <button 
+                            @click.stop="addItemToCalendarSingle(item)"
+                            class="btn btn-primary btn-xs absolute bottom-2 right-2"
+                          >
+                            Add
+                      </button>
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-            <button @click="addItemToCalendar" :disabled="selectedItems.length === 0" class="btn btn-primary w-full">
-              Add Selected Items to Calendar
-            </button>
           </div>
         </div>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -846,6 +863,22 @@ const addItemToCalendar = () => {
   }
 }
 
+// Add single item to calendar
+const addItemToCalendarSingle = (item: Item) => {
+  // Check if item is already in calendar
+  if (itemsInCalendar.value.some(calendarItem => calendarItem.id === item.id)) {
+    return
+  }
+  
+  // Add item to calendar
+  itemsInCalendar.value.push(item)
+  
+  // Recalculate recommendations when item is added
+  if (itemsInCalendar.value.length > 0) {
+    calculateRecommendations()
+  }
+}
+
 // Remove item from calendar
 const removeItemFromCalendar = (itemId: number) => {
   itemsInCalendar.value = itemsInCalendar.value.filter(item => item.id !== itemId)
@@ -939,5 +972,18 @@ const onImageError = (event: Event) => {
 
 const onImageLoad = (event: Event) => {
   console.log('Image loaded successfully', (event.target as HTMLImageElement).src)
+}
+
+// Scroll recommendations carousel
+const scrollRecommendations = (direction: 'left' | 'right') => {
+  const carousel = document.querySelector('.overflow-x-auto')
+  if (carousel) {
+    const scrollAmount = 300 // Adjust scroll amount as needed
+    if (direction === 'right') {
+      carousel.scrollBy({ left: scrollAmount, behavior: 'smooth' })
+    } else {
+      carousel.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
+    }
+  }
 }
 </script>
