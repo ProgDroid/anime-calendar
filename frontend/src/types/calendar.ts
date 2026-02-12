@@ -8,3 +8,11 @@ export interface Calendar {
   created_at: string;
   updated_at: string;
 }
+
+export interface PageCalendar {
+  id: number;
+  item_count: number;
+  name: string;
+  created_at: string;
+  updated_at: string;
+}

@@ -60,5 +60,3 @@ pub async fn google_oauth(
         }
     }
 }
-
-// TODO prevent oauth users from editing their details

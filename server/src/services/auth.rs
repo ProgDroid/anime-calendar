@@ -91,3 +91,6 @@ pub fn verify_token(token: &str) -> Result<Claims, jsonwebtoken::errors::Error> 
         jsonwebtoken::decode::<Claims>(token, &decoding_key, &jsonwebtoken::Validation::default())?;
     Ok(token_data.claims)
 }
+
+// TODO make recommendations display better when there are none and when calendar is updated
+// TODO redis(?) caching

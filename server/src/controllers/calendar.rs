@@ -8,6 +8,7 @@ use crate::{
 };
 
 use actix_web::{delete, get, put, web, HttpResponse, ResponseError};
+use chrono::NaiveDateTime;
 use common::{
     calendar::Calendar,
     id::Id,
@@ -177,8 +178,17 @@ async fn put(
 }
 
 #[derive(Serialize)]
+struct PageCalendar {
+    pub id: Id,
+    pub item_count: usize,
+    pub name: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+}
+
+#[derive(Serialize)]
 struct PaginatedResponse {
-    data: Vec<Calendar>,
+    data: Vec<PageCalendar>,
     pagination: PaginationInfo,
 }
 
@@ -203,12 +213,6 @@ async fn get_calendars(
         }
     };
 
-    // TODO parallelise, otherwise takes too long
-    // TODO alternatively, ask for all items at once for all calendars, then distribute them
-    // TODO CACHING
-    // TODO not getting the actual items for this and only when loading the actual calendar, then I can do everything off of my own DB
-    // TODO OR load everything here and just pass it when you go into the edit page.
-
     // Get calendars for the authenticated user with pagination
     match data
         .database
@@ -216,26 +220,13 @@ async fn get_calendars(
         .await
     {
         Ok((calendars, total_count)) => {
-            let mut results: Vec<Calendar> = Vec::new();
+            let mut results: Vec<PageCalendar> = Vec::new();
 
             for calendar in calendars {
-                let item_ids: Vec<Id> = calendar
-                    .item_ids
-                    .iter()
-                    .filter_map(|id| Id::new(i64::from(*id)))
-                    .collect();
-
-                let items = data.anilist.get_items(item_ids).await;
-
-                if items.is_empty() {
-                    return Error::NotFound.error_response();
-                }
-
                 if let Some(id) = Id::new(calendar.id.into()) {
-                    results.push(Calendar {
+                    results.push(PageCalendar {
                         id,
-                        items,
-                        language: calendar.language.to_common_language(),
+                        item_count: calendar.item_ids.len(),
                         name: calendar.name,
                         created_at: calendar
                             .created_at
@@ -327,3 +318,6 @@ async fn delete_calendar(
         Err(e) => e.error_response(),
     }
 }
+
+// TODO character limits
+// TODO user settings e.g. date display format, language display(? this is already on calendar page)
