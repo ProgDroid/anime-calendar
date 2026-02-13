@@ -79,14 +79,13 @@ pub fn start(
             .service(cache_metrics::get_cache_health)
             .service(cache_metrics::reset_metrics)
             .service(cache_metrics::get_cache_stats)
+            .service(cache_metrics::flush_cache)
     })
     .bind(format!("{}:{}", config.host, config.port))?
     .run())
 }
 // TODO refactor frontend components
-// TODO clear paginated response cache when calendar is created or deleted
 // TODO ensure cache keys are per user
-// TODO implement cache flush endpoint for testing
 
 // TODO add more tests for the backend services and controllers
 // TODO implement rate limiting for API endpoints

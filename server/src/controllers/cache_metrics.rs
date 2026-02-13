@@ -98,3 +98,11 @@ pub async fn get_cache_stats(repos: web::Data<Repos>) -> Result<HttpResponse> {
 
     Ok(HttpResponse::Ok().json(response))
 }
+
+#[actix_web::get("/cache/flush")]
+pub async fn flush_cache(repos: web::Data<Repos>) -> Result<HttpResponse> {
+    let _ = repos.cache.invalidate_pattern("*").await;
+    Ok(HttpResponse::Ok().json(serde_json::json!({
+        "message": "Cache flushed successfully"
+    })))
+}

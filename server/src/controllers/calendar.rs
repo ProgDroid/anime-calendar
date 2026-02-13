@@ -188,6 +188,7 @@ async fn put(
             if let Some(id) = Id::new(calendar.id.into()) {
                 // Invalidate cache for this calendar (controller-level invalidation)
                 let _ = data.cache.invalidate_calendar(calendar.id).await;
+                let _ = data.cache.invalidate_pattern("/calendars:page:*").await;
 
                 HttpResponse::Ok().json(Calendar {
                     id,
@@ -397,6 +398,7 @@ async fn delete_calendar(
         Ok(()) => {
             // Invalidate cache for this calendar (controller-level invalidation)
             let _ = data.cache.invalidate_calendar(*id as i32).await;
+            let _ = data.cache.invalidate_pattern("/calendars:page:*").await;
             HttpResponse::Ok().finish()
         }
         Err(e) => e.error_response(),
