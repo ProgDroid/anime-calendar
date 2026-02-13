@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::{id::Id, item::Item, language::Language};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Clone)]
 pub struct Calendar {
     #[serde(default)]
     pub id: Id,

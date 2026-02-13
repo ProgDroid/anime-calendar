@@ -174,7 +174,6 @@ onMounted(() => {
           </div>
           
           <div v-if="user" class="space-y-6">
-            <!-- User Avatar for OAuth users -->
             <div v-if="user.is_oauth" class="flex justify-center mb-6">
               <div class="avatar">
                 <div class="w-24 h-24 rounded-full">
@@ -193,7 +192,7 @@ onMounted(() => {
                     type="text" 
                     class="input input-bordered"
                     :value="user.is_oauth ? userName : user.username"
-                    :disabled="user.is_oauth"
+                    disabled=true
                   />
                 </div>
                 
@@ -205,7 +204,7 @@ onMounted(() => {
                     type="email" 
                     class="input input-bordered"
                     :value="user.email"
-                    :disabled="user.is_oauth"
+                    disabled=true
                   />
                 </div>
               </div>

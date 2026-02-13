@@ -9,6 +9,15 @@ pub struct Server {
     pub port: u16,
     pub log_level: String,
     pub google_client_id: String,
+    pub redis: RedisConfig,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct RedisConfig {
+    pub host: String,
+    pub port: u16,
+    pub password: String,
+    pub db: u8,
 }
 
 impl Default for Server {
@@ -18,6 +27,18 @@ impl Default for Server {
             port: 8080,
             log_level: "debug".to_string(),
             google_client_id: String::new(),
+            redis: RedisConfig::default(),
+        }
+    }
+}
+
+impl Default for RedisConfig {
+    fn default() -> Self {
+        Self {
+            host: "127.0.0.1".to_string(),
+            port: 6379,
+            password: String::new(),
+            db: 0,
         }
     }
 }

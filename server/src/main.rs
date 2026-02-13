@@ -1,3 +1,4 @@
+pub mod cache;
 pub mod config;
 pub mod controllers;
 pub mod entity;
@@ -6,8 +7,10 @@ pub mod mappers;
 pub mod middleware;
 pub mod server;
 pub mod services;
+pub mod utils;
 
 use crate::{
+    cache::Cache,
     config::{database::Database as DatabaseConfig, server::Server as ServerConfig},
     error::Error,
     mappers::{anilist::Anilist, google_oauth::GoogleOauth},
@@ -18,13 +21,23 @@ pub type ServerResult<T> = std::result::Result<T, Error>;
 
 #[actix_web::main]
 async fn main() -> ServerResult<()> {
+    let settings = ServerConfig::new().expect("Failed to load config");
+
     let anilist = Anilist::new();
     let database = Database::new(DatabaseConfig::new()?).await?;
 
-    let settings = ServerConfig::new().expect("Failed to load config");
-
     let google_oauth = GoogleOauth::new(&settings.google_client_id);
 
-    Ok(server::start(&settings, anilist, database, google_oauth)?.await?)
+    // Initialize Redis cache
+    let cache = Cache::new(
+        &settings.redis.host,
+        settings.redis.port,
+        &settings.redis.password,
+        settings.redis.db,
+    )
+    .await
+    .expect("Failed to initialize Redis cache");
+
+    Ok(server::start(&settings, anilist, database, google_oauth, cache)?.await?)
 }
 // TODO add setting for adding specific episode times rather than all day settings

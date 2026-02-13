@@ -29,7 +29,7 @@ impl Language {
     }
 }
 
-#[derive(Clone, Default, Deserialize)]
+#[derive(Clone, Default, Deserialize, Serialize)]
 pub struct Calendar {
     #[serde(default)]
     pub id: i32,

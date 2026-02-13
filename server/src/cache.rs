@@ -1,0 +1,397 @@
+use log::info;
+use redis::{aio::MultiplexedConnection, Client, RedisResult};
+use serde::{de::DeserializeOwned, Serialize};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+#[derive(Clone)]
+pub struct Cache {
+    connection: Arc<Mutex<MultiplexedConnection>>,
+    metrics: Arc<Mutex<CacheMetrics>>,
+}
+
+impl Cache {
+    /// # Errors
+    /// Fails if Redis connection fails.
+    pub async fn new(host: &str, port: u16, password: &str, _db: u8) -> RedisResult<Self> {
+        let url = if password.is_empty() {
+            format!("redis://{host}:{port}")
+        } else {
+            format!("redis://:{password}@{host}:{port}")
+        };
+
+        let client = Client::open(url)?;
+        let connection = client.get_multiplexed_async_connection().await?;
+
+        Ok(Self {
+            connection: Arc::new(Mutex::new(connection)),
+            metrics: Arc::new(Mutex::new(CacheMetrics::default())),
+        })
+    }
+
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn get<T>(&self, key: &str) -> RedisResult<Option<T>>
+    where
+        T: DeserializeOwned,
+    {
+        let value: Option<String> = redis::cmd("GET")
+            .arg(key)
+            .query_async(&mut *self.connection.lock().await)
+            .await?;
+
+        if let Some(v) = value {
+            self.metrics.lock().await.increment_hit();
+            if let Ok(parsed) = serde_json::from_str(&v) {
+                Ok(Some(parsed))
+            } else {
+                self.metrics.lock().await.increment_miss();
+                Ok(None) // Return None if deserialization fails
+            }
+        } else {
+            self.metrics.lock().await.increment_miss();
+            Ok(None)
+        }
+    }
+
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn delete(&self, key: &str) -> RedisResult<()> {
+        redis::cmd("DEL")
+            .arg(key)
+            .exec_async(&mut *self.connection.lock().await)
+            .await?;
+        Ok(())
+    }
+
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn exists(&self, key: &str) -> RedisResult<bool> {
+        let result: i64 = redis::cmd("EXISTS")
+            .arg(key)
+            .query_async(&mut *self.connection.lock().await)
+            .await?;
+        Ok(result > 0)
+    }
+
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn get_keys(&self, pattern: &str) -> RedisResult<Vec<String>> {
+        let keys: Vec<String> = redis::cmd("KEYS")
+            .arg(pattern)
+            .query_async(&mut *self.connection.lock().await)
+            .await?;
+        Ok(keys)
+    }
+
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn flush(&self) -> RedisResult<()> {
+        redis::cmd("FLUSHALL")
+            .exec_async(&mut *self.connection.lock().await)
+            .await?;
+        Ok(())
+    }
+
+    /// # Errors
+    /// Fails if Redis query fails.
+    /// # Panics
+    /// Panics if value cannot be serialised
+    pub async fn set<T>(&self, key: &str, value: &T, ttl_seconds: u64) -> RedisResult<()>
+    where
+        T: Serialize + Sync,
+    {
+        let serialized =
+            serde_json::to_string(value).expect("Could not serialize value when setting in cache");
+
+        redis::cmd("SET")
+            .arg(key)
+            .arg(serialized)
+            .arg("EX")
+            .arg(ttl_seconds)
+            .exec_async(&mut *self.connection.lock().await)
+            .await?;
+
+        Ok(())
+    }
+
+    // Middleware-style caching function with metrics
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn cached_response<T, F, Fut>(
+        &self,
+        cache_key: &str,
+        ttl_seconds: u64,
+        fetch_fn: F,
+    ) -> RedisResult<T>
+    where
+        T: Serialize + DeserializeOwned + Send + Sync,
+        F: FnOnce() -> Fut + Send,
+        Fut: std::future::Future<Output = RedisResult<T>> + Send,
+    {
+        // Try to get from cache first
+        if let Some(cached) = self.get::<T>(cache_key).await? {
+            return Ok(cached);
+        }
+
+        // If not in cache, fetch fresh data
+        let result = fetch_fn().await?;
+
+        // Store in cache
+        self.set(cache_key, &result, ttl_seconds).await?;
+
+        Ok(result)
+    }
+
+    // Helper function to check if cache is available
+    // TODO is this needed
+    #[must_use]
+    pub const fn is_available(&self) -> bool {
+        true // Since we have a connection, it's available
+    }
+
+    // Get cache metrics
+    pub async fn get_metrics(&self) -> CacheMetrics {
+        self.metrics.lock().await.clone()
+    }
+
+    // Reset cache metrics
+    pub async fn reset_metrics(&self) {
+        *self.metrics.lock().await = CacheMetrics::default();
+    }
+
+    // Invalidate cache for a specific key
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn invalidate(&self, key: &str) -> RedisResult<()> {
+        self.delete(key).await
+    }
+
+    // Invalidate cache for a pattern (e.g., all calendar keys)
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn invalidate_pattern(&self, pattern: &str) -> RedisResult<()> {
+        let keys = self.get_keys(pattern).await?;
+        for key in keys {
+            self.delete(&key).await?;
+        }
+        Ok(())
+    }
+
+    // Invalidate cache for a specific calendar
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn invalidate_calendar(&self, calendar_id: i32) -> RedisResult<()> {
+        let calendar_key = generate_calendar_key(calendar_id);
+        self.delete(&calendar_key).await?;
+
+        // Also invalidate related keys
+        let items_key = generate_calendar_items_key(calendar_id);
+        self.delete(&items_key).await?;
+
+        Ok(())
+    }
+
+    // Invalidate cache for a specific item
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn invalidate_item(&self, item_id: i64) -> RedisResult<()> {
+        let item_key = generate_item_key(item_id);
+        self.delete(&item_key).await?;
+        Ok(())
+    }
+
+    // Invalidate cache for search results
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn invalidate_search(
+        &self,
+        query: &str,
+        media_type: Option<&str>,
+    ) -> RedisResult<()> {
+        let search_key = generate_search_key(query, media_type);
+        self.delete(&search_key).await?;
+        Ok(())
+    }
+
+    // Monitor cache performance
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn monitor_performance(
+        &self,
+    ) -> Result<CachePerformanceMetrics, Box<dyn std::error::Error>> {
+        let metrics = self.get_metrics().await;
+        let keys = self.get_keys("*").await?;
+
+        let performance = CachePerformanceMetrics {
+            hit_rate: metrics.cache_hit_rate,
+            total_requests: metrics.total_requests,
+            cache_size: keys.len(),
+            hits: metrics.hits,
+            misses: metrics.misses,
+        };
+
+        Ok(performance)
+    }
+
+    // Simulate cache warming for popular items (placeholder for future implementation)
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub fn warm_cache_for_popular_items(&self) -> Result<(), Box<dyn std::error::Error>> {
+        // This would be implemented in the future to pre-populate frequently accessed data
+        // For now, it's just a placeholder to show the structure
+        info!("Cache warming for popular items - placeholder implementation");
+        Ok(())
+    }
+
+    // Simulate smart cache warmup for user's recent calendars (placeholder for future implementation)
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub fn warm_cache_for_recent_calendars(&self) -> Result<(), Box<dyn std::error::Error>> {
+        // This would be implemented in the future to warm up cache for user's most recent calendars
+        info!("Cache warming for recent calendars - placeholder implementation");
+        Ok(())
+    }
+
+    // Simulate cache warming for trending content (placeholder for future implementation)
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub fn warm_cache_for_trending_content(&self) -> Result<(), Box<dyn std::error::Error>> {
+        // This would be implemented in the future to warm up cache for trending content
+        info!("Cache warming for trending content - placeholder implementation");
+        Ok(())
+    }
+}
+
+#[must_use]
+pub fn generate_calendar_key(id: i32) -> String {
+    format!("calendar:{id}")
+}
+
+#[must_use]
+pub fn generate_calendar_items_key(id: i32) -> String {
+    format!("calendar:items:{id}")
+}
+
+#[must_use]
+pub fn generate_item_key(id: i64) -> String {
+    format!("item:{id}")
+}
+
+#[must_use]
+pub fn generate_search_key(query: &str, media_type: Option<&str>) -> String {
+    media_type.map_or_else(
+        || format!("search:{query}"),
+        |type_str| format!("search:{query}:{type_str}"),
+    )
+}
+
+#[must_use]
+pub fn generate_items_key(ids: &[common::id::Id]) -> String {
+    let id_string: Vec<String> = ids.iter().map(|id| id.to_int().to_string()).collect();
+    format!("items:{}", id_string.join(","))
+}
+
+#[must_use]
+pub fn generate_paginated_key(endpoint: &str, page: usize, page_size: usize) -> String {
+    format!("{endpoint}:page:{page}:size:{page_size}")
+}
+
+// Cache metrics structure with atomic counters for thread safety
+#[derive(Debug, Clone, Serialize)]
+pub struct CacheMetrics {
+    pub hits: u64,
+    pub misses: u64,
+    pub evictions: u64,
+    pub total_requests: u64,
+    pub cache_hit_rate: f64,
+}
+
+impl Default for CacheMetrics {
+    fn default() -> Self {
+        Self {
+            hits: 0,
+            misses: 0,
+            evictions: 0,
+            total_requests: 0,
+            cache_hit_rate: 0.0,
+        }
+    }
+}
+
+impl CacheMetrics {
+    pub fn increment_hit(&mut self) {
+        self.hits += 1;
+        self.total_requests += 1;
+        self.calculate_hit_rate();
+    }
+
+    pub fn increment_miss(&mut self) {
+        self.misses += 1;
+        self.total_requests += 1;
+        self.calculate_hit_rate();
+    }
+
+    pub const fn increment_eviction(&mut self) {
+        self.evictions += 1;
+    }
+
+    #[allow(clippy::cast_precision_loss)]
+    fn calculate_hit_rate(&mut self) {
+        if self.total_requests > 0 {
+            self.cache_hit_rate = (self.hits as f64 / self.total_requests as f64) * 100.0;
+        } else {
+            self.cache_hit_rate = 0.0;
+        }
+    }
+}
+
+// Middleware trait for caching
+pub trait Cacheable {
+    fn cache_key(&self) -> String;
+    fn cache_ttl(&self) -> u64;
+}
+
+// Cache middleware configuration
+#[derive(Debug, Clone)]
+pub struct CacheConfig {
+    pub ttl_seconds: u64,
+    pub enabled: bool,
+}
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            ttl_seconds: 3600, // 1 hour default
+            enabled: true,
+        }
+    }
+}
+
+impl CacheConfig {
+    #[must_use]
+    pub const fn new(ttl_seconds: u64) -> Self {
+        Self {
+            ttl_seconds,
+            enabled: true,
+        }
+    }
+
+    #[must_use]
+    pub const fn disabled() -> Self {
+        Self {
+            ttl_seconds: 3600,
+            enabled: false,
+        }
+    }
+}
+
+// Cache performance metrics structure
+#[derive(Debug, Clone)]
+pub struct CachePerformanceMetrics {
+    pub hit_rate: f64,
+    pub total_requests: u64,
+    pub cache_size: usize,
+    pub hits: u64,
+    pub misses: u64,
+}

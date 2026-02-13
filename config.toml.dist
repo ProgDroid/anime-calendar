@@ -3,3 +3,9 @@ port = 8080
 log_level = "debug"
 google_client_id = ""
 google_client_secret = ""
+
+[redis]
+host = "127.0.0.1"
+port = 6379
+password = ""
+db = 0

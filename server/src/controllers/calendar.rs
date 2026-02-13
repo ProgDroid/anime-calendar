@@ -78,7 +78,7 @@ async fn export(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims) -> H
 
             if let Some(id) = Id::new(calendar_data.id.into()) {
                 let calendar = Calendar {
-                    id,
+                    id: id.clone(),
                     items,
                     language: calendar_data.language.to_common_language(),
                     name: calendar_data.name,
@@ -91,6 +91,35 @@ async fn export(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims) -> H
                 };
 
                 let file = generate_calendar_export(&calendar);
+
+                // Cache the response for 2 hours (7200 seconds)
+                let cache_key = crate::cache::generate_calendar_key(id.to_int() as i32);
+                let cache_ttl = 7200; // 2 hours
+
+                // If cache is available, try to get from cache
+                match data
+                    .cache
+                    .cached_response(&cache_key, cache_ttl, || async { Ok(format!("{file}")) })
+                    .await
+                {
+                    Ok(cached_file) => {
+                        return HttpResponse::Ok()
+                            .append_header(("Content-Type", "text/calendar"))
+                            .append_header((
+                                "Content-Disposition",
+                                format!(
+                                    "attachment; filename=\"{}.{}\"",
+                                    calendar.name.replace(' ', "_").to_lowercase(),
+                                    "ics"
+                                ),
+                            ))
+                            .body(cached_file);
+                    }
+                    Err(e) => {
+                        // Log error but continue with regular processing
+                        eprintln!("Cache error: {e:?}");
+                    }
+                }
 
                 HttpResponse::Ok()
                     .append_header(("Content-Type", "text/calendar"))
@@ -157,6 +186,9 @@ async fn put(
             }
 
             if let Some(id) = Id::new(calendar.id.into()) {
+                // Invalidate cache for this calendar (controller-level invalidation)
+                let _ = data.cache.invalidate_calendar(calendar.id).await;
+
                 HttpResponse::Ok().json(Calendar {
                     id,
                     items,
@@ -177,7 +209,7 @@ async fn put(
     }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct PageCalendar {
     pub id: Id,
     pub item_count: usize,
@@ -186,13 +218,13 @@ struct PageCalendar {
     pub updated_at: NaiveDateTime,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct PaginatedResponse {
     data: Vec<PageCalendar>,
     pagination: PaginationInfo,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Clone)]
 struct PaginationInfo {
     page: usize,
     page_size: usize,
@@ -240,8 +272,7 @@ async fn get_calendars(
 
             // Return paginated response with metadata
             let total_pages = total_count.div_ceil(params.page_size);
-
-            HttpResponse::Ok().json(PaginatedResponse {
+            let paginated_response = PaginatedResponse {
                 data: results,
                 pagination: PaginationInfo {
                     page: params.page,
@@ -249,7 +280,32 @@ async fn get_calendars(
                     total: total_count,
                     total_pages,
                 },
-            })
+            };
+
+            // Cache the response for 30 minutes (1800 seconds)
+            let cache_key =
+                crate::cache::generate_paginated_key("/calendars", params.page, params.page_size);
+            let cache_ttl = 1800; // 30 minutes
+
+            // If cache is available, try to get from cache
+            match data
+                .cache
+                .cached_response(&cache_key, cache_ttl, || async {
+                    Ok(paginated_response.clone())
+                })
+                .await
+            {
+                Ok(cached_response) => {
+                    return HttpResponse::Ok().json(cached_response);
+                }
+                Err(e) => {
+                    // Log error but continue with regular processing
+                    eprintln!("Cache error: {e:?}");
+                }
+            }
+
+            // If no cache or cache error, return the response normally
+            HttpResponse::Ok().json(paginated_response)
         }
         Err(e) => e.error_response(),
     }
@@ -280,8 +336,8 @@ async fn get_calendar(data: web::Data<Repos>, id: web::Path<i64>, claims: Claims
             }
 
             if let Some(id) = Id::new(calendar.id.into()) {
-                HttpResponse::Ok().json(Calendar {
-                    id,
+                let calendar_response = Calendar {
+                    id: id.clone(),
                     items,
                     language: calendar.language.to_common_language(),
                     name: calendar.name,
@@ -291,7 +347,31 @@ async fn get_calendar(data: web::Data<Repos>, id: web::Path<i64>, claims: Claims
                     updated_at: calendar
                         .updated_at
                         .expect("Did not load updated_at for calendar"), // TODO consider doing this differently
-                })
+                };
+
+                // Cache the response for 1 hour (3600 seconds)
+                let cache_key = crate::cache::generate_calendar_key(id.to_int() as i32);
+                let cache_ttl = 3600; // 1 hour
+
+                // If cache is available, try to get from cache
+                match data
+                    .cache
+                    .cached_response(&cache_key, cache_ttl, || async {
+                        Ok(calendar_response.clone())
+                    })
+                    .await
+                {
+                    Ok(cached_response) => {
+                        return HttpResponse::Ok().json(cached_response);
+                    }
+                    Err(e) => {
+                        // Log error but continue with regular processing
+                        eprintln!("Cache error: {e:?}");
+                    }
+                }
+
+                // If no cache or cache error, return the response normally
+                HttpResponse::Ok().json(calendar_response)
             } else {
                 Error::NotFound.error_response()
             }
@@ -314,7 +394,11 @@ async fn delete_calendar(
     };
 
     match data.database.delete_calendar(*id as i32, user.id).await {
-        Ok(()) => HttpResponse::Ok().finish(),
+        Ok(()) => {
+            // Invalidate cache for this calendar (controller-level invalidation)
+            let _ = data.cache.invalidate_calendar(*id as i32).await;
+            HttpResponse::Ok().finish()
+        }
         Err(e) => e.error_response(),
     }
 }

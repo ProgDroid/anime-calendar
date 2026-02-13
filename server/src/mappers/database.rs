@@ -32,6 +32,7 @@ impl Database {
         )
         .await?;
 
+        // Initialize with no cache initially - will be set by server
         Ok(Self { pool })
     }
 
@@ -106,7 +107,7 @@ impl Database {
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(Calendar {
+        let calendar_result = Calendar {
             id: calendar.id,
             name: calendar.name,
             item_ids,
@@ -114,7 +115,9 @@ impl Database {
             user_id: calendar.user_id,
             created_at: Some(calendar.created_at),
             updated_at: Some(calendar.updated_at),
-        })
+        };
+
+        Ok(calendar_result)
     }
 
     #[allow(
@@ -206,7 +209,7 @@ impl Database {
         self.update_calendar_items(inserted_calendar.id, calendar.item_ids.clone())
             .await?;
 
-        Ok(Calendar {
+        let result = Calendar {
             id: inserted_calendar.id,
             name: inserted_calendar.name,
             item_ids: calendar.item_ids,
@@ -214,7 +217,9 @@ impl Database {
             user_id: inserted_calendar.user_id,
             created_at: Some(inserted_calendar.created_at),
             updated_at: Some(inserted_calendar.updated_at),
-        })
+        };
+
+        Ok(result)
     }
 
     /// # Errors
@@ -233,7 +238,7 @@ impl Database {
         self.update_calendar_items(updated_calendar.id, calendar.item_ids.clone())
             .await?;
 
-        Ok(Calendar {
+        let result = Calendar {
             id: updated_calendar.id,
             name: updated_calendar.name,
             item_ids: calendar.item_ids,
@@ -241,7 +246,9 @@ impl Database {
             user_id: updated_calendar.user_id,
             created_at: Some(updated_calendar.created_at),
             updated_at: Some(updated_calendar.updated_at),
-        })
+        };
+
+        Ok(result)
     }
 
     async fn update_calendar_items(

@@ -80,6 +80,9 @@ pub async fn update_user(
 
     match user {
         Ok(user) => {
+            // Invalidate user cache
+            let _ = data.cache.invalidate(&format!("user:{}", user.id)).await;
+
             let response = UserResponse {
                 username: if user.password_hash.is_none() {
                     String::new()
@@ -136,7 +139,11 @@ pub async fn update_password(
         .update_user_password(user.id, &hashed_password)
         .await
     {
-        Ok(()) => HttpResponse::Ok().finish(),
+        Ok(()) => {
+            // Invalidate user cache
+            let _ = data.cache.invalidate(&format!("user:{}", user.id)).await;
+            HttpResponse::Ok().finish()
+        }
         Err(e) => {
             error!("{e}");
             HttpResponse::InternalServerError().finish()
@@ -146,8 +153,17 @@ pub async fn update_password(
 
 #[delete("/user/{id}")]
 pub async fn delete_user(data: web::Data<Repos>, user_id: web::Path<i32>) -> HttpResponse {
-    match data.database.delete_user(user_id.into_inner()).await {
-        Ok(()) => HttpResponse::NoContent().finish(),
+    let user_id_inner = user_id.into_inner();
+
+    match data.database.delete_user(user_id_inner).await {
+        Ok(()) => {
+            // Invalidate user cache
+            let _ = data
+                .cache
+                .invalidate(&format!("user:{user_id_inner}"))
+                .await;
+            HttpResponse::NoContent().finish()
+        }
         Err(e) => {
             error!("{e}");
             HttpResponse::InternalServerError().finish()

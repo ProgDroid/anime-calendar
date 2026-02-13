@@ -6,8 +6,9 @@ use env_logger::Builder;
 use log::{error, LevelFilter};
 
 use crate::{
+    cache::Cache,
     config::server::Server as ServerConfig,
-    controllers::{auth, calendar, item, items, oauth, user},
+    controllers::{auth, cache_metrics, calendar, item, items, oauth, user},
     mappers::{anilist::Anilist, database::Database, google_oauth::GoogleOauth},
     ServerResult,
 };
@@ -17,6 +18,7 @@ pub struct Repos {
     pub anilist: Anilist,
     pub database: Database,
     pub google_oauth: GoogleOauth,
+    pub cache: Cache,
 }
 
 /// # Errors
@@ -26,11 +28,13 @@ pub fn start(
     anilist: Anilist,
     database: Database,
     google_oauth: GoogleOauth,
+    cache: Cache,
 ) -> ServerResult<Server> {
     let repos = Repos {
         anilist,
         database,
         google_oauth,
+        cache,
     };
 
     let level_filter = match LevelFilter::from_str(&config.log_level) {
@@ -70,8 +74,28 @@ pub fn start(
             .service(user::delete_user)
             .service(user::update_password)
             .service(oauth::google_oauth)
+            .service(cache_metrics::get_cache_metrics)
+            .service(cache_metrics::get_cache_performance)
+            .service(cache_metrics::get_cache_health)
+            .service(cache_metrics::reset_metrics)
+            .service(cache_metrics::get_cache_stats)
     })
     .bind(format!("{}:{}", config.host, config.port))?
     .run())
 }
 // TODO refactor frontend components
+// TODO clear paginated response cache when calendar is created or deleted
+// TODO ensure cache keys are per user
+// TODO implement cache flush endpoint for testing
+
+// TODO add more tests for the backend services and controllers
+// TODO implement rate limiting for API endpoints
+// TODO optimize database queries and indexes
+// TODO add logging to all critical sections of the code
+// TODO improve error handling and provide meaningful error messages to the client
+// TODO refactor the codebase to follow a more modular architecture
+// TODO update dependencies to their latest versions
+// TODO add support for multiple languages in the frontend
+// TODO optimize image loading and rendering on the frontend
+// TODO improve accessibility features on the frontend
+// TODO add analytics tracking to the frontend
