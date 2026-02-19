@@ -8,8 +8,7 @@ actix-cors = "0.7"
 actix-web = "4.11"
 actix-web-lab = "0.24"
 anilist = { path = "../anilist" }
-argon2 = "0.5"
-bcrypt = "0.17"
+argon2 = { version = "0.5", features = [ "std" ] }
 chrono = { version = "0.4", features = [ "serde" ] }
 common = { path = "../common" }
 config = "0.15"

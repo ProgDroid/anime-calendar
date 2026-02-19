@@ -44,7 +44,11 @@ pub async fn google_oauth(
                 }
             };
 
-            let token = generate_token(&user.id);
+            let token = match generate_token(&user.id) {
+                Ok(token) => token,
+                Err(e) => return e.error_response(),
+            };
+
             let response = GoogleOAuthResponse {
                 token,
                 username: google_user.full_name,

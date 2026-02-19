@@ -22,6 +22,10 @@ pub enum Error {
     NotImplemented,
     #[error("Invalid token")]
     InvalidToken(#[from] google_oauth::Error),
+    #[error("Cannot hash password")]
+    CannotHashPassword(#[from] argon2::password_hash::Error),
+    #[error("Cannot generate auth token")]
+    CannotGenerateAuthToken(#[from] jsonwebtoken::errors::Error),
 }
 
 impl ResponseError for Error {
@@ -33,9 +37,11 @@ impl ResponseError for Error {
         match self {
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Unauthorised | Self::InvalidToken(_) => StatusCode::UNAUTHORIZED,
-            Self::InvalidRequest | Self::UserAlreadyExists | Self::InvalidPassword => {
-                StatusCode::BAD_REQUEST
-            }
+            Self::InvalidRequest
+            | Self::UserAlreadyExists
+            | Self::InvalidPassword
+            | Self::CannotHashPassword(_)
+            | Self::CannotGenerateAuthToken(_) => StatusCode::BAD_REQUEST,
             Self::Database(_) | Self::Config(_) | Self::Server(_) | Self::NotImplemented => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
