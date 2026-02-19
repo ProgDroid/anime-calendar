@@ -13,7 +13,9 @@ use crate::{
     cache::Cache,
     config::{database::Database as DatabaseConfig, server::Server as ServerConfig},
     error::Error,
-    mappers::{anilist::Anilist, google_oauth::GoogleOauth, user::UserMapper},
+    mappers::{
+        anilist::Anilist, calendar::CalendarMapper, google_oauth::GoogleOauth, user::UserMapper,
+    },
 };
 use mappers::database::Database;
 
@@ -29,6 +31,8 @@ async fn main() -> ServerResult<()> {
     let db_config = DatabaseConfig::new()?;
 
     let user_mapper = UserMapper::new(db_config.clone()).await?;
+
+    let calendar_mapper = CalendarMapper::new(db_config.clone()).await?;
 
     let google_oauth = GoogleOauth::new(&settings.google_client_id);
 
@@ -49,6 +53,7 @@ async fn main() -> ServerResult<()> {
         google_oauth,
         cache,
         user_mapper,
+        calendar_mapper,
     )?
     .await?)
 }

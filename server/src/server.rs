@@ -13,7 +13,10 @@ use crate::{
     cache::Cache,
     config::server::Server as ServerConfig,
     controllers::{auth, cache_metrics, calendar, item, items, oauth, user},
-    mappers::{anilist::Anilist, database::Database, google_oauth::GoogleOauth, user::UserMapper},
+    mappers::{
+        anilist::Anilist, calendar::CalendarMapper, database::Database, google_oauth::GoogleOauth,
+        user::UserMapper,
+    },
     ServerResult,
 };
 
@@ -34,6 +37,7 @@ pub fn start(
     google_oauth: GoogleOauth,
     cache: Cache,
     user_mapper: UserMapper,
+    calendar_mapper: CalendarMapper,
 ) -> ServerResult<Server> {
     let repos = Repos {
         anilist,
@@ -66,10 +70,11 @@ pub fn start(
                 Cors::default()
                     .allow_any_origin()
                     .allow_any_method()
-                    .allow_any_header(),
+                    .allow_any_header(), // TODO ?
             )
             .app_data(web::Data::new(repos.clone()))
             .app_data(web::Data::new(user_mapper.clone()))
+            .app_data(web::Data::new(calendar_mapper.clone()))
             .app_data(web::Data::new(config)) // TODO do I want this data lying around the entire time?
             .service(item::get)
             .service(items::get)

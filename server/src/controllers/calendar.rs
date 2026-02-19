@@ -2,7 +2,7 @@
 use crate::{
     entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
     error::Error,
-    mappers::user::UserMapper,
+    mappers::{calendar::CalendarMapper, user::UserMapper},
     middleware::auth::Claims,
     server::Repos,
     services::calendar_export::generate_calendar_export,
@@ -46,6 +46,7 @@ const fn default_page_size() -> usize {
 #[get("/calendar/{id}/export")]
 async fn export(
     user_mapper: web::Data<UserMapper>,
+    calendar_mapper: web::Data<CalendarMapper>,
     data: web::Data<Repos>,
     id: web::Path<u64>,
     claims: Claims,
@@ -66,7 +67,10 @@ async fn export(
     // TODO * config.toml in frontend is accessible via URL and downloadable. This needs to be changed
     // TODO * search calendar
 
-    match data.database.get_calendar_by_id(*id as i32, user.id).await {
+    match calendar_mapper
+        .get_calendar_by_id(*id as i32, user.id)
+        .await
+    {
         Ok(calendar_data) => {
             // TODO Check if calendar belongs to the current user or is public
             // For now, we'll assume all calendars are user-specific
@@ -150,6 +154,7 @@ async fn export(
 #[put("/calendar")]
 async fn put(
     user_mapper: web::Data<UserMapper>,
+    calendar_mapper: web::Data<CalendarMapper>,
     data: web::Data<Repos>,
     body: web::Json<CalendarRequest>,
     claims: Claims,
@@ -178,7 +183,7 @@ async fn put(
     };
 
     // Create calendar with the authenticated user's ID
-    match data.database.save_calendar(calendar_entity).await {
+    match calendar_mapper.save_calendar(calendar_entity).await {
         Ok(calendar) => {
             let item_ids: Vec<Id> = calendar
                 .item_ids
@@ -243,6 +248,7 @@ struct PaginationInfo {
 #[get("/calendars")]
 async fn get_calendars(
     user_mapper: web::Data<UserMapper>,
+    calendar_mapper: web::Data<CalendarMapper>,
     data: web::Data<Repos>,
     claims: Claims,
     params: web::Query<PaginationParams>,
@@ -255,8 +261,7 @@ async fn get_calendars(
     };
 
     // Get calendars for the authenticated user with pagination
-    match data
-        .database
+    match calendar_mapper
         .get_calendars_by_user_paginated(user.id, params.page, params.page_size)
         .await
     {
@@ -323,6 +328,7 @@ async fn get_calendars(
 #[get("/calendars/{id}")]
 async fn get_calendar(
     user_mapper: web::Data<UserMapper>,
+    calendar_mapper: web::Data<CalendarMapper>,
     data: web::Data<Repos>,
     id: web::Path<i64>,
     claims: Claims,
@@ -335,7 +341,10 @@ async fn get_calendar(
     };
 
     // Check if the calendar belongs to the authenticated user
-    match data.database.get_calendar_by_id(*id as i32, user.id).await {
+    match calendar_mapper
+        .get_calendar_by_id(*id as i32, user.id)
+        .await
+    {
         Ok(calendar) => {
             let item_ids: Vec<Id> = calendar
                 .item_ids
@@ -397,6 +406,7 @@ async fn get_calendar(
 #[delete("/calendars/{id}")]
 async fn delete_calendar(
     user_mapper: web::Data<UserMapper>,
+    calendar_mapper: web::Data<CalendarMapper>,
     data: web::Data<Repos>,
     id: web::Path<i64>,
     claims: Claims,
@@ -408,7 +418,7 @@ async fn delete_calendar(
         }
     };
 
-    match data.database.delete_calendar(*id as i32, user.id).await {
+    match calendar_mapper.delete_calendar(*id as i32, user.id).await {
         Ok(()) => {
             // Invalidate cache for this calendar (controller-level invalidation)
             let _ = data.cache.invalidate_calendar(*id as i32).await;
