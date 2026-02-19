@@ -571,7 +571,7 @@
         </div>
       </div>
     <div class="max-w-6xl mx-auto">
-      <div v-if="!isMobile && recommendations.length > 0" class="card bg-base-100 shadow-md mt-4">
+      <div v-if="!isMobile" class="card bg-base-100 shadow-md mt-4">
         <div class="card-body">
           <h2 class="card-title">Recommended Items</h2>
           <!-- Recommendations Section -->
@@ -615,6 +615,12 @@
                 </div>
               </div>
             </div>
+          </div>
+          <div v-else-if="itemsInCalendar.length > 0" class="flex justify-center items-center h-full">
+            <p>No recommendations for your current selected items.</p>
+          </div>
+          <div v-else class="flex justify-center items-center h-full">
+            <p>Add items to your calendar to see recommendations.</p>
           </div>
         </div>
       </div>

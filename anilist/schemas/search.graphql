@@ -16,6 +16,7 @@ type Media {
     type: MediaType
     coverImage: CoverImage
     bannerImage: String
+    recommendations: RecommendationsConnection
 }
 
 type MediaTitle {
@@ -39,6 +40,26 @@ type CoverImage {
     large: String
     medium: String
     color: String
+}
+
+type RecommendationMedia {
+    id: Int!
+    idMal: Int
+    title: MediaTitle
+    coverImage: CoverImage
+}
+
+type Recommendation {
+    rating: Int
+    mediaRecommendation: RecommendationMedia
+}
+
+type RecommendationEdge {
+    node: Recommendation!
+}
+
+type RecommendationsConnection {
+    edges: [RecommendationEdge]
 }
 
 type Page {

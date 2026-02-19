@@ -104,8 +104,6 @@ pub fn verify_token(token: &str) -> ServerResult<Claims> {
     Ok(token_data.claims)
 }
 
-// TODO make recommendations display better when there are none and when calendar is updated
-
 #[cfg(test)]
 mod tests {
     use super::*;
