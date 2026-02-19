@@ -4,6 +4,7 @@ log_level = "debug"
 google_client_id = ""
 google_client_secret = ""
 jwt_secret = ""
+compress = true
 
 [redis]
 host = "127.0.0.1"

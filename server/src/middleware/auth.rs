@@ -37,7 +37,7 @@ impl FromRequest for Claims {
                 return Err(Error::Unauthorised);
             };
 
-            let secret = config.jwt_secret.as_bytes(); // TODO actix_settings?
+            let secret = config.jwt_secret.as_bytes();
             let decoding_key = DecodingKey::from_secret(secret);
             let validation = Validation::default();
 
@@ -61,5 +61,3 @@ pub async fn get_user_from_claims(claims: &Claims, database: &Database) -> Serve
         .await
         .map_err(|_| Error::Unauthorised)
 }
-
-// TODO look into actix web compression settings

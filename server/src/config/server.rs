@@ -11,6 +11,7 @@ pub struct Server {
     pub google_client_id: String,
     pub redis: RedisConfig,
     pub jwt_secret: String, // TODO secret?
+    pub compress: bool,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -30,6 +31,7 @@ impl Default for Server {
             google_client_id: String::new(),
             redis: RedisConfig::default(),
             jwt_secret: String::new(),
+            compress: true,
         }
     }
 }

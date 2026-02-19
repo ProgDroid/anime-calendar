@@ -11,7 +11,6 @@ use argon2::{
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use log::error;
 use serde::{Deserialize, Serialize};
-use std::env;
 
 use crate::ServerResult;
 

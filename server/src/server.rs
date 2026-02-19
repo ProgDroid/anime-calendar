@@ -1,7 +1,11 @@
 use std::str::FromStr;
 
 use actix_cors::Cors;
-use actix_web::{dev::Server, middleware::Logger, web, App, HttpServer};
+use actix_web::{
+    dev::Server,
+    middleware::{Compress, Condition, Logger},
+    web, App, HttpServer,
+};
 use env_logger::Builder;
 use log::{error, LevelFilter};
 
@@ -49,11 +53,13 @@ pub fn start(
 
     let host = config.host.clone();
     let port = config.port;
+    let compress = config.compress;
 
     Ok(HttpServer::new(move || {
         let config = config.clone();
 
         App::new()
+            .wrap(Condition::new(compress, Compress::default()))
             .wrap(Logger::default())
             .wrap(
                 Cors::default()
