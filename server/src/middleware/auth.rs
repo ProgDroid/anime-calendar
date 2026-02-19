@@ -1,3 +1,4 @@
+use crate::config::server;
 use crate::entity::user::User;
 use crate::error::Error;
 use crate::mappers::database::Database;
@@ -5,7 +6,6 @@ use crate::ServerResult;
 use actix_web::{dev::Payload, FromRequest, HttpRequest};
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
-use std::env;
 use std::future::Future;
 use std::pin::Pin;
 
@@ -33,8 +33,12 @@ impl FromRequest for Claims {
                 .strip_prefix("Bearer ")
                 .ok_or(Error::Unauthorised)?;
 
-            let secret = env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string());
-            let decoding_key = DecodingKey::from_secret(secret.as_ref());
+            let Some(config) = req.app_data::<actix_web::web::Data<server::Server>>() else {
+                return Err(Error::Unauthorised);
+            };
+
+            let secret = config.jwt_secret.as_bytes(); // TODO actix_settings?
+            let decoding_key = DecodingKey::from_secret(secret);
             let validation = Validation::default();
 
             let token_data = decode::<Self>(token, &decoding_key, &validation)
@@ -57,3 +61,5 @@ pub async fn get_user_from_claims(claims: &Claims, database: &Database) -> Serve
         .await
         .map_err(|_| Error::Unauthorised)
 }
+
+// TODO look into actix web compression settings

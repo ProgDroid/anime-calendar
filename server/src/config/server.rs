@@ -10,6 +10,7 @@ pub struct Server {
     pub log_level: String,
     pub google_client_id: String,
     pub redis: RedisConfig,
+    pub jwt_secret: String, // TODO secret?
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -28,6 +29,7 @@ impl Default for Server {
             log_level: "debug".to_string(),
             google_client_id: String::new(),
             redis: RedisConfig::default(),
+            jwt_secret: String::new(),
         }
     }
 }

@@ -1,5 +1,5 @@
-use crate::server::Repos;
 use crate::services::auth::generate_token;
+use crate::{config::server::Server as ServerConfig, server::Repos};
 use actix_web::{post, web, HttpResponse, ResponseError};
 use log::error;
 use serde::{Deserialize, Serialize};
@@ -22,6 +22,7 @@ pub struct GoogleOAuthResponse {
 pub async fn google_oauth(
     db: web::Data<Repos>,
     google_request: web::Json<GoogleOAuthRequest>,
+    config: web::Data<ServerConfig>,
 ) -> HttpResponse {
     match db
         .google_oauth
@@ -44,7 +45,7 @@ pub async fn google_oauth(
                 }
             };
 
-            let token = match generate_token(&user.id) {
+            let token = match generate_token(&user.id, config.jwt_secret.clone()) {
                 Ok(token) => token,
                 Err(e) => return e.error_response(),
             };

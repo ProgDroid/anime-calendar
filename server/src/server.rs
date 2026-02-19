@@ -24,7 +24,7 @@ pub struct Repos {
 /// # Errors
 /// Returns an error if the server fails to start.
 pub fn start(
-    config: &ServerConfig,
+    config: ServerConfig,
     anilist: Anilist,
     database: Database,
     google_oauth: GoogleOauth,
@@ -47,7 +47,12 @@ pub fn start(
 
     Builder::default().filter_level(level_filter).init();
 
+    let host = config.host.clone();
+    let port = config.port;
+
     Ok(HttpServer::new(move || {
+        let config = config.clone();
+
         App::new()
             .wrap(Logger::default())
             .wrap(
@@ -57,6 +62,7 @@ pub fn start(
                     .allow_any_header(),
             )
             .app_data(web::Data::new(repos.clone()))
+            .app_data(web::Data::new(config)) // TODO do I want this data lying around the entire time?
             .service(item::get)
             .service(items::get)
             .service(items::search)
@@ -81,7 +87,7 @@ pub fn start(
             .service(cache_metrics::get_cache_stats)
             .service(cache_metrics::flush_cache)
     })
-    .bind(format!("{}:{}", config.host, config.port))?
+    .bind(format!("{host}:{port}"))?
     .run())
 }
 // TODO refactor frontend components

@@ -82,23 +82,21 @@ pub fn validate_password_strength(password: &str) -> bool {
 
 /// # Errors
 /// Fails if claims cannot be encoded
-pub fn generate_token(id: &i32) -> ServerResult<String> {
-    let secret = env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string()); // TODO ?
+pub fn generate_token<T: AsRef<[u8]>>(id: &i32, jwt_secret: T) -> ServerResult<String> {
     let claims = Claims {
         sub: id.to_string(),
         exp: (chrono::Utc::now() + chrono::Duration::hours(24)).timestamp() as usize,
     };
 
-    let encoding_key = EncodingKey::from_secret(secret.as_ref());
+    let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
     Ok(encode(&Header::default(), &claims, &encoding_key)?)
 }
 
 // Add a function to verify token
 /// # Errors
 /// Returns an error if the token is invalid or expired
-pub fn verify_token(token: &str) -> ServerResult<Claims> {
-    let secret = env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string()); // TODO probably shouldn't get this far if we have no secret
-    let decoding_key = DecodingKey::from_secret(secret.as_ref());
+pub fn verify_token<T: AsRef<[u8]>>(token: &str, jwt_secret: T) -> ServerResult<Claims> {
+    let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
     let token_data =
         jsonwebtoken::decode::<Claims>(token, &decoding_key, &jsonwebtoken::Validation::default())?;
     Ok(token_data.claims)

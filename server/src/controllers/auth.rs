@@ -1,3 +1,4 @@
+use crate::config::server::Server as ServerConfig;
 use crate::error::Error;
 use crate::middleware::auth::{get_user_from_claims, Claims};
 use crate::server::Repos;
@@ -20,7 +21,11 @@ pub struct LoginResponse {
 }
 
 #[post("/login")]
-pub async fn login(db: web::Data<Repos>, credentials: web::Json<LoginRequest>) -> HttpResponse {
+pub async fn login(
+    db: web::Data<Repos>,
+    credentials: web::Json<LoginRequest>,
+    config: web::Data<ServerConfig>,
+) -> HttpResponse {
     let user = match db.database.get_user_by_email(&credentials.email).await {
         Ok(user) => user,
         Err(e) => return e.error_response(),
@@ -29,7 +34,7 @@ pub async fn login(db: web::Data<Repos>, credentials: web::Json<LoginRequest>) -
     match user.password_hash {
         Some(hash) => {
             if validate_password(&credentials.password, &hash) {
-                let token = match generate_token(&user.id) {
+                let token = match generate_token(&user.id, config.jwt_secret.clone()) {
                     Ok(token) => token,
                     Err(e) => return e.error_response(),
                 };
@@ -55,7 +60,11 @@ pub struct RegisterRequest {
 }
 
 #[post("/register")]
-pub async fn register(db: web::Data<Repos>, user_data: web::Json<RegisterRequest>) -> HttpResponse {
+pub async fn register(
+    db: web::Data<Repos>,
+    user_data: web::Json<RegisterRequest>,
+    config: web::Data<ServerConfig>,
+) -> HttpResponse {
     // Check if user already exists
     if (db.database.get_user_by_email(&user_data.email).await).is_ok() {
         return Error::UserAlreadyExists.error_response();
@@ -84,7 +93,7 @@ pub async fn register(db: web::Data<Repos>, user_data: web::Json<RegisterRequest
         Err(e) => return e.error_response(),
     };
 
-    let token = match generate_token(&user.id) {
+    let token = match generate_token(&user.id, config.jwt_secret.clone()) {
         Ok(token) => token,
         Err(e) => return e.error_response(),
     };
@@ -118,8 +127,11 @@ struct AuthVerifyRequest {
 }
 
 #[post("/auth/verify")]
-pub async fn verify_token_endpoint(token: web::Json<AuthVerifyRequest>) -> HttpResponse {
-    match verify_token(&token.token) {
+pub async fn verify_token_endpoint(
+    token: web::Json<AuthVerifyRequest>,
+    config: web::Data<ServerConfig>,
+) -> HttpResponse {
+    match verify_token(&token.token, config.jwt_secret.clone()) {
         Ok(_) => HttpResponse::Ok().finish(),
         Err(_) => Error::Unauthorised.error_response(),
     }

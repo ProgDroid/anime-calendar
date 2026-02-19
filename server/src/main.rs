@@ -38,6 +38,6 @@ async fn main() -> ServerResult<()> {
     .await
     .expect("Failed to initialize Redis cache");
 
-    Ok(server::start(&settings, anilist, database, google_oauth, cache)?.await?)
+    Ok(server::start(settings, anilist, database, google_oauth, cache)?.await?)
 }
 // TODO add setting for adding specific episode times rather than all day settings
