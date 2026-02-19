@@ -1,7 +1,8 @@
 #![allow(unused_variables)]
 use crate::{
     error::Error,
-    middleware::auth::{get_user_from_claims, Claims},
+    mappers::user::UserMapper,
+    middleware::auth::Claims,
     server::Repos,
     services::auth::{hash_password, validate_password},
 };
@@ -37,8 +38,8 @@ pub struct UpdatePasswordRequest {
 }
 
 #[get("/user/details")]
-pub async fn get_user_details(data: web::Data<Repos>, claims: Claims) -> HttpResponse {
-    match get_user_from_claims(&claims, &data.database).await {
+pub async fn get_user_details(user_mapper: web::Data<UserMapper>, claims: Claims) -> HttpResponse {
+    match user_mapper.get_user_from_claims(&claims).await {
         Ok(user) => {
             let response = UserResponse {
                 username: if user.password_hash.is_none() {
@@ -58,19 +59,19 @@ pub async fn get_user_details(data: web::Data<Repos>, claims: Claims) -> HttpRes
 
 #[put("/user")]
 pub async fn update_user(
+    user_mapper: web::Data<UserMapper>,
     data: web::Data<Repos>,
     claims: Claims,
     user_data: web::Json<UpdateUserRequest>,
 ) -> HttpResponse {
-    let user = match get_user_from_claims(&claims, &data.database).await {
+    let user = match user_mapper.get_user_from_claims(&claims).await {
         Ok(user) => user,
         Err(e) => {
             return e.error_response();
         }
     };
 
-    let user = data
-        .database
+    let user = user_mapper
         .update_user(
             user.id,
             user_data.username.as_ref(),
@@ -104,11 +105,12 @@ pub async fn update_user(
 
 #[post("/user/password")]
 pub async fn update_password(
+    user_mapper: web::Data<UserMapper>,
     data: web::Data<Repos>,
     claims: Claims,
     password_data: web::Json<UpdatePasswordRequest>,
 ) -> HttpResponse {
-    let user = match get_user_from_claims(&claims, &data.database).await {
+    let user = match user_mapper.get_user_from_claims(&claims).await {
         Ok(user) => user,
         Err(e) => {
             return e.error_response();
@@ -137,8 +139,7 @@ pub async fn update_password(
     };
 
     // Update password in database
-    match data
-        .database
+    match user_mapper
         .update_user_password(user.id, &hashed_password)
         .await
     {
@@ -155,10 +156,24 @@ pub async fn update_password(
 }
 
 #[delete("/user/{id}")]
-pub async fn delete_user(data: web::Data<Repos>, user_id: web::Path<i32>) -> HttpResponse {
+pub async fn delete_user(
+    user_mapper: web::Data<UserMapper>,
+    data: web::Data<Repos>,
+    user_id: web::Path<i32>,
+    claims: Claims,
+) -> HttpResponse {
+    let user = match user_mapper.get_user_from_claims(&claims).await {
+        Ok(user) => user,
+        Err(e) => {
+            return e.error_response();
+        }
+    };
+
+    // TODO should only delete self?
+
     let user_id_inner = user_id.into_inner();
 
-    match data.database.delete_user(user_id_inner).await {
+    match user_mapper.delete_user(user_id_inner).await {
         Ok(()) => {
             // Invalidate user cache
             let _ = data

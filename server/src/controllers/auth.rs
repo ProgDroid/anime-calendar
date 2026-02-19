@@ -1,7 +1,7 @@
 use crate::config::server::Server as ServerConfig;
 use crate::error::Error;
-use crate::middleware::auth::{get_user_from_claims, Claims};
-use crate::server::Repos;
+use crate::mappers::user::UserMapper;
+use crate::middleware::auth::Claims;
 use crate::services::auth::{
     generate_token, hash_password, validate_password, validate_password_strength, verify_token,
 };
@@ -22,11 +22,11 @@ pub struct LoginResponse {
 
 #[post("/login")]
 pub async fn login(
-    db: web::Data<Repos>,
+    db: web::Data<UserMapper>,
     credentials: web::Json<LoginRequest>,
     config: web::Data<ServerConfig>,
 ) -> HttpResponse {
-    let user = match db.database.get_user_by_email(&credentials.email).await {
+    let user = match db.get_user_by_email(&credentials.email).await {
         Ok(user) => user,
         Err(e) => return e.error_response(),
     };
@@ -61,12 +61,12 @@ pub struct RegisterRequest {
 
 #[post("/register")]
 pub async fn register(
-    db: web::Data<Repos>,
+    db: web::Data<UserMapper>,
     user_data: web::Json<RegisterRequest>,
     config: web::Data<ServerConfig>,
 ) -> HttpResponse {
     // Check if user already exists
-    if (db.database.get_user_by_email(&user_data.email).await).is_ok() {
+    if (db.get_user_by_email(&user_data.email).await).is_ok() {
         return Error::UserAlreadyExists.error_response();
     }
 
@@ -81,7 +81,6 @@ pub async fn register(
     };
 
     let user = match db
-        .database
         .create_user(
             &user_data.username,
             &user_data.email,
@@ -107,8 +106,8 @@ pub async fn register(
 }
 
 #[get("/user")]
-pub async fn get_current_user(db: web::Data<Repos>, claims: Claims) -> HttpResponse {
-    let user = match get_user_from_claims(&claims, &db.database).await {
+pub async fn get_current_user(db: web::Data<UserMapper>, claims: Claims) -> HttpResponse {
+    let user = match db.get_user_from_claims(&claims).await {
         Ok(user) => user,
         Err(e) => return e.error_response(),
     };

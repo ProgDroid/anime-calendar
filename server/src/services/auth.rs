@@ -10,15 +10,8 @@ use argon2::{
 };
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use log::error;
-use serde::{Deserialize, Serialize};
 
-use crate::ServerResult;
-
-#[derive(Debug, Serialize, Deserialize)]
-pub struct Claims {
-    pub sub: String,
-    pub exp: usize,
-}
+use crate::{middleware::auth::Claims, ServerResult};
 
 /// # Errors
 /// Fails if password cannot be hashed

@@ -13,7 +13,7 @@ use crate::{
     cache::Cache,
     config::{database::Database as DatabaseConfig, server::Server as ServerConfig},
     error::Error,
-    mappers::{anilist::Anilist, google_oauth::GoogleOauth},
+    mappers::{anilist::Anilist, google_oauth::GoogleOauth, user::UserMapper},
 };
 use mappers::database::Database;
 
@@ -25,6 +25,10 @@ async fn main() -> ServerResult<()> {
 
     let anilist = Anilist::new();
     let database = Database::new(DatabaseConfig::new()?).await?;
+
+    let db_config = DatabaseConfig::new()?;
+
+    let user_mapper = UserMapper::new(db_config.clone()).await?;
 
     let google_oauth = GoogleOauth::new(&settings.google_client_id);
 
@@ -38,6 +42,14 @@ async fn main() -> ServerResult<()> {
     .await
     .expect("Failed to initialize Redis cache");
 
-    Ok(server::start(settings, anilist, database, google_oauth, cache)?.await?)
+    Ok(server::start(
+        settings,
+        anilist,
+        database,
+        google_oauth,
+        cache,
+        user_mapper,
+    )?
+    .await?)
 }
 // TODO add setting for adding specific episode times rather than all day settings

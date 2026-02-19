@@ -1,8 +1,5 @@
 use crate::config::server;
-use crate::entity::user::User;
 use crate::error::Error;
-use crate::mappers::database::Database;
-use crate::ServerResult;
 use actix_web::{dev::Payload, FromRequest, HttpRequest};
 use jsonwebtoken::{decode, DecodingKey, Validation};
 use serde::{Deserialize, Serialize};
@@ -49,15 +46,4 @@ impl FromRequest for Claims {
 
         Box::pin(fut)
     }
-}
-
-// Helper function to get user from claims and database
-/// # Errors
-/// Returns `Error` if user is not found or claims are invalid
-pub async fn get_user_from_claims(claims: &Claims, database: &Database) -> ServerResult<User> {
-    let user_id = claims.sub.parse::<i32>().map_err(|_| Error::Unauthorised)?;
-    database
-        .get_user_by_id(user_id)
-        .await
-        .map_err(|_| Error::Unauthorised)
 }

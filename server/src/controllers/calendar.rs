@@ -2,7 +2,8 @@
 use crate::{
     entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
     error::Error,
-    middleware::auth::{get_user_from_claims, Claims},
+    mappers::user::UserMapper,
+    middleware::auth::Claims,
     server::Repos,
     services::calendar_export::generate_calendar_export,
 };
@@ -43,8 +44,13 @@ const fn default_page_size() -> usize {
 }
 
 #[get("/calendar/{id}/export")]
-async fn export(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims) -> HttpResponse {
-    let user = match get_user_from_claims(&claims, &data.database).await {
+async fn export(
+    user_mapper: web::Data<UserMapper>,
+    data: web::Data<Repos>,
+    id: web::Path<u64>,
+    claims: Claims,
+) -> HttpResponse {
+    let user = match user_mapper.get_user_from_claims(&claims).await {
         Ok(user) => user,
         Err(e) => {
             return e.error_response();
@@ -143,11 +149,12 @@ async fn export(data: web::Data<Repos>, id: web::Path<u64>, claims: Claims) -> H
 #[allow(clippy::cast_possible_truncation)]
 #[put("/calendar")]
 async fn put(
+    user_mapper: web::Data<UserMapper>,
     data: web::Data<Repos>,
     body: web::Json<CalendarRequest>,
     claims: Claims,
 ) -> HttpResponse {
-    let user = match get_user_from_claims(&claims, &data.database).await {
+    let user = match user_mapper.get_user_from_claims(&claims).await {
         Ok(user) => user,
         Err(e) => {
             return e.error_response();
@@ -235,11 +242,12 @@ struct PaginationInfo {
 
 #[get("/calendars")]
 async fn get_calendars(
+    user_mapper: web::Data<UserMapper>,
     data: web::Data<Repos>,
     claims: Claims,
     params: web::Query<PaginationParams>,
 ) -> HttpResponse {
-    let user = match get_user_from_claims(&claims, &data.database).await {
+    let user = match user_mapper.get_user_from_claims(&claims).await {
         Ok(user) => user,
         Err(e) => {
             return e.error_response();
@@ -313,8 +321,13 @@ async fn get_calendars(
 }
 
 #[get("/calendars/{id}")]
-async fn get_calendar(data: web::Data<Repos>, id: web::Path<i64>, claims: Claims) -> HttpResponse {
-    let user = match get_user_from_claims(&claims, &data.database).await {
+async fn get_calendar(
+    user_mapper: web::Data<UserMapper>,
+    data: web::Data<Repos>,
+    id: web::Path<i64>,
+    claims: Claims,
+) -> HttpResponse {
+    let user = match user_mapper.get_user_from_claims(&claims).await {
         Ok(user) => user,
         Err(e) => {
             return e.error_response();
@@ -383,11 +396,12 @@ async fn get_calendar(data: web::Data<Repos>, id: web::Path<i64>, claims: Claims
 
 #[delete("/calendars/{id}")]
 async fn delete_calendar(
+    user_mapper: web::Data<UserMapper>,
     data: web::Data<Repos>,
     id: web::Path<i64>,
     claims: Claims,
 ) -> HttpResponse {
-    let user = match get_user_from_claims(&claims, &data.database).await {
+    let user = match user_mapper.get_user_from_claims(&claims).await {
         Ok(user) => user,
         Err(e) => {
             return e.error_response();
