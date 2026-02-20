@@ -169,9 +169,11 @@ pub async fn delete_user(
         }
     };
 
-    // TODO should only delete self?
-
     let user_id_inner = user_id.into_inner();
+
+    if user.id != user_id_inner {
+        return HttpResponse::Forbidden().finish();
+    }
 
     match user_mapper.delete_user(user_id_inner).await {
         Ok(()) => {
