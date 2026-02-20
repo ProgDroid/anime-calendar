@@ -1,4 +1,6 @@
-use anilist::{client::Client, GetItemsResponseItem, SearchItemsResponseItem, SearchItemsByTypeResponseItem, SearchItemsByTypeMediaType};
+use std::str::FromStr;
+
+use anilist::{MediaTrait, TitleTrait, CoverImageTrait, AiringScheduleTrait, RecommendationTrait, RecommendationMediaTrait, ResponseItemTrait, SearchItemsByTypeMediaType, client::Client};
 use common::{
     id::Id,
     item::{Item, Repository as RepositoryItem, Type},
@@ -34,7 +36,7 @@ impl RepositoryItem for Anilist {
     async fn get_item(&self, id: Id) -> Option<Item> {
         match std::convert::TryInto::<i64>::try_into(id.to_int()) {
             Ok(id) => match self.client.get_item(id).await {
-                Ok(item) => response_to_items_get(item).first().cloned(),
+                Ok(item) => response_to_items(item).first().cloned(),
                 Err(e) => {
                     error!("{e}");
                     None
@@ -55,7 +57,7 @@ impl RepositoryItem for Anilist {
             .collect();
 
         match self.client.get_items(ids).await {
-            Ok(item) => response_to_items_get(item),
+            Ok(item) => response_to_items(item),
             Err(e) => {
                 error!("{e}");
                 Vec::default()
@@ -72,7 +74,7 @@ impl RepositoryItem for Anilist {
                 };
 
                 match self.client.search_items_by_type(query, inner_type).await {
-                    Ok(item) => response_to_items_search_by_type(item),
+                    Ok(item) => response_to_items(item),
                     Err(e) => {
                         error!("{e}");
                         Vec::default()
@@ -80,7 +82,7 @@ impl RepositoryItem for Anilist {
                 }
             }
             None => match self.client.search_items(query).await {
-                Ok(item) => response_to_items_search(item),
+                Ok(item) => response_to_items(item),
                 Err(e) => {
                     error!("{e}");
                     Vec::default()
@@ -88,289 +90,90 @@ impl RepositoryItem for Anilist {
             }
         }
     }
-
 }
 
-// TODO this is bad, fix somehow
-// impl ResponseItem that gets everything?
-fn response_to_items_get(response: GetItemsResponseItem) -> Vec<Item> {
-    let mut items = Vec::default();
+fn response_to_items<T: ResponseItemTrait>(response: T) -> Vec<Item> {
+    response.media().iter().filter_map(|media| {
+        let media_id = Id::new(media.id());
 
-    if let Some(media_list) = response.page.media {
-        for media in media_list {
-            let airing_schedule: Vec<Schedule> = match media.airing_schedule {
-                Some(connection) => connection.nodes.map_or_else(Vec::default, |entries| {
-                    entries
-                        .iter()
-                        .flatten()
-                        .filter_map(|item| {
-                            if let Some(id) = Id::new(item.id) && let Some(airing_at) = Timestamp::new(item.airing_at) {
-                                Some(Schedule {
-                                    id,
-                                    airing_at,
-                                    episode: item.episode,
-                                    media_id: None,
-                                })
-                            } else {
-                                None
-                            }}
-                        )
-                        .collect()
-                }),
-                None => Vec::default(),
-            };
+        media_id.as_ref()?;
 
-            let title = match media.title {
-                Some(title) => Title {
-                    english: title.english.unwrap_or_default(),
-                    native: title.native.unwrap_or_default(),
-                    romaji: title.romaji.unwrap_or_default(),
-                },
-                None => Title::default(),
-            };
+        let media_type = Type::from_str(&media.media_type());
 
-            let media_type = media
-                .media_type
-                .map_or(Type::Anime, |media_type| match media_type {
-                    anilist::GetItemsMediaType::MANGA => Type::Manga,
-                    _ => Type::Anime,
-                });
-
-            let cover_image = match media.cover_image {
-                Some(image) => MediaCover {
-                    extra_large: image.extra_large.unwrap_or_default(),
-                    large: image.large.unwrap_or_default(),
-                    medium: image.medium.unwrap_or_default(),
-                    color: image.color.unwrap_or_default(),
-                },
-                None => MediaCover::default()
-            };
-
-            let recommendations = match media.recommendations {
-                Some(connection) => connection.edges.map_or_else(Vec::new, |edges| edges.iter().flatten().map(|edge| Recommendation {
-                    rating: edge.node.rating.unwrap_or_default(),
-                    media: edge.node.media_recommendation.as_ref().map_or_else(RecommendationMedia::default, |inner| RecommendationMedia {
-                        id: Id::new(inner.id).unwrap(),
-                        id_mal: inner.id_mal,
-                        title: inner.title.as_ref().map_or_else(Title::default, |title| Title {
-                            english: title.english.clone().unwrap_or_default(),
-                            native: title.native.clone().unwrap_or_default(),
-                            romaji: title.romaji.clone().unwrap_or_default(),
-                        }),
-                        cover_image: inner.cover_image.as_ref().map_or_else(MediaCover::default, |image| MediaCover {
-                            extra_large: image.extra_large.clone().unwrap_or_default(),
-                            large: image.large.clone().unwrap_or_default(),
-                            medium: image.medium.clone().unwrap_or_default(),
-                            color: image.color.clone().unwrap_or_default(),
-                        })
-                    })
-                }).filter(|rec| rec.media.id.to_int() > 0).collect()),
-                None => Vec::new()
-            };
-
-            if let Some(id) = Id::new(media.id) {
-                items.push(Item {
-                    id,
-                    id_mal: media.id_mal,
-                    title,
-                    airing_schedule,
-                    episode_duration: media.duration.unwrap_or_default(),
-                    media_type,
-                    cover_image,
-                    banner_image: media.banner_image.unwrap_or_default(),
-                    recommendations,
-                });
-            }
+        if media_type.is_err() {
+            return None;
         }
-    }
 
-    items
-}
+        let media_title = media.title();
 
-fn response_to_items_search(response: SearchItemsResponseItem) -> Vec<Item> {
-    let mut items = Vec::default();
+        let title = Title {
+            english: media_title.english(),
+            native: media_title.native(),
+            romaji: media_title.romaji(),
+        };
 
-    if let Some(media_list) = response.page.media {
-        for media in media_list {
-            let airing_schedule: Vec<Schedule> = match media.airing_schedule {
-                Some(connection) => connection.nodes.map_or_else(Vec::default, |entries| {
-                    entries
-                        .iter()
-                        .flatten()
-                        .filter_map(|item| {
-                            if let Some(id) = Id::new(item.id) && let Some(airing_at) = Timestamp::new(item.airing_at) {
-                                Some(Schedule {
-                                    id,
-                                    airing_at,
-                                    episode: item.episode,
-                                    media_id: None,
-                                })
-                            } else {
-                                None
-                            }}
-                        )
-                        .collect()
-                }),
-                None => Vec::default(),
-            };
+        let media_airing_schedule = media.airing_schedule();
 
-            let title = match media.title {
-                Some(title) => Title {
-                    english: title.english.unwrap_or_default(),
-                    native: title.native.unwrap_or_default(),
-                    romaji: title.romaji.unwrap_or_default(),
-                },
-                None => Title::default(),
-            };
-
-            let media_type = media
-                .media_type
-                .map_or(Type::Anime, |media_type| match media_type {
-                    anilist::SearchItemsMediaType::MANGA => Type::Manga,
-                    _ => Type::Anime,
-                });
-
-            let cover_image = match media.cover_image {
-                Some(image) => MediaCover {
-                    extra_large: image.extra_large.unwrap_or_default(),
-                    large: image.large.unwrap_or_default(),
-                    medium: image.medium.unwrap_or_default(),
-                    color: image.color.unwrap_or_default(),
-                },
-                None => MediaCover::default()
-            };
-
-            let recommendations = match media.recommendations {
-                Some(connection) => connection.edges.map_or_else(Vec::new, |edges| edges.iter().flatten().map(|edge| Recommendation {
-                    rating: edge.node.rating.unwrap_or_default(),
-                    media: edge.node.media_recommendation.as_ref().map_or_else(RecommendationMedia::default, |inner| RecommendationMedia {
-                        id: Id::new(inner.id).unwrap(),
-                        id_mal: inner.id_mal,
-                        title: inner.title.as_ref().map_or_else(Title::default, |title| Title {
-                            english: title.english.clone().unwrap_or_default(),
-                            native: title.native.clone().unwrap_or_default(),
-                            romaji: title.romaji.clone().unwrap_or_default(),
-                        }),
-                        cover_image: inner.cover_image.as_ref().map_or_else(MediaCover::default, |image| MediaCover {
-                            extra_large: image.extra_large.clone().unwrap_or_default(),
-                            large: image.large.clone().unwrap_or_default(),
-                            medium: image.medium.clone().unwrap_or_default(),
-                            color: image.color.clone().unwrap_or_default(),
-                        })
+        let airing_schedule = media_airing_schedule
+            .iter()
+            .filter_map(|schedule| {
+                if let Some(id) = Id::new(schedule.id()) && let Some(airing_at) = Timestamp::new(schedule.airing_at()) {
+                    Some(Schedule {
+                        id,
+                        airing_at,
+                        episode: schedule.episode(),
+                        media_id: None,
                     })
-                }).filter(|rec| rec.media.id.to_int() > 0).collect()),
-                None => Vec::new()
+                } else {
+                    None
+                }
+            })
+            .collect();
+
+        let media_cover_image = media.cover_image();
+
+        let cover_image = MediaCover { extra_large: media_cover_image.extra_large(), large: media_cover_image.large(), medium: media_cover_image.medium(), color: media_cover_image.color() };
+
+        let recommendations = media.recommendations().iter().filter_map(|recommendation| {
+            let recommendation_media = recommendation.media();
+            let media_id = Id::new(recommendation_media.id());
+
+            media_id.as_ref()?;
+
+            let media_title = recommendation_media.title();
+
+            let title = Title {
+                english: media_title.english(),
+                native: media_title.native(),
+                romaji: media_title.romaji(),
             };
 
-            if let Some(id) = Id::new(media.id) {
-                items.push(Item {
-                    id,
-                    id_mal: media.id_mal,
+            let media_cover_image = recommendation_media.cover_image();
+
+            let cover_image = MediaCover { extra_large: media_cover_image.extra_large(), large: media_cover_image.large(), medium: media_cover_image.medium(), color: media_cover_image.color() };
+
+            Some(Recommendation {
+                rating: recommendation.rating(),
+                media: RecommendationMedia {
+                    id: media_id.unwrap(),
+                    id_mal: recommendation_media.id_mal(),
                     title,
-                    airing_schedule,
-                    episode_duration: media.duration.unwrap_or_default(),
-                    media_type,
                     cover_image,
-                    banner_image: media.banner_image.unwrap_or_default(),
-                    recommendations,
-                });
-            }
-        }
-    }
+                }
+            })
+            }).collect();
 
-    items
-}
-
-fn response_to_items_search_by_type(response: SearchItemsByTypeResponseItem) -> Vec<Item> {
-    let mut items = Vec::default();
-
-    if let Some(media_list) = response.page.media {
-        for media in media_list {
-            let airing_schedule: Vec<Schedule> = match media.airing_schedule {
-                Some(connection) => connection.nodes.map_or_else(Vec::default, |entries| {
-                    entries
-                        .iter()
-                        .flatten()
-                        .filter_map(|item| {
-                            if let Some(id) = Id::new(item.id) && let Some(airing_at) = Timestamp::new(item.airing_at) {
-                                Some(Schedule {
-                                    id,
-                                    airing_at,
-                                    episode: item.episode,
-                                    media_id: None,
-                                })
-                            } else {
-                                None
-                            }}
-                        )
-                        .collect()
-                }),
-                None => Vec::default(),
-            };
-
-            let title = match media.title {
-                Some(title) => Title {
-                    english: title.english.unwrap_or_default(),
-                    native: title.native.unwrap_or_default(),
-                    romaji: title.romaji.unwrap_or_default(),
-                },
-                None => Title::default(),
-            };
-
-            let media_type = media
-                .media_type
-                .map_or(Type::Anime, |media_type| match media_type {
-                    anilist::SearchItemsByTypeMediaType::MANGA => Type::Manga,
-                    _ => Type::Anime,
-                });
-
-            let cover_image = match media.cover_image {
-                Some(image) => MediaCover {
-                    extra_large: image.extra_large.unwrap_or_default(),
-                    large: image.large.unwrap_or_default(),
-                    medium: image.medium.unwrap_or_default(),
-                    color: image.color.unwrap_or_default(),
-                },
-                None => MediaCover::default()
-            };
-
-            let recommendations = match media.recommendations {
-                Some(connection) => connection.edges.map_or_else(Vec::new, |edges| edges.iter().flatten().map(|edge| Recommendation {
-                    rating: edge.node.rating.unwrap_or_default(),
-                    media: edge.node.media_recommendation.as_ref().map_or_else(RecommendationMedia::default, |inner| RecommendationMedia {
-                        id: Id::new(inner.id).unwrap(),
-                        id_mal: inner.id_mal,
-                        title: inner.title.as_ref().map_or_else(Title::default, |title| Title {
-                            english: title.english.clone().unwrap_or_default(),
-                            native: title.native.clone().unwrap_or_default(),
-                            romaji: title.romaji.clone().unwrap_or_default(),
-                        }),
-                        cover_image: inner.cover_image.as_ref().map_or_else(MediaCover::default, |image| MediaCover {
-                            extra_large: image.extra_large.clone().unwrap_or_default(),
-                            large: image.large.clone().unwrap_or_default(),
-                            medium: image.medium.clone().unwrap_or_default(),
-                            color: image.color.clone().unwrap_or_default(),
-                        })
-                    })
-                }).filter(|rec| rec.media.id.to_int() > 0).collect()),
-                None => Vec::new()
-            };
-
-            if let Some(id) = Id::new(media.id) {
-                items.push(Item {
-                    id,
-                    id_mal: media.id_mal,
-                    title,
-                    airing_schedule,
-                    episode_duration: media.duration.unwrap_or_default(),
-                    media_type,
-                    cover_image,
-                    banner_image: media.banner_image.unwrap_or_default(),
-                    recommendations,
-                });
-            }
-        }
-    }
-
-    items
+        Some(Item {
+            id: media_id.unwrap(),
+            id_mal: media.id_mal(),
+            title,
+            airing_schedule,
+            episode_duration: media.episode_duration(),
+            media_type: media_type.unwrap(),
+            cover_image,
+            banner_image: media.banner_image(),
+            recommendations,
+        })
+    })
+    .collect()
 }

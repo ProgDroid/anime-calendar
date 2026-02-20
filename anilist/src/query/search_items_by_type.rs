@@ -4,6 +4,6 @@ use graphql_client::GraphQLQuery;
 #[graphql(
     query_path = "queries/search_items_by_type.graphql",
     schema_path = "schemas/search_type.graphql",
-    response_derives = "Debug"
+    response_derives = "Debug,Clone"
 )]
 pub struct SearchItemsByType;
