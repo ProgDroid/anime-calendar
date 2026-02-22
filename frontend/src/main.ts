@@ -6,7 +6,6 @@ import router from './router'
 import './assets/main.css'
 import { loadConfig } from './config/api'
 import { useAuthStore } from './stores/auth'
-import { initSettingsService } from './services/userSettingsService'
 
 // Load configuration before creating the app
 loadConfig().then(() => {
@@ -18,8 +17,6 @@ loadConfig().then(() => {
     // Initialize authentication
     const authStore = useAuthStore()
     authStore.initAuth().then(() => {
-        // Initialize settings service
-        initSettingsService()
         app.mount('#app')
     })
 })

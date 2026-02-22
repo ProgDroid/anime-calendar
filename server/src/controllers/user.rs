@@ -236,7 +236,6 @@ pub async fn update_user_settings(
     }
 }
 
-// TODO cache settings locally in browser? custom TTL
 // TODO actually use these settings
 
 // TODO commented out until I work out how to create fake repos to set up application for tests

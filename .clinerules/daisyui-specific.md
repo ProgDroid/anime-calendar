@@ -184,23 +184,18 @@ People can use https://daisyui.com/theme-generator/ visual tool to create their 
 
 ## daisyUI 5 components
 
-### carousel
-Carousel show images or content in a scrollable area
+### theme-controller
+If a checked checkbox input or a checked radio input with theme-controller class exists in the page, The page will have the same theme as that input's value
 
-[carousel docs](https://daisyui.com/components/carousel/)
+[theme-controller docs](https://daisyui.com/components/theme-controller/)
 
 #### Class names
-- component: `carousel`
-- part: `carousel-item`
-- modifier: `carousel-start`, `carousel-center`, `carousel-end`
-- direction: `carousel-horizontal`, `carousel-vertical`
+- component: `theme-controller`
 
 #### Syntax
 ```html
-<div class="carousel {MODIFIER}">{CONTENT}</div>
+<input type="checkbox" value="{theme-name}" class="theme-controller" />
 ```
 
 #### Rules
-- {MODIFIER} is optional and can have one of the modifier/direction class names
-- Content is a list of `carousel-item` divs: `<div class="carousel-item"></div>`
-- To create a full-width carousel, add `w-full` to each carousel item
+- The value attribute of the input element should be a valid daisyUI theme name

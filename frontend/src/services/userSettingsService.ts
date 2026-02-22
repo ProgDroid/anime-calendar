@@ -67,23 +67,3 @@ export const invalidateSettingsCache = (): void => {
   localStorage.removeItem(SETTINGS_TIMESTAMP_KEY)
   console.log('User settings cache invalidated')
 }
-
-// Initialize the service
-export const initSettingsService = (): void => {
-  // No initialization needed for this service
-  console.log('User settings service initialized')
-}
-
-// Get cached settings without making API call (for immediate access)
-export const getCachedSettings = (): UserSettings | null => {
-  try {
-    const cachedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY)
-    if (cachedSettings) {
-      return JSON.parse(cachedSettings)
-    }
-    return null
-  } catch (error) {
-    console.error('Failed to get cached settings:', error)
-    return null
-  }
-}

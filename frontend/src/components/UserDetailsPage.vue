@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/config/api'
 import { toastService } from '@/services/toastService'
+import { useUserSettingsStore } from '@/stores/userSettingsStore'
+import { applySettings } from '@/services/applySettings'
 
 interface User {
   username: string
@@ -13,6 +15,7 @@ interface User {
 
 const router = useRouter()
 const authStore = useAuthStore()
+const userSettingsStore = useUserSettingsStore()
 
 const user = ref<User | null>(null)
 const loading = ref(true)
@@ -139,6 +142,8 @@ const handleDelete = async () => {
     isDeleting.value = true
     await api.delete('/user')
     authStore.logout()
+    userSettingsStore.clearCache()
+    applySettings(userSettingsStore.getDefaultSettings())
     router.push('/login')
   } catch (err) {
     error.value = 'Failed to delete account'

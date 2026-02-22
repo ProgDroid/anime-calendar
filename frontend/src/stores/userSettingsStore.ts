@@ -1,39 +1,43 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
-import { getUserSettings, updateUserSettings, getCachedSettings, invalidateSettingsCache } from '@/services/userSettingsService'
+import { ref } from 'vue'
+import { getUserSettings, updateUserSettings, invalidateSettingsCache } from '@/services/userSettingsService'
 import type { UserSettings } from '@/types/userSettings'
+import { useAuthStore } from './auth'
 
 export const useUserSettingsStore = defineStore('userSettings', () => {
   const settings = ref<UserSettings | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const authStore = useAuthStore()
 
-  // Get cached settings immediately
-  const cachedSettings = computed(() => {
-    return getCachedSettings()
-  })
+  const getDefaultSettings = (): UserSettings => {
+    return {
+      theme_preference: 'dark',
+      language_preference: 'en',
+      title_language_preference: 'English',
+      date_display_preference: 'yyyymmdd',
+      date_separator_preference: 'slash',
+      timezone: 'UTC'
+    }
+  }
 
-  const isAuthenticated = computed(() => {
-    // This would need to be connected to auth store
-    return true // Placeholder
-  })
-
-  const fetchSettings = async (): Promise<UserSettings | null> => {
-    if (!isAuthenticated.value) {
-      return null
+  const fetchSettings = async (): Promise<UserSettings> => {
+    if (!authStore.isAuthenticated()) {
+      return getDefaultSettings()
     }
 
     try {
       loading.value = true
       error.value = null
-      
+
+      // getUserSettings will use cache if available
       const fetchedSettings = await getUserSettings()
       settings.value = fetchedSettings
       return fetchedSettings
     } catch (err) {
       error.value = 'Failed to fetch user settings'
       console.error('Error fetching user settings:', err)
-      return null
+      return getDefaultSettings()
     } finally {
       loading.value = false
     }
@@ -57,12 +61,11 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
 
   return {
     settings,
-    cachedSettings,
     loading,
     error,
     fetchSettings,
     updateSettings,
     clearCache,
-    isAuthenticated
+    getDefaultSettings,
   }
 })

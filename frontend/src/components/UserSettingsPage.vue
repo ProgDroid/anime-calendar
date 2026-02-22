@@ -1,28 +1,23 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
-import { getUserSettings, updateUserSettings } from '@/services/userSettingsService'
 import { toastService } from '@/services/toastService'
 import type { UserSettings } from '@/types/userSettings'
+import { useUserSettingsStore } from '@/stores/userSettingsStore'
+import { applySettings } from '@/services/applySettings'
 
 const authStore = useAuthStore()
+const userSettingsStore = useUserSettingsStore()
 const loading = ref(true)
 const error = ref<string | null>(null)
-const settings = ref<UserSettings>({
-  theme_preference: 'dark',
-  language_preference: 'en',
-  title_language_preference: 'English',
-  date_display_preference: 'yyyymmdd',
-  date_separator_preference: 'dash',
-  timezone: 'UTC'
-})
+const settings = ref<UserSettings>(userSettingsStore.getDefaultSettings())
 
 const fetchUserSettings = async () => {
   try {
     loading.value = true
     error.value = null
     
-    const fetchedSettings = await getUserSettings()
+    let fetchedSettings = await userSettingsStore.fetchSettings()
     console.log('Fetched settings:', fetchedSettings)
     settings.value = fetchedSettings
   } catch (err) {
@@ -35,7 +30,10 @@ const fetchUserSettings = async () => {
 
 const handleUpdateSettings = async () => {
   try {
-    await updateUserSettings(settings.value)
+    await userSettingsStore.updateSettings(settings.value)
+    
+    // Apply the theme immediately after updating
+    applySettings(settings.value)
     
     // Show success notification
     toastService.success('Settings updated successfully!')

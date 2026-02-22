@@ -1,5 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { useUserSettingsStore } from '@/stores/userSettingsStore'
+import { applySettings } from '@/services/applySettings'
 
 // Lazy load components to improve performance
 const MyCalendarsPage = () => import('@/components/MyCalendarsPage.vue')
@@ -50,6 +52,15 @@ const router = createRouter({
 // Navigation guard to protect routes
 router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
+  const userSettingsStore = useUserSettingsStore()
+
+  // Fetch settings on every route change
+  let settings = await userSettingsStore.fetchSettings()
+  
+  if (settings) {
+    // Apply theme based on settings
+    applySettings(settings)
+  }
   
   if (to.path === '/login' && authStore.isAuthenticated()) {
     // If user is already logged in and tries to access /login, redirect to /my-calendars

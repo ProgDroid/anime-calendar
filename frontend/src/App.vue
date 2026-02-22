@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import { RouterLink, RouterView } from 'vue-router'
 import { useAuthStore } from './stores/auth'
+import { useUserSettingsStore } from './stores/userSettingsStore'
 import { ref } from 'vue'
+import { applySettings } from './services/applySettings'
 
 const authStore = useAuthStore()
 const drawerToggle = ref<HTMLInputElement | null>(null)
+const userSettingsStore = useUserSettingsStore()
 
 const handleLogout = () => {
   authStore.logout()
+  userSettingsStore.clearCache()
+  applySettings(userSettingsStore.getDefaultSettings())
   // Close the drawer after logout
   if (drawerToggle.value) {
     drawerToggle.value.checked = false
