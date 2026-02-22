@@ -109,3 +109,4 @@ pub fn start(
 // TODO improve accessibility features on the frontend
 // TODO add analytics tracking to the frontend
 // TODO cache anilist content as well? separate cache
+// TODO load testing
