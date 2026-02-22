@@ -635,6 +635,7 @@ import type { Item } from '@/types/item'
 import type { Calendar } from '@/types/calendar'
 import api from '@/config/api'
 import { toastService } from '@/services/toastService'
+import { useUserSettingsStore } from '@/stores/userSettingsStore'
 
 // Router
 const router = useRouter()
@@ -651,6 +652,7 @@ const loading = ref(false)
 const searchError = ref<string | null>(null)
 const calendarError = ref<string | null>(null)
 const recommendations = ref<Item[]>([])
+const userSettingsStore = useUserSettingsStore()
 
 // Route
 const route = useRoute()
@@ -754,6 +756,21 @@ onBeforeMount(async () => {
       console.error('Failed to load calendar:', err)
     } finally {
       loading.value = false
+    }
+  } else { // If new calendar, use user setting
+    const settings = await userSettingsStore.fetchSettings()
+    switch (settings.title_language_preference) {
+      case 'English':
+        calendarLanguage.value = 'english'
+        break
+      case 'Romaji':
+        calendarLanguage.value = 'romaji'
+        break
+      case 'Native':
+        calendarLanguage.value = 'native'
+        break
+      default:
+        calendarLanguage.value = 'english'
     }
   }
 })

@@ -55,7 +55,7 @@ router.beforeEach(async (to, from, next) => {
   const userSettingsStore = useUserSettingsStore()
 
   // Fetch settings on every route change
-  let settings = await userSettingsStore.fetchSettings()
+  const settings = await userSettingsStore.fetchSettings()
   
   if (settings) {
     // Apply theme based on settings

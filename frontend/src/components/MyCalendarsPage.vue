@@ -100,6 +100,7 @@ import { ref, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { PageCalendar } from '@/types/calendar'
 import api from '@/config/api'
+import { useUserSettingsStore } from '@/stores/userSettingsStore'
 
 // State
 const calendars = ref<PageCalendar[]>([])
@@ -111,6 +112,7 @@ const pagination = ref({
   total: 0,
   total_pages: 0
 })
+const userSettingsStore = useUserSettingsStore()
 
 // Router
 const router = useRouter()
@@ -157,11 +159,6 @@ const onPageChange = (newPage: number) => {
 // Create a new calendar
 const createNewCalendar = () => {
   router.push('/calendar/new')
-}
-
-// View a calendar
-const viewCalendar = (id: number) => {
-  router.push(`/calendar/${id}`)
 }
 
 // Edit a calendar
