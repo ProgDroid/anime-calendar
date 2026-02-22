@@ -130,51 +130,7 @@ onMounted(() => {
                 <option value="Native">Native</option>
               </select>
             </div>
-            
-            <!-- Date Display Preference -->
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">Date Display Format</span>
-              </label>
-              <select 
-                v-model="settings.date_display_preference" 
-                class="ml-2 select select-bordered w-full max-w-xs"
-              >
-                <option value="yyyymmdd">YYYY-MM-DD</option>
-                <option value="ddmmyyyy">DD-MM-YYYY</option>
-                <option value="mmddyyyy">MM-DD-YYYY</option>
-              </select>
-            </div>
-            
-            <!-- Date Separator Preference -->
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">Date Separator</span>
-              </label>
-              <div class="mt-2 flex space-x-4">
-                <label class="flex items-center space-x-2 cursor-pointer">
-                  <input 
-                    type="radio" 
-                    name="dateSeparator" 
-                    class="radio radio-primary"
-                    v-model="settings.date_separator_preference" 
-                    value="slash"
-                  />
-                  <span>Slash (/)</span>
-                </label>
-                <label class="flex items-center space-x-2 cursor-pointer">
-                  <input 
-                    type="radio" 
-                    name="dateSeparator" 
-                    class="radio radio-primary"
-                    v-model="settings.date_separator_preference" 
-                    value="dash"
-                  />
-                  <span>Dash (-)</span>
-                </label>
-              </div>
-            </div>
-            
+
             <!-- Timezone -->
             <div class="form-control">
               <label class="label">

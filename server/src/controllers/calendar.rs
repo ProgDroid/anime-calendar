@@ -430,6 +430,3 @@ async fn delete_calendar(
 }
 
 // TODO character limits
-// TODO remove user settings that I don't intend to implement
-// - date display format
-// - date separator

@@ -15,8 +15,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
       theme_preference: 'dark',
       language_preference: 'en',
       title_language_preference: 'English',
-      date_display_preference: 'yyyymmdd',
-      date_separator_preference: 'slash',
       timezone: 'UTC'
     }
   }

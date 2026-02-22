@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT user_id, theme_preference as \"theme_preference: Theme\", language_preference as \"language_preference: SiteLanguage\", title_language_preference as \"title_language_preference: Language\", date_display_preference as \"date_display_preference: DateFormat\", date_separator_preference as \"date_separator_preference: DateSeparator\", timezone, created_at, updated_at FROM user_settings WHERE user_id = $1",
+  "query": "SELECT user_id, theme_preference as \"theme_preference: Theme\", language_preference as \"language_preference: SiteLanguage\", title_language_preference as \"title_language_preference: Language\", timezone, created_at, updated_at FROM user_settings WHERE user_id = $1",
   "describe": {
     "columns": [
       {
@@ -56,47 +56,16 @@
       },
       {
         "ordinal": 4,
-        "name": "date_display_preference: DateFormat",
-        "type_info": {
-          "Custom": {
-            "name": "date_format",
-            "kind": {
-              "Enum": [
-                "YYYY-MM-DD",
-                "DD-MM-YYYY",
-                "MM-DD-YYYY"
-              ]
-            }
-          }
-        }
-      },
-      {
-        "ordinal": 5,
-        "name": "date_separator_preference: DateSeparator",
-        "type_info": {
-          "Custom": {
-            "name": "date_separator",
-            "kind": {
-              "Enum": [
-                "/",
-                "-"
-              ]
-            }
-          }
-        }
-      },
-      {
-        "ordinal": 6,
         "name": "timezone",
         "type_info": "Text"
       },
       {
-        "ordinal": 7,
+        "ordinal": 5,
         "name": "created_at",
         "type_info": "Timestamp"
       },
       {
-        "ordinal": 8,
+        "ordinal": 6,
         "name": "updated_at",
         "type_info": "Timestamp"
       }
@@ -113,10 +82,8 @@
       false,
       false,
       false,
-      false,
-      false,
       false
     ]
   },
-  "hash": "bf42ce0baee044c8f90aa386c694684d6b9d02ccb9079f4649bf1f74da346c60"
+  "hash": "df7a992cc8841abd1605117b6e75e0f011d1ef68aedf1e8880b8dd5dd00f7a3a"
 }
