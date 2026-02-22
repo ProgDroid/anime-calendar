@@ -27,6 +27,28 @@ pub struct CalendarRequest {
     pub name: String,
 }
 
+impl CalendarRequest {
+    /// Validates that the calendar name meets character limits
+    /// # Errors
+    /// Returns Ok(()) if valid, Err with error message if invalid
+    pub fn validate_name(&self) -> Result<(), String> {
+        // Set character limit for calendar names
+        const MAX_NAME_LENGTH: usize = 100;
+
+        if self.name.is_empty() {
+            return Err("Calendar name cannot be empty".to_string());
+        }
+
+        if self.name.chars().count() > MAX_NAME_LENGTH {
+            return Err(format!(
+                "Calendar name must be {MAX_NAME_LENGTH} characters or less"
+            ));
+        }
+
+        Ok(())
+    }
+}
+
 #[derive(Deserialize, Serialize)]
 pub struct PaginationParams {
     #[serde(default = "default_page")]
@@ -94,12 +116,8 @@ async fn export(
                     items,
                     language: calendar_data.language.to_common_language(),
                     name: calendar_data.name,
-                    created_at: calendar_data
-                        .created_at
-                        .expect("Did not load created_at for calendar"), // TODO consider doing this differently,
-                    updated_at: calendar_data
-                        .updated_at
-                        .expect("Did not load updated_at for calendar"), // TODO consider doing this differently,
+                    created_at: calendar_data.created_at,
+                    updated_at: calendar_data.updated_at,
                 };
 
                 let file = generate_calendar_export(&calendar);
@@ -168,6 +186,13 @@ async fn put(
         }
     };
 
+    // Validate calendar name before proceeding
+    if let Err(validation_error) = body.validate_name() {
+        return HttpResponse::BadRequest().json(serde_json::json!({
+            "error": validation_error
+        }));
+    }
+
     let item_ids: Vec<i32> = body
         .items
         .iter()
@@ -180,8 +205,8 @@ async fn put(
         language: LanguageEntity::from_common_language(&body.language),
         name: body.name.clone(),
         user_id: user.id,
-        created_at: None,
-        updated_at: None,
+        created_at: NaiveDateTime::default(),
+        updated_at: NaiveDateTime::default(),
     };
 
     // Create calendar with the authenticated user's ID
@@ -209,12 +234,8 @@ async fn put(
                     items,
                     language: calendar.language.to_common_language(),
                     name: calendar.name,
-                    created_at: calendar
-                        .created_at
-                        .expect("Did not load created_at for calendar"), // TODO consider doing this differently
-                    updated_at: calendar
-                        .updated_at
-                        .expect("Did not load updated_at for calendar"), // TODO consider doing this differently
+                    created_at: calendar.created_at,
+                    updated_at: calendar.updated_at,
                 })
             } else {
                 Error::NotFound.error_response()
@@ -276,12 +297,8 @@ async fn get_calendars(
                         id,
                         item_count: calendar.item_ids.len(),
                         name: calendar.name,
-                        created_at: calendar
-                            .created_at
-                            .expect("Did not load created_at for calendar"), // TODO consider doing this differently
-                        updated_at: calendar
-                            .updated_at
-                            .expect("Did not load updated_at for calendar"), // TODO consider doing this differently
+                        created_at: calendar.created_at,
+                        updated_at: calendar.updated_at,
                     });
                 }
             }
@@ -366,12 +383,8 @@ async fn get_calendar(
                     items,
                     language: calendar.language.to_common_language(),
                     name: calendar.name,
-                    created_at: calendar
-                        .created_at
-                        .expect("Did not load created_at for calendar"), // TODO consider doing this differently
-                    updated_at: calendar
-                        .updated_at
-                        .expect("Did not load updated_at for calendar"), // TODO consider doing this differently
+                    created_at: calendar.created_at,
+                    updated_at: calendar.updated_at,
                 };
 
                 // Cache the response for 1 hour (3600 seconds)
@@ -429,5 +442,3 @@ async fn delete_calendar(
         Err(e) => e.error_response(),
     }
 }
-
-// TODO character limits

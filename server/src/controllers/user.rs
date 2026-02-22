@@ -72,6 +72,11 @@ pub async fn update_user(
         }
     };
 
+    // Validate username length
+    if user_data.username.len() > 50 {
+        return Error::InvalidRequest.error_response();
+    }
+
     let user = user_mapper
         .update_user(
             user.id,
@@ -120,6 +125,11 @@ pub async fn update_password(
 
     // Check that new password is different from current password
     if password_data.new_password == password_data.current_password {
+        return Error::InvalidRequest.error_response();
+    }
+
+    // Validate password length
+    if password_data.new_password.len() > 128 {
         return Error::InvalidRequest.error_response();
     }
 
@@ -237,43 +247,3 @@ pub async fn update_user_settings(
 }
 
 // TODO actually use these settings
-
-// TODO commented out until I work out how to create fake repos to set up application for tests
-// #[cfg(test)]
-// mod tests {
-//     use crate::controllers::user;
-//     use actix_web::{test, App, Result};
-//     use serde_json::json;
-
-//     #[actix_web::test]
-//     async fn test_update_user() -> Result<()> {
-//         let app = test::init_service(App::new().service(user::update_user)).await;
-
-//         let req = test::TestRequest::put()
-//             .uri("/user")
-//             .set_json(json!({
-//                 "username": "updateduser",
-//                 "email": "updated@example.com"
-//             }))
-//             .to_request();
-
-//         let resp = test::call_service(&app, req).await;
-//         // This should fail without authentication
-//         assert!(resp.status().is_client_error());
-
-//         Ok(())
-//     }
-
-//     #[actix_web::test]
-//     async fn test_delete_user() -> Result<()> {
-//         let app = test::init_service(App::new().service(user::delete_user)).await;
-
-//         let req = test::TestRequest::delete().uri("/user").to_request();
-
-//         let resp = test::call_service(&app, req).await;
-//         // This should fail without authentication
-//         assert!(resp.status().is_client_error());
-
-//         Ok(())
-//     }
-// }

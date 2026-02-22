@@ -163,13 +163,18 @@
             <label class="label">
               <span class="label-text">Calendar Name:</span>
             </label>
-            <input 
-              id="calendarName" 
-              v-model="calendarName" 
-              type="text" 
-              placeholder="Enter calendar name"
-              class="input input-bordered mt-2"
-            />
+            <div class="relative">
+              <input 
+                id="calendarName" 
+                v-model="calendarName" 
+                type="text" 
+                placeholder="Enter calendar name"
+                class="input input-bordered mt-2 w-full pr-16"
+              />
+              <div class="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500">
+                {{ calendarName.length }}/100
+              </div>
+            </div>
           </div>
 
           <div class="form-control">
@@ -319,13 +324,18 @@
               <label class="label">
                 <span class="label-text">Calendar Name:</span>
               </label>
-              <input 
-                id="calendarName" 
-                v-model="calendarName" 
-                type="text" 
-                placeholder="Enter calendar name"
-                class="input input-bordered ml-2"
-              />
+              <div class="relative">
+                <input 
+                  id="calendarName" 
+                  v-model="calendarName" 
+                  type="text" 
+                  placeholder="Enter calendar name"
+                  class="input input-bordered ml-2 w-full pr-19"
+                />
+                <div class="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500">
+                  {{ calendarName.length }}/100
+                </div>
+              </div>
             </div>
 
             <div class="form-control">
@@ -926,8 +936,15 @@ const toggleItemSelection = (itemId: number) => {
 
 // Submit calendar
 const submitCalendar = async () => {
+  // Validate calendar name length on frontend
+  const MAX_NAME_LENGTH = 100;
   if (!calendarName.value) {
     calendarError.value = 'Please enter a name for the calendar'
+    return
+  }
+
+  if (calendarName.value.length > MAX_NAME_LENGTH) {
+    calendarError.value = `Calendar name must be ${MAX_NAME_LENGTH} characters or less`
     return
   }
 

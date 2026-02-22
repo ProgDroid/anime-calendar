@@ -51,8 +51,8 @@ impl CalendarMapper {
             item_ids,
             language: calendar.language,
             user_id: calendar.user_id,
-            created_at: Some(calendar.created_at),
-            updated_at: Some(calendar.updated_at),
+            created_at: calendar.created_at,
+            updated_at: calendar.updated_at,
         };
 
         Ok(calendar_result)
@@ -153,8 +153,8 @@ impl CalendarMapper {
             item_ids: calendar.item_ids,
             language: inserted_calendar.language,
             user_id: inserted_calendar.user_id,
-            created_at: Some(inserted_calendar.created_at),
-            updated_at: Some(inserted_calendar.updated_at),
+            created_at: inserted_calendar.created_at,
+            updated_at: inserted_calendar.updated_at,
         };
 
         Ok(result)
@@ -182,8 +182,8 @@ impl CalendarMapper {
             item_ids: calendar.item_ids,
             language: updated_calendar.language,
             user_id: updated_calendar.user_id,
-            created_at: Some(updated_calendar.created_at),
-            updated_at: Some(updated_calendar.updated_at),
+            created_at: updated_calendar.created_at,
+            updated_at: updated_calendar.updated_at,
         };
 
         Ok(result)

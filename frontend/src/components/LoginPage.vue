@@ -56,6 +56,7 @@ const toggleMode = () => {
               required 
               class="input input-bordered w-full"
               placeholder="Enter your username"
+              maxlength="50"
             />
           </div>
           
@@ -84,6 +85,7 @@ const toggleMode = () => {
               required 
               class="input input-bordered w-full"
               placeholder="Enter your password"
+              maxlength="128"
             />
           </div>
           

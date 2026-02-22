@@ -70,6 +70,16 @@ pub async fn register(
         return Error::UserAlreadyExists.error_response();
     }
 
+    // Validate username length
+    if user_data.username.len() > 50 {
+        return Error::InvalidRequest.error_response();
+    }
+
+    // Validate password length
+    if user_data.password.len() > 128 {
+        return Error::InvalidRequest.error_response();
+    }
+
     // Validate password strength
     if !validate_password_strength(&user_data.password) {
         return Error::InvalidPassword.error_response();

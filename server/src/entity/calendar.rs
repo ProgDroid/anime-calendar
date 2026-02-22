@@ -37,6 +37,6 @@ pub struct Calendar {
     pub language: Language,
     pub name: String,
     pub user_id: i32,
-    pub created_at: Option<chrono::NaiveDateTime>,
-    pub updated_at: Option<chrono::NaiveDateTime>,
+    pub created_at: chrono::NaiveDateTime,
+    pub updated_at: chrono::NaiveDateTime,
 }

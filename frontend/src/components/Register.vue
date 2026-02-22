@@ -9,6 +9,7 @@
           v-model="registerForm.username"
           type="text"
           required
+          maxlength="50"
         />
       </div>
       <div>
@@ -27,6 +28,7 @@
           v-model="registerForm.password"
           type="password"
           required
+          maxlength="128"
         />
       </div>
       <button type="submit" :disabled="loading">Register</button>
