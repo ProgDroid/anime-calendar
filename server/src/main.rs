@@ -18,7 +18,6 @@ use crate::{
         user_settings::UserSettingsMapper,
     },
 };
-use mappers::database::Database;
 
 pub type ServerResult<T> = std::result::Result<T, Error>;
 
@@ -27,8 +26,6 @@ async fn main() -> ServerResult<()> {
     let settings = ServerConfig::new().expect("Failed to load config");
 
     let anilist = Anilist::new();
-    let database = Database::new(DatabaseConfig::new()?).await?;
-
     let db_config = DatabaseConfig::new()?;
 
     let user_mapper = UserMapper::new(db_config.clone()).await?;
@@ -51,7 +48,6 @@ async fn main() -> ServerResult<()> {
     Ok(server::start(
         settings,
         anilist,
-        database,
         google_oauth,
         cache,
         user_mapper,

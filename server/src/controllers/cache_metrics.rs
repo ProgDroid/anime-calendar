@@ -1,6 +1,7 @@
-use crate::server::Repos;
 use actix_web::{web, HttpResponse, Result};
 use serde::Serialize;
+
+use crate::cache::Cache;
 
 #[derive(Serialize)]
 pub struct CacheMetricsResponse {
@@ -23,9 +24,9 @@ pub struct CachePerformanceResponse {
 
 /// Get current cache metrics
 #[actix_web::get("/cache/metrics")]
-pub async fn get_cache_metrics(repos: web::Data<Repos>) -> Result<HttpResponse> {
+pub async fn get_cache_metrics(cache: web::Data<Cache>) -> Result<HttpResponse> {
     // Get current metrics from cache
-    let metrics = repos.cache.get_metrics().await;
+    let metrics = cache.get_metrics().await;
 
     let response = CacheMetricsResponse {
         hit_rate: metrics.cache_hit_rate,
@@ -40,8 +41,8 @@ pub async fn get_cache_metrics(repos: web::Data<Repos>) -> Result<HttpResponse> 
 
 /// Get detailed cache performance metrics
 #[actix_web::get("/cache/performance")]
-pub async fn get_cache_performance(repos: web::Data<Repos>) -> Result<HttpResponse> {
-    match repos.cache.monitor_performance().await {
+pub async fn get_cache_performance(cache: web::Data<Cache>) -> Result<HttpResponse> {
+    match cache.monitor_performance().await {
         Ok(performance) => {
             let response = CachePerformanceResponse {
                 hit_rate: performance.hit_rate,
@@ -62,14 +63,14 @@ pub async fn get_cache_performance(repos: web::Data<Repos>) -> Result<HttpRespon
 
 /// Get cache health status
 #[actix_web::get("/cache/health")]
-pub async fn get_cache_health(repos: web::Data<Repos>) -> Result<HttpResponse> {
+pub async fn get_cache_health(cache: web::Data<Cache>) -> Result<HttpResponse> {
     // Simple health check - just verify we can access the cache
-    let is_available = repos.cache.is_available();
+    let is_available = cache.is_available();
 
     let response = serde_json::json!({
         "status": if is_available { "healthy" } else { "unhealthy" },
         "available": is_available,
-        "metrics": repos.cache.get_metrics().await
+        "metrics": cache.get_metrics().await
     });
 
     Ok(HttpResponse::Ok().json(response))
@@ -77,8 +78,8 @@ pub async fn get_cache_health(repos: web::Data<Repos>) -> Result<HttpResponse> {
 
 /// Reset cache metrics
 #[actix_web::post("/cache/reset")]
-pub async fn reset_metrics(repos: web::Data<Repos>) -> Result<HttpResponse> {
-    repos.cache.reset_metrics().await;
+pub async fn reset_metrics(cache: web::Data<Cache>) -> Result<HttpResponse> {
+    cache.reset_metrics().await;
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "message": "Cache metrics reset successfully"
     })))
@@ -86,9 +87,9 @@ pub async fn reset_metrics(repos: web::Data<Repos>) -> Result<HttpResponse> {
 
 /// Get detailed cache statistics
 #[actix_web::get("/cache/stats")]
-pub async fn get_cache_stats(repos: web::Data<Repos>) -> Result<HttpResponse> {
-    let metrics = repos.cache.get_metrics().await;
-    let keys = repos.cache.get_keys("*").await.unwrap_or_else(|_| vec![]);
+pub async fn get_cache_stats(cache: web::Data<Cache>) -> Result<HttpResponse> {
+    let metrics = cache.get_metrics().await;
+    let keys = cache.get_keys("*").await.unwrap_or_else(|_| vec![]);
 
     let response = serde_json::json!({
         "metrics": metrics,
@@ -100,8 +101,8 @@ pub async fn get_cache_stats(repos: web::Data<Repos>) -> Result<HttpResponse> {
 }
 
 #[actix_web::get("/cache/flush")]
-pub async fn flush_cache(repos: web::Data<Repos>) -> Result<HttpResponse> {
-    let _ = repos.cache.invalidate_pattern("*").await;
+pub async fn flush_cache(cache: web::Data<Cache>) -> Result<HttpResponse> {
+    let _ = cache.invalidate_pattern("*").await;
     Ok(HttpResponse::Ok().json(serde_json::json!({
         "message": "Cache flushed successfully"
     })))

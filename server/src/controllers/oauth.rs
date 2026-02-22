@@ -1,6 +1,6 @@
 use crate::mappers::user::UserMapper;
 use crate::services::auth::generate_token;
-use crate::{config::server::Server as ServerConfig, server::Repos};
+use crate::{config::server::Server as ServerConfig, mappers::google_oauth::GoogleOauth};
 use actix_web::{post, web, HttpResponse, ResponseError};
 use log::error;
 use serde::{Deserialize, Serialize};
@@ -22,15 +22,11 @@ pub struct GoogleOAuthResponse {
 #[post("/auth/google")]
 pub async fn google_oauth(
     user_mapper: web::Data<UserMapper>,
-    db: web::Data<Repos>,
+    google_oauth: web::Data<GoogleOauth>,
     google_request: web::Json<GoogleOAuthRequest>,
     config: web::Data<ServerConfig>,
 ) -> HttpResponse {
-    match db
-        .google_oauth
-        .validate_id_token(&google_request.token)
-        .await
-    {
+    match google_oauth.validate_id_token(&google_request.token).await {
         Ok(google_user) => {
             let user = match user_mapper.get_user_by_email(&google_user.email).await {
                 Ok(user) => user,

@@ -1,5 +1,3 @@
-use crate::server::Repos;
-
 use actix_web::{get, web, HttpResponse};
 use actix_web_lab::extract::Query;
 use common::{
@@ -7,6 +5,8 @@ use common::{
     item::{Repository, Type},
 };
 use serde::Deserialize;
+
+use crate::{cache::Cache, mappers::anilist::Anilist};
 
 #[derive(Deserialize)]
 struct Params {
@@ -16,7 +16,11 @@ struct Params {
 
 #[allow(clippy::cast_possible_wrap)]
 #[get("/items")]
-async fn get(data: web::Data<Repos>, ids: Query<Params>) -> HttpResponse {
+async fn get(
+    anilist: web::Data<Anilist>,
+    cache: web::Data<Cache>,
+    ids: Query<Params>,
+) -> HttpResponse {
     let ids: Vec<Id> = ids
         .into_inner()
         .ids
@@ -33,10 +37,9 @@ async fn get(data: web::Data<Repos>, ids: Query<Params>) -> HttpResponse {
     let cache_ttl = 3600; // 1 hour
 
     // If cache is available, try to get from cache
-    match data
-        .cache
+    match cache
         .cached_response(&cache_key, cache_ttl, || async {
-            let items = data.anilist.get_items(ids.clone()).await;
+            let items = anilist.get_items(ids.clone()).await;
             Ok(items)
         })
         .await
@@ -51,7 +54,7 @@ async fn get(data: web::Data<Repos>, ids: Query<Params>) -> HttpResponse {
     }
 
     // If no cache or cache error, fetch and return normally
-    let items = data.anilist.get_items(ids).await;
+    let items = anilist.get_items(ids).await;
 
     HttpResponse::Ok().json(items)
 }
@@ -63,7 +66,11 @@ struct SearchParams {
 }
 
 #[get("/search")]
-async fn search(data: web::Data<Repos>, name: Query<SearchParams>) -> HttpResponse {
+async fn search(
+    anilist: web::Data<Anilist>,
+    cache: web::Data<Cache>,
+    name: Query<SearchParams>,
+) -> HttpResponse {
     let query = name.name.trim();
 
     if query.is_empty() {
@@ -80,11 +87,9 @@ async fn search(data: web::Data<Repos>, name: Query<SearchParams>) -> HttpRespon
     let cache_ttl = 1800; // 30 minutes
 
     // If cache is available, try to get from cache
-    match data
-        .cache
+    match cache
         .cached_response(&cache_key, cache_ttl, || async {
-            let items = data
-                .anilist
+            let items = anilist
                 .search_items(query.to_string(), name.media_type.clone())
                 .await;
             Ok(items)
@@ -101,8 +106,7 @@ async fn search(data: web::Data<Repos>, name: Query<SearchParams>) -> HttpRespon
     }
 
     // If no cache or cache error, fetch and return normally
-    let items = data
-        .anilist
+    let items = anilist
         .search_items(query.to_string(), name.media_type.clone())
         .await;
 

@@ -1,8 +1,8 @@
 use crate::{
+    cache::Cache,
     error::Error,
     mappers::user::UserMapper,
     middleware::auth::Claims,
-    server::Repos,
     services::auth::{hash_password, validate_password},
 };
 
@@ -61,7 +61,7 @@ pub async fn get_user_details(user_mapper: web::Data<UserMapper>, claims: Claims
 #[put("/user")]
 pub async fn update_user(
     user_mapper: web::Data<UserMapper>,
-    data: web::Data<Repos>,
+    cache: web::Data<Cache>,
     claims: Claims,
     user_data: web::Json<UpdateUserRequest>,
 ) -> HttpResponse {
@@ -83,7 +83,7 @@ pub async fn update_user(
     match user {
         Ok(user) => {
             // Invalidate user cache
-            let _ = data.cache.invalidate_user_details(user.id).await;
+            let _ = cache.invalidate_user_details(user.id).await;
 
             let response = UserResponse {
                 username: if user.password_hash.is_none() {
@@ -107,7 +107,7 @@ pub async fn update_user(
 #[post("/user/password")]
 pub async fn update_password(
     user_mapper: web::Data<UserMapper>,
-    data: web::Data<Repos>,
+    cache: web::Data<Cache>,
     claims: Claims,
     password_data: web::Json<UpdatePasswordRequest>,
 ) -> HttpResponse {
@@ -146,7 +146,7 @@ pub async fn update_password(
     {
         Ok(()) => {
             // Invalidate user cache
-            let _ = data.cache.invalidate_user_details(user.id).await;
+            let _ = cache.invalidate_user_details(user.id).await;
             HttpResponse::Ok().finish()
         }
         Err(e) => {
@@ -159,7 +159,7 @@ pub async fn update_password(
 #[delete("/user/{id}")]
 pub async fn delete_user(
     user_mapper: web::Data<UserMapper>,
-    data: web::Data<Repos>,
+    cache: web::Data<Cache>,
     user_id: web::Path<i32>,
     claims: Claims,
 ) -> HttpResponse {
@@ -179,7 +179,7 @@ pub async fn delete_user(
     match user_mapper.delete_user(user_id_inner).await {
         Ok(()) => {
             // Invalidate user cache
-            let _ = data.cache.invalidate_user_details(user_id_inner).await;
+            let _ = cache.invalidate_user_details(user_id_inner).await;
             HttpResponse::NoContent().finish()
         }
         Err(e) => {
@@ -210,7 +210,7 @@ pub async fn get_user_settings(
 #[put("/user/settings")]
 pub async fn update_user_settings(
     user_settings_mapper: web::Data<UserSettingsMapper>,
-    data: web::Data<Repos>,
+    cache: web::Data<Cache>,
     claims: Claims,
     settings_data: web::Json<UserSettings>,
 ) -> HttpResponse {
@@ -226,7 +226,7 @@ pub async fn update_user_settings(
         .await
     {
         Ok(()) => {
-            let _ = data.cache.invalidate_user_settings(user_id).await;
+            let _ = cache.invalidate_user_settings(user_id).await;
             HttpResponse::Ok().finish()
         }
         Err(e) => {

@@ -1,10 +1,10 @@
 #![allow(clippy::cast_possible_truncation)]
 use crate::{
+    cache::Cache,
     entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
     error::Error,
-    mappers::{calendar::CalendarMapper, user::UserMapper},
+    mappers::{anilist::Anilist, calendar::CalendarMapper, user::UserMapper},
     middleware::auth::Claims,
-    server::Repos,
     services::calendar_export::generate_calendar_export,
 };
 
@@ -47,7 +47,8 @@ const fn default_page_size() -> usize {
 async fn export(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
-    data: web::Data<Repos>,
+    anilist: web::Data<Anilist>,
+    cache: web::Data<Cache>,
     id: web::Path<u64>,
     claims: Claims,
 ) -> HttpResponse {
@@ -66,6 +67,7 @@ async fn export(
     // TODO * Calendar templates? (predefined items)
     // TODO * config.toml in frontend is accessible via URL and downloadable. This needs to be changed
     // TODO * search calendar
+    // TODO * are item endpoints needed?
 
     match calendar_mapper
         .get_calendar_by_id(*id as i32, user.id)
@@ -80,7 +82,7 @@ async fn export(
                 .filter_map(|id| Id::new(i64::from(*id)))
                 .collect();
 
-            let items = data.anilist.get_items(item_ids).await;
+            let items = anilist.get_items(item_ids).await;
 
             if items.is_empty() {
                 return Error::NotFound.error_response();
@@ -107,8 +109,7 @@ async fn export(
                 let cache_ttl = 7200; // 2 hours
 
                 // If cache is available, try to get from cache
-                match data
-                    .cache
+                match cache
                     .cached_response(&cache_key, cache_ttl, || async { Ok(format!("{file}")) })
                     .await
                 {
@@ -155,7 +156,8 @@ async fn export(
 async fn put(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
-    data: web::Data<Repos>,
+    anilist: web::Data<Anilist>,
+    cache: web::Data<Cache>,
     body: web::Json<CalendarRequest>,
     claims: Claims,
 ) -> HttpResponse {
@@ -191,7 +193,7 @@ async fn put(
                 .filter_map(|id| Id::new(i64::from(*id)))
                 .collect();
 
-            let items = data.anilist.get_items(item_ids).await;
+            let items = anilist.get_items(item_ids).await;
 
             if items.is_empty() {
                 return Error::NotFound.error_response();
@@ -199,8 +201,8 @@ async fn put(
 
             if let Some(id) = Id::new(calendar.id.into()) {
                 // Invalidate cache for this calendar (controller-level invalidation)
-                let _ = data.cache.invalidate_calendar(calendar.id).await;
-                let _ = data.cache.invalidate_pattern("/calendars:page:*").await;
+                let _ = cache.invalidate_calendar(calendar.id).await;
+                let _ = cache.invalidate_pattern("/calendars:page:*").await;
 
                 HttpResponse::Ok().json(Calendar {
                     id,
@@ -249,7 +251,7 @@ struct PaginationInfo {
 async fn get_calendars(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
-    data: web::Data<Repos>,
+    cache: web::Data<Cache>,
     claims: Claims,
     params: web::Query<PaginationParams>,
 ) -> HttpResponse {
@@ -302,8 +304,7 @@ async fn get_calendars(
             let cache_ttl = 1800; // 30 minutes
 
             // If cache is available, try to get from cache
-            match data
-                .cache
+            match cache
                 .cached_response(&cache_key, cache_ttl, || async {
                     Ok(paginated_response.clone())
                 })
@@ -329,7 +330,8 @@ async fn get_calendars(
 async fn get_calendar(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
-    data: web::Data<Repos>,
+    anilist: web::Data<Anilist>,
+    cache: web::Data<Cache>,
     id: web::Path<i64>,
     claims: Claims,
 ) -> HttpResponse {
@@ -352,7 +354,7 @@ async fn get_calendar(
                 .filter_map(|id| Id::new(i64::from(*id)))
                 .collect();
 
-            let items = data.anilist.get_items(item_ids).await;
+            let items = anilist.get_items(item_ids).await;
 
             if items.is_empty() {
                 return Error::NotFound.error_response();
@@ -377,8 +379,7 @@ async fn get_calendar(
                 let cache_ttl = 3600; // 1 hour
 
                 // If cache is available, try to get from cache
-                match data
-                    .cache
+                match cache
                     .cached_response(&cache_key, cache_ttl, || async {
                         Ok(calendar_response.clone())
                     })
@@ -407,7 +408,7 @@ async fn get_calendar(
 async fn delete_calendar(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
-    data: web::Data<Repos>,
+    cache: web::Data<Cache>,
     id: web::Path<i64>,
     claims: Claims,
 ) -> HttpResponse {
@@ -421,8 +422,8 @@ async fn delete_calendar(
     match calendar_mapper.delete_calendar(*id as i32, user.id).await {
         Ok(()) => {
             // Invalidate cache for this calendar (controller-level invalidation)
-            let _ = data.cache.invalidate_calendar(*id as i32).await;
-            let _ = data.cache.invalidate_pattern("/calendars:page:*").await;
+            let _ = cache.invalidate_calendar(*id as i32).await;
+            let _ = cache.invalidate_pattern("/calendars:page:*").await;
             HttpResponse::Ok().finish()
         }
         Err(e) => e.error_response(),

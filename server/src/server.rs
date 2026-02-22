@@ -14,19 +14,11 @@ use crate::{
     config::server::Server as ServerConfig,
     controllers::{auth, cache_metrics, calendar, item, items, oauth, user},
     mappers::{
-        anilist::Anilist, calendar::CalendarMapper, database::Database, google_oauth::GoogleOauth,
-        user::UserMapper, user_settings::UserSettingsMapper,
+        anilist::Anilist, calendar::CalendarMapper, google_oauth::GoogleOauth, user::UserMapper,
+        user_settings::UserSettingsMapper,
     },
     ServerResult,
 };
-
-#[derive(Clone)]
-pub struct Repos {
-    pub anilist: Anilist,
-    pub database: Database,
-    pub google_oauth: GoogleOauth,
-    pub cache: Cache,
-}
 
 #[allow(clippy::too_many_arguments)]
 /// # Errors
@@ -34,20 +26,12 @@ pub struct Repos {
 pub fn start(
     config: ServerConfig,
     anilist: Anilist,
-    database: Database,
     google_oauth: GoogleOauth,
     cache: Cache,
     user_mapper: UserMapper,
     calendar_mapper: CalendarMapper,
     user_settings_mapper: UserSettingsMapper,
 ) -> ServerResult<Server> {
-    let repos = Repos {
-        anilist,
-        database,
-        google_oauth,
-        cache,
-    };
-
     let level_filter = match LevelFilter::from_str(&config.log_level) {
         Ok(filter) => filter,
         Err(e) => {
@@ -74,10 +58,12 @@ pub fn start(
                     .allow_any_method()
                     .allow_any_header(), // TODO ?
             )
-            .app_data(web::Data::new(repos.clone()))
             .app_data(web::Data::new(user_mapper.clone()))
             .app_data(web::Data::new(calendar_mapper.clone()))
             .app_data(web::Data::new(user_settings_mapper.clone()))
+            .app_data(web::Data::new(anilist.clone()))
+            .app_data(web::Data::new(google_oauth.clone()))
+            .app_data(web::Data::new(cache.clone()))
             .app_data(web::Data::new(config)) // TODO do I want this data lying around the entire time?
             .service(item::get)
             .service(items::get)
