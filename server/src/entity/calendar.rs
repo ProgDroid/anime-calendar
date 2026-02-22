@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, sqlx::Type)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, sqlx::Type, Copy)]
 #[sqlx(type_name = "language", rename_all = "lowercase")]
 pub enum Language {
     #[default]

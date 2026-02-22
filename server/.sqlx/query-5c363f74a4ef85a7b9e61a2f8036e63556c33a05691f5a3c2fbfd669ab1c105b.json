@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_settings (user_id, theme_preference, language_preference, title_language_preference, date_display_preference, date_separator_preference, timezone) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (user_id) DO UPDATE SET theme_preference = EXCLUDED.theme_preference, language_preference = EXCLUDED.language_preference, title_language_preference = EXCLUDED.title_language_preference, date_display_preference = EXCLUDED.date_display_preference, date_separator_preference = EXCLUDED.date_separator_preference, timezone = EXCLUDED.timezone",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        {
+          "Custom": {
+            "name": "theme",
+            "kind": {
+              "Enum": [
+                "light",
+                "dark"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "site_language",
+            "kind": {
+              "Enum": [
+                "en",
+                "pt"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "language",
+            "kind": {
+              "Enum": [
+                "english",
+                "romaji",
+                "native"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "date_format",
+            "kind": {
+              "Enum": [
+                "YYYY-MM-DD",
+                "DD-MM-YYYY",
+                "MM-DD-YYYY"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "date_separator",
+            "kind": {
+              "Enum": [
+                "/",
+                "-"
+              ]
+            }
+          }
+        },
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5c363f74a4ef85a7b9e61a2f8036e63556c33a05691f5a3c2fbfd669ab1c105b"
+}

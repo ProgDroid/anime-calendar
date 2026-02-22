@@ -218,6 +218,12 @@ onMounted(() => {
                   Edit Details
                 </button>
               </div>
+              
+              <div class="flex justify-end space-x-3 mt-4">
+                <RouterLink to="/user/settings" class="btn btn-outline w-full">
+                  View Settings
+                </RouterLink>
+              </div>
             </div>
             
             <div v-else class="space-y-4">

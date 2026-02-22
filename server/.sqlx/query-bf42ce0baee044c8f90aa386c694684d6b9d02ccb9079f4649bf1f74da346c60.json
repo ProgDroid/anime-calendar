@@ -1,0 +1,122 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT user_id, theme_preference as \"theme_preference: Theme\", language_preference as \"language_preference: SiteLanguage\", title_language_preference as \"title_language_preference: Language\", date_display_preference as \"date_display_preference: DateFormat\", date_separator_preference as \"date_separator_preference: DateSeparator\", timezone, created_at, updated_at FROM user_settings WHERE user_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "theme_preference: Theme",
+        "type_info": {
+          "Custom": {
+            "name": "theme",
+            "kind": {
+              "Enum": [
+                "light",
+                "dark"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 2,
+        "name": "language_preference: SiteLanguage",
+        "type_info": {
+          "Custom": {
+            "name": "site_language",
+            "kind": {
+              "Enum": [
+                "en",
+                "pt"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "title_language_preference: Language",
+        "type_info": {
+          "Custom": {
+            "name": "language",
+            "kind": {
+              "Enum": [
+                "english",
+                "romaji",
+                "native"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 4,
+        "name": "date_display_preference: DateFormat",
+        "type_info": {
+          "Custom": {
+            "name": "date_format",
+            "kind": {
+              "Enum": [
+                "YYYY-MM-DD",
+                "DD-MM-YYYY",
+                "MM-DD-YYYY"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "date_separator_preference: DateSeparator",
+        "type_info": {
+          "Custom": {
+            "name": "date_separator",
+            "kind": {
+              "Enum": [
+                "/",
+                "-"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "timezone",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "bf42ce0baee044c8f90aa386c694684d6b9d02ccb9079f4649bf1f74da346c60"
+}

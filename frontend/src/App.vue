@@ -42,6 +42,9 @@ const handleLogout = () => {
               <li v-if="authStore.isAuthenticated()" class="py-1">
                 <RouterLink to="/user/details" active-class="active">My Account</RouterLink>
               </li>
+              <li v-if="authStore.isAuthenticated()" class="py-1">
+                <RouterLink to="/user/settings" active-class="active">Settings</RouterLink>
+              </li>
               <li v-if="authStore.isAuthenticated()" class="mt-auto py-1">
                 <button @click="handleLogout" class="w-full text-left">Logout</button>
               </li>

@@ -2,9 +2,10 @@ use std::{convert::Infallible, str::FromStr};
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize, Clone)]
+#[derive(Deserialize, Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "lowercase")]
 pub enum Language {
+    #[default]
     English,
     Native,
     Romaji,

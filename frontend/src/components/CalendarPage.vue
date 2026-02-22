@@ -635,6 +635,7 @@ import type { Item } from '@/types/item'
 import type { Calendar } from '@/types/calendar'
 import api from '@/config/api'
 import { toastService } from '@/services/toastService'
+import { getCachedSettings } from '@/services/userSettingsService'
 
 // Router
 const router = useRouter()

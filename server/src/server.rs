@@ -15,7 +15,7 @@ use crate::{
     controllers::{auth, cache_metrics, calendar, item, items, oauth, user},
     mappers::{
         anilist::Anilist, calendar::CalendarMapper, database::Database, google_oauth::GoogleOauth,
-        user::UserMapper,
+        user::UserMapper, user_settings::UserSettingsMapper,
     },
     ServerResult,
 };
@@ -28,6 +28,7 @@ pub struct Repos {
     pub cache: Cache,
 }
 
+#[allow(clippy::too_many_arguments)]
 /// # Errors
 /// Returns an error if the server fails to start.
 pub fn start(
@@ -38,6 +39,7 @@ pub fn start(
     cache: Cache,
     user_mapper: UserMapper,
     calendar_mapper: CalendarMapper,
+    user_settings_mapper: UserSettingsMapper,
 ) -> ServerResult<Server> {
     let repos = Repos {
         anilist,
@@ -75,6 +77,7 @@ pub fn start(
             .app_data(web::Data::new(repos.clone()))
             .app_data(web::Data::new(user_mapper.clone()))
             .app_data(web::Data::new(calendar_mapper.clone()))
+            .app_data(web::Data::new(user_settings_mapper.clone()))
             .app_data(web::Data::new(config)) // TODO do I want this data lying around the entire time?
             .service(item::get)
             .service(items::get)
@@ -99,6 +102,8 @@ pub fn start(
             .service(cache_metrics::reset_metrics)
             .service(cache_metrics::get_cache_stats)
             .service(cache_metrics::flush_cache)
+            .service(user::get_user_settings)
+            .service(user::update_user_settings)
     })
     .bind(format!("{host}:{port}"))?
     .run())

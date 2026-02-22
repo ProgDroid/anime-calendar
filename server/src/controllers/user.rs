@@ -1,4 +1,3 @@
-#![allow(unused_variables)]
 use crate::{
     error::Error,
     mappers::user::UserMapper,
@@ -7,6 +6,8 @@ use crate::{
     services::auth::{hash_password, validate_password},
 };
 
+use crate::entity::user_settings::UserSettings;
+use crate::mappers::user_settings::UserSettingsMapper;
 use actix_web::{delete, get, post, put, web, HttpResponse, ResponseError};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
@@ -82,7 +83,7 @@ pub async fn update_user(
     match user {
         Ok(user) => {
             // Invalidate user cache
-            let _ = data.cache.invalidate(&format!("user:{}", user.id)).await;
+            let _ = data.cache.invalidate_user_details(user.id).await;
 
             let response = UserResponse {
                 username: if user.password_hash.is_none() {
@@ -145,7 +146,7 @@ pub async fn update_password(
     {
         Ok(()) => {
             // Invalidate user cache
-            let _ = data.cache.invalidate(&format!("user:{}", user.id)).await;
+            let _ = data.cache.invalidate_user_details(user.id).await;
             HttpResponse::Ok().finish()
         }
         Err(e) => {
@@ -178,10 +179,7 @@ pub async fn delete_user(
     match user_mapper.delete_user(user_id_inner).await {
         Ok(()) => {
             // Invalidate user cache
-            let _ = data
-                .cache
-                .invalidate(&format!("user:{user_id_inner}"))
-                .await;
+            let _ = data.cache.invalidate_user_details(user_id_inner).await;
             HttpResponse::NoContent().finish()
         }
         Err(e) => {
@@ -190,6 +188,56 @@ pub async fn delete_user(
         }
     }
 }
+
+// User settings endpoints
+#[get("/user/settings")]
+pub async fn get_user_settings(
+    user_settings_mapper: web::Data<UserSettingsMapper>,
+    claims: Claims,
+) -> HttpResponse {
+    let user_id = claims
+        .sub
+        .parse::<i32>()
+        .map_err(|_| Error::Unauthorised)
+        .unwrap();
+
+    match user_settings_mapper.get_user_settings(user_id).await {
+        Ok(settings) => HttpResponse::Ok().json(settings),
+        Err(e) => e.error_response(),
+    }
+}
+
+#[put("/user/settings")]
+pub async fn update_user_settings(
+    user_settings_mapper: web::Data<UserSettingsMapper>,
+    data: web::Data<Repos>,
+    claims: Claims,
+    settings_data: web::Json<UserSettings>,
+) -> HttpResponse {
+    let user_id = claims
+        .sub
+        .parse::<i32>()
+        .map_err(|_| Error::Unauthorised)
+        .unwrap();
+
+    info!("{settings_data:?}");
+    match user_settings_mapper
+        .update_user_settings(user_id, &settings_data)
+        .await
+    {
+        Ok(()) => {
+            let _ = data.cache.invalidate_user_settings(user_id).await;
+            HttpResponse::Ok().finish()
+        }
+        Err(e) => {
+            error!("Failed to update user settings: {e:?}");
+            HttpResponse::InternalServerError().finish()
+        }
+    }
+}
+
+// TODO cache settings locally in browser? custom TTL
+// TODO actually use these settings
 
 // TODO commented out until I work out how to create fake repos to set up application for tests
 // #[cfg(test)]

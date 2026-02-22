@@ -6,6 +6,7 @@ const MyCalendarsPage = () => import('@/components/MyCalendarsPage.vue')
 const CalendarPage = () => import('@/components/CalendarPage.vue')
 const LoginPage = () => import('@/components/LoginPage.vue')
 const UserDetailsPage = () => import('@/components/UserDetailsPage.vue')
+const UserSettingsPage = () => import('@/components/UserSettingsPage.vue')
 
 const router = createRouter({
   history: createWebHistory(),
@@ -35,6 +36,12 @@ const router = createRouter({
       path: '/user/details',
       name: 'UserDetails',
       component: UserDetailsPage,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/user/settings',
+      name: 'UserSettings',
+      component: UserSettingsPage,
       meta: { requiresAuth: true }
     }
   ]
