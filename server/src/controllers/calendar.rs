@@ -316,8 +316,12 @@ async fn get_calendars(
             };
 
             // Cache the response for 30 minutes (1800 seconds)
-            let cache_key =
-                crate::cache::generate_paginated_key("/calendars", params.page, params.page_size);
+            let cache_key = crate::cache::generate_paginated_key(
+                user.id,
+                "/calendars",
+                params.page,
+                params.page_size,
+            );
             let cache_ttl = 1800; // 30 minutes
 
             // If cache is available, try to get from cache
@@ -436,7 +440,7 @@ async fn delete_calendar(
         Ok(()) => {
             // Invalidate cache for this calendar (controller-level invalidation)
             let _ = cache.invalidate_calendar(*id as i32).await;
-            let _ = cache.invalidate_pattern("/calendars:page:*").await;
+            let _ = cache.invalidate_user_paged_calendars(user.id).await;
             HttpResponse::Ok().finish()
         }
         Err(e) => e.error_response(),

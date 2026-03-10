@@ -232,6 +232,15 @@ impl Cache {
         Ok(())
     }
 
+    // Invalidate cache for user paged calendars
+    /// # Errors
+    /// Fails if Redis query fails
+    pub async fn invalidate_user_paged_calendars(&self, user_id: i32) -> RedisResult<()> {
+        let key = generate_user_paged_calendars_key(user_id);
+        self.delete(&key).await?;
+        Ok(())
+    }
+
     // Monitor cache performance
     /// # Errors
     /// Fails if Redis query fails.
@@ -311,8 +320,13 @@ pub fn generate_items_key(ids: &[common::id::Id]) -> String {
 }
 
 #[must_use]
-pub fn generate_paginated_key(endpoint: &str, page: usize, page_size: usize) -> String {
-    format!("{endpoint}:page:{page}:size:{page_size}")
+pub fn generate_paginated_key(
+    user_id: i32,
+    endpoint: &str,
+    page: usize,
+    page_size: usize,
+) -> String {
+    format!("{user_id}:{endpoint}:page:{page}:size:{page_size}")
 }
 
 #[must_use]
@@ -323,6 +337,11 @@ pub fn generate_user_settings_key(user_id: i32) -> String {
 #[must_use]
 pub fn generate_user_details_key(user_id: i32) -> String {
     format!("user_details:{user_id}")
+}
+
+#[must_use]
+pub fn generate_user_paged_calendars_key(user_id: i32) -> String {
+    format!("{user_id}:/calendars:page:*")
 }
 
 // Cache metrics structure with atomic counters for thread safety
