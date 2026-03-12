@@ -2,7 +2,9 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import api from '@/config/api'
+import { i18n } from '@/plugins/i18n'
+
+const { t } = i18n.global
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -28,7 +30,7 @@ const handleGoogleLogin = async (data: GoogleResponse) => {
     
     router.push('/my-calendars')
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Google login failed'
+    error.value = t('login.google.failed')
     console.error('Google login error:', err)
   } finally {
     loading.value = false

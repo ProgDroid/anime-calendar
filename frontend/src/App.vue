@@ -24,7 +24,7 @@ const handleLogout = () => {
   <div class="min-h-[calc(100vh-6rem)] bg-base-200">
     <div class="navbar bg-base-100 shadow">
       <div class="flex-1">
-        <RouterLink to="/my-calendars" class="btn btn-ghost text-xl">Anime Calendar</RouterLink>
+        <RouterLink to="/my-calendars" class="btn btn-ghost text-xl">{{ $t('app.title') }}</RouterLink>
       </div>
       <div class="flex-none">
         <!-- DaisyUI Drawer for mobile -->
@@ -42,16 +42,16 @@ const handleLogout = () => {
             <label for="my-drawer" class="drawer-overlay"></label>
             <ul class="menu p-4 w-80 min-h-full bg-base-100 text-base-content">
               <li v-if="authStore.isAuthenticated()" class="py-1">
-                <RouterLink to="/my-calendars" active-class="active">My Calendars</RouterLink>
+                <RouterLink to="/my-calendars" active-class="active">{{ $t('app.myCalendars') }}</RouterLink>
               </li>
               <li v-if="authStore.isAuthenticated()" class="py-1">
-                <RouterLink to="/user/details" active-class="active">My Account</RouterLink>
+                <RouterLink to="/user/details" active-class="active">{{ $t('app.myAccount') }}</RouterLink>
               </li>
               <li v-if="authStore.isAuthenticated()" class="py-1">
-                <RouterLink to="/user/settings" active-class="active">Settings</RouterLink>
+                <RouterLink to="/user/settings" active-class="active">{{ $t('app.settings') }}</RouterLink>
               </li>
               <li v-if="authStore.isAuthenticated()" class="mt-auto py-1">
-                <button @click="handleLogout" class="w-full text-left">Logout</button>
+                <button @click="handleLogout" class="w-full text-left">{{ $t('app.logout') }}</button>
               </li>
             </ul>
           </div>
@@ -60,13 +60,13 @@ const handleLogout = () => {
         <!-- Desktop menu items -->
         <ul class="menu menu-horizontal px-1 md:flex hidden gap-1">
           <li v-if="authStore.isAuthenticated()">
-            <RouterLink to="/my-calendars" active-class="active">My Calendars</RouterLink>
+            <RouterLink to="/my-calendars" active-class="active">{{ $t('app.myCalendars') }}</RouterLink>
           </li>
           <li v-if="authStore.isAuthenticated()">
-            <RouterLink to="/user/details" active-class="active">My Account</RouterLink>
+            <RouterLink to="/user/details" active-class="active">{{ $t('app.myAccount') }}</RouterLink>
           </li>
           <li v-if="authStore.isAuthenticated()">
-            <button @click="handleLogout">Logout</button>
+            <button @click="handleLogout">{{ $t('app.logout') }}</button>
           </li>
         </ul>
       </div>

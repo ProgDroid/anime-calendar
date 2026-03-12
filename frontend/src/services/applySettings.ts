@@ -1,4 +1,5 @@
 import type { UserSettings } from "@/types/userSettings"
+import { i18n } from '@/plugins/i18n'
 
 const applyTheme = (theme: 'light' | 'dark') => {
     const html = document.documentElement
@@ -15,4 +16,7 @@ export async function applySettings(settings: UserSettings): Promise<void> {
     // This could involve updating various parts of the app
 
     applyTheme(settings.theme_preference)
+
+    // Apply language setting by updating i18n instance directly
+    i18n.global.locale.value = settings.language_preference
 }

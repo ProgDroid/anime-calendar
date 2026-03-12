@@ -1,15 +1,15 @@
 <template>
   <div class="min-h-[calc(100vh-6.1rem)] bg-base-200 p-4">
-    <h1 class="text-2xl font-bold mb-6">My Calendars</h1>
+    <h1 class="text-2xl font-bold mb-6">{{ $t('calendars.title') }}</h1>
     
     <div class="flex justify-center mb-6">
       <button @click="createNewCalendar" class="btn btn-primary">
-        Create New Calendar
+        {{ $t('calendars.createNew') }}
       </button>
     </div>
     
     <div v-if="loading" class="alert alert-info">
-      Loading calendars...
+      {{ $t('calendars.loading') }}
     </div>
     
     <div v-else-if="error" class="alert alert-error">
@@ -17,7 +17,7 @@
     </div>
     
     <div v-else-if="calendars.length === 0" class="alert alert-info">
-      No calendars found. <button @click="createNewCalendar" class="btn btn-sm btn-primary">Create your first calendar</button>
+      {{ $t('calendars.notFound') }} <button @click="createNewCalendar" class="btn btn-sm btn-primary">{{ $t('calendars.createNew') }}</button>
     </div>
     
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -29,8 +29,8 @@
         <div class="card-body">
           <h2 class="card-title text-lg font-bold">{{ calendar.name }}</h2>
           <div class="space-y-1">
-            <p class="text-sm text-gray">Created: <span class="font-semibold">{{ formatDate(calendar.created_at) }}</span></p>
-            <p class="text-sm text-gray">Updated: <span class="font-semibold">{{ formatDate(calendar.updated_at) }}</span></p>
+            <p class="text-sm text-gray">{{ $t('calendars.created') }}: <span class="font-semibold">{{ formatDate(calendar.created_at) }}</span></p>
+            <p class="text-sm text-gray">{{ $t('calendars.updated') }}: <span class="font-semibold">{{ formatDate(calendar.updated_at) }}</span></p>
           </div>
           
           <!-- Icon indicators with counts for Anime and Manga -->
@@ -45,13 +45,13 @@
           
           <div class="card-actions justify-end mt-4">
             <button @click.stop="exportCalendar(calendar.id)" class="btn btn-sm btn-success">
-              Export
+              {{ $t('calendars.export') }}
             </button>
             <button @click.stop="editCalendar(calendar.id)" class="btn btn-sm btn-primary">
-              Edit
+              {{ $t('calendars.edit') }}
             </button>
             <button @click.stop="deleteCalendar(calendar.id)" class="btn btn-sm btn-error">
-              Delete
+              {{ $t('calendars.delete') }}
             </button>
           </div>
         </div>
@@ -65,7 +65,7 @@
         :disabled="pagination.page === 1"
         class="join-item btn"
       >
-        Previous
+        {{ $t('calendars.pagePrevious') }}
       </button>
       
       <button 
@@ -85,12 +85,12 @@
         :disabled="pagination.page === pagination.total_pages"
         class="join-item btn"
       >
-        Next
+        {{ $t('calendars.pageNext') }}
       </button>
     </div>
     
     <div v-if="pagination.total_pages > 1" class="text-center mt-4 text-sm text-gray">
-      Showing {{ (pagination.page - 1) * pagination.page_size + 1 }} to {{ Math.min(pagination.page * pagination.page_size, pagination.total) }} of {{ pagination.total }} calendars
+      {{ $t('calendars.paginationText', {first: pagination.page_size * (pagination.page - 1) + 1, last: pagination.page_size * pagination.page, total: pagination.total }) }}
     </div>
   </div>
 </template>
@@ -101,6 +101,9 @@ import { useRouter } from 'vue-router'
 import type { PageCalendar } from '@/types/calendar'
 import api from '@/config/api'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
+import { i18n } from '@/plugins/i18n'
+
+const { t } = i18n.global
 
 // State
 const calendars = ref<PageCalendar[]>([])
@@ -143,7 +146,7 @@ const loadCalendars = async (page: number = 1) => {
       total_pages: response.data.pagination.total_pages
     }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load calendars'
+    error.value = t('calendars.loadingFailed')
   } finally {
     loading.value = false
   }
@@ -177,7 +180,7 @@ const deleteCalendar = async (id: number) => {
     // Refresh the list
     await loadCalendars()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to delete calendar'
+    error.value = t('calendars.deleteFailed')
   }
 }
 

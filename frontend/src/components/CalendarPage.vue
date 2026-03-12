@@ -1,39 +1,39 @@
 <template>
   <div class="min-h-[calc(100vh-6.1rem)] bg-base-200 p-4">
-    <h1 class="text-2xl font-bold mb-6">Edit Calendar</h1>
+    <h1 class="text-2xl font-bold mb-6">{{ $t('calendar.edit') }}</h1>
     
     <!-- Mobile Layout -->
     <div v-if="isMobile" class="flex flex-col gap-6">
       <!-- Search Section -->
       <div class="card bg-base-100 shadow-md">
         <div class="card-body">
-          <h2 class="card-title">Search</h2>
+          <h2 class="card-title">{{ $t('calendar.search') }}</h2>
           <div class="form-control">
             <label class="label">
-              <span class="label-text">Item Name:</span>
+              <span class="label-text">{{ $t('calendar.itemName') }}:</span>
             </label>
             <input 
               id="nameInput" 
               v-model="nameInput" 
               type="text" 
-              placeholder="Enter item name"
+              :placeholder="$t('calendar.itemNamePlaceholder')"
               class="input input-bordered mt-2"
             />
           </div>
           
           <div class="form-control">
             <label class="label mb-2">
-              <span class="label-text">Media Type:</span>
+              <span class="label-text">{{ $t('calendar.mediaType') }}:</span>
             </label>
             <div class="flex gap-4 mb-2">
               <label class="label cursor-pointer">
                 <input 
                   v-model="mediaType" 
                   type="radio" 
-                  value="" 
+                  value=""
                   class="radio radio-primary"
                 />
-                <span class="label-text">Any</span>
+                <span class="label-text">{{ $t('calendar.mediaTypeAny') }}</span>
               </label>
               <label class="label cursor-pointer">
                 <input 
@@ -42,7 +42,7 @@
                   value="ANIME" 
                   class="radio radio-primary"
                 />
-                <span class="label-text">Anime</span>
+                <span class="label-text">{{ $t('calendar.mediaTypeAnime') }}</span>
               </label>
               <label class="label cursor-pointer">
                 <input 
@@ -51,13 +51,13 @@
                   value="MANGA" 
                   class="radio radio-primary"
                 />
-                <span class="label-text">Manga</span>
+                <span class="label-text">{{ $t('calendar.mediaTypeManga') }}</span>
               </label>
             </div>
           </div>
           
           <button @click="fetchItems" :disabled="loading" class="btn btn-primary w-full">
-            {{ loading ? 'Fetching...' : 'Fetch Items' }}
+            {{ loading ? $t('calendar.fetchingItems') : $t('calendar.fetchItems') }}
           </button>
           
           <div v-if="searchError" class="alert alert-error mt-4">
@@ -69,7 +69,7 @@
       <!-- Fetched Items Section -->
       <div class="card bg-base-100 shadow-md">
         <div class="card-body">
-          <h3 class="font-bold mb-2">Fetched Items</h3>
+          <h3 class="font-bold mb-2">{{ $t('calendar.fetchedItems') }}</h3>
           <div class="overflow-y-auto max-h-96 p-2 border rounded max-h-[250px] min-h-[250px]">
             <div class="flex flex-col gap-1">
                   <div 
@@ -95,17 +95,17 @@
                             />
                           </div>
                           <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                            <span class="text-xs">No image</span>
+                            <span class="text-xs">{{ $t('calendar.noImage') }}</span>
                           </div>
                         </div>
                         <div class="flex-grow">
                           <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
                           <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
-                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">Episodes: {{ item.episode_duration }}</p>
+                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">{{ $t('calendar.episodes')}}: {{ item.episode_duration }}</p>
                         </div>
                       </div>
                       <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="absolute top-2 right-2 bg-success text-white text-xs px-2 py-1 rounded">
-                        Already in calendar
+                        {{ $t('calendar.alreadyInCalendar') }}
                       </div>
                       <!-- Background image for selected items -->
                       <div 
@@ -149,7 +149,7 @@
           
           <div class="mt-4">
             <button @click="addItemToCalendar" :disabled="selectedItems.length === 0" class="btn btn-primary w-full">
-              Add Selected Items to Calendar
+              {{ $t('calendar.addSelectedToCalendar') }}
             </button>
           </div>
         </div>
@@ -158,17 +158,17 @@
       <!-- Calendar Section -->
       <div class="card bg-base-100 shadow-md">
         <div class="card-body">
-          <h2 class="card-title">Calendar</h2>
+          <h2 class="card-title">{{ $t('calendar.title') }}</h2>
           <div class="form-control">
             <label class="label">
-              <span class="label-text">Calendar Name:</span>
+              <span class="label-text">{{ $t('calendar.name') }}:</span>
             </label>
             <div class="relative">
               <input 
                 id="calendarName" 
                 v-model="calendarName" 
                 type="text" 
-                placeholder="Enter calendar name"
+                placeholder="{{ $t('calendar.namePlaceholder') }}"
                 class="input input-bordered mt-2 w-full pr-16"
               />
               <div class="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500">
@@ -179,7 +179,7 @@
 
           <div class="form-control">
             <label class="label mb-2">
-              <span class="label-text">Language:</span>
+              <span class="label-text">{{ $t('calendar.language') }}:</span>
             </label>
             <div class="flex gap-4">
               <label class="label cursor-pointer">
@@ -189,7 +189,7 @@
                   value="english" 
                   class="radio radio-primary"
                 />
-                <span class="label-text">English</span>
+                <span class="label-text">{{ $t('calendar.english') }}</span>
               </label>
               <label class="label cursor-pointer">
                 <input 
@@ -198,7 +198,7 @@
                   value="romaji" 
                   class="radio radio-primary"
                 />
-                <span class="label-text">Romaji</span>
+                <span class="label-text">{{ $t('calendar.romaji') }}</span>
               </label>
               <label class="label cursor-pointer">
                 <input 
@@ -207,7 +207,7 @@
                   value="native" 
                   class="radio radio-primary"
                 />
-                <span class="label-text">Native</span>
+                <span class="label-text">{{ $t('calendar.native') }}</span>
               </label>
             </div>
           </div>
@@ -217,7 +217,7 @@
           </div>
 
           <div v-if="itemsInCalendar.length > 0" class="mt-4">
-            <h3 class="font-bold mb-2">Items in Calendar</h3>
+            <h3 class="font-bold mb-2">{{ $t('calendar.itemsInCalendar') }}</h3>
             <div class="overflow-y-auto max-h-[400px] min-h-[400px] p-2 border rounded">
               <div class="flex flex-col gap-1">
                 <div 
@@ -238,17 +238,17 @@
                           />
                         </div>
                         <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                          <span class="text-xs">No image</span>
+                          <span class="text-xs">{{ $t('calendar.noImage') }}</span>
                         </div>
                       </div>
                       <div class="flex-grow">
                         <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
                         <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
-                        <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">Episodes: {{ item.episode_duration }}</p>
+                        <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">{{ $t('calendar.episodes') }}: {{ item.episode_duration }}</p>
                       </div>
                     </div>
                     <button @click="removeItemFromCalendar(item.id)" class="btn btn-sm btn-error mt-2">
-                      Remove
+                      {{ $t('calendar.remove') }}
                     </button>
                   </div>
                 </div>
@@ -257,7 +257,7 @@
             
             <!-- Recommendations Section -->
             <div v-if="recommendations.length > 0" class="mt-6">
-              <h3 class="font-bold mb-2">Recommended Items</h3>
+              <h3 class="font-bold mb-2">{{ $t('calendar.recommendedItems') }}</h3>
               <div class="carousel w-full gap-4">
                 <div 
                   v-for="item in recommendations" 
@@ -277,7 +277,7 @@
                           />
                         </div>
                         <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                          <span class="text-xs">No image</span>
+                          <span class="text-xs">{{ $t('calendar.noImage') }}</span>
                         </div>
                       </div>
                       <div class="flex-grow">
@@ -288,7 +288,7 @@
                             @click.stop="addItemToCalendarSingle(item)"
                             class="btn btn-primary btn-xs absolute bottom-2 right-2"
                           >
-                            Add
+                            {{ $t('calendar.add') }}
                           </button>
                         </div>
                       </div>
@@ -300,14 +300,14 @@
 
             <div class="mt-4">
               <button @click="clearCalendar" class="btn btn-warning w-full" :disabled="itemsInCalendar.length === 0">
-                Clear Calendar
+                {{ $t('calendar.clear') }}
               </button>
             </div>
           </div>
 
           <div class="mt-4">
             <button @click="submitCalendar" :disabled="loading || itemsInCalendar.length === 0" class="btn btn-success w-full">
-              {{ loading ? 'Submitting...' : 'Submit Calendar' }}
+              {{ loading ? $t('calendar.submitting') : $t('calendar.submit') }}
             </button>
           </div>
         </div>
@@ -319,17 +319,17 @@
         <!-- Calendar Block -->
         <div class="card bg-base-100 shadow-md">
           <div class="card-body">
-            <h2 class="card-title">Calendar</h2>
+            <h2 class="card-title">{{ $t('calendar.title') }}</h2>
             <div class="form-control">
               <label class="label">
-                <span class="label-text">Calendar Name:</span>
+                <span class="label-text">{{ $t('calendar.name') }}:</span>
               </label>
               <div class="relative">
                 <input 
                   id="calendarName" 
                   v-model="calendarName" 
                   type="text" 
-                  placeholder="Enter calendar name"
+                  placeholder="{{ $t('calendar.namePlaceholder') }}"
                   class="input input-bordered ml-2 w-full pr-19"
                 />
                 <div class="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500">
@@ -340,7 +340,7 @@
 
             <div class="form-control">
               <label class="label mb-2">
-                <span class="label-text">Language:</span>
+                <span class="label-text">{{ $t('calendar.language') }}:</span>
               </label>
               <div class="flex gap-4">
                 <label class="label cursor-pointer">
@@ -350,7 +350,7 @@
                     value="english" 
                     class="radio radio-primary"
                   />
-                  <span class="label-text">English</span>
+                  <span class="label-text">{{ $t('calendar.english') }}</span>
                 </label>
                 <label class="label cursor-pointer">
                   <input 
@@ -359,7 +359,7 @@
                     value="romaji" 
                     class="radio radio-primary"
                   />
-                  <span class="label-text">Romaji</span>
+                  <span class="label-text">{{ $t('calendar.romaji') }}</span>
                 </label>
                 <label class="label cursor-pointer">
                   <input 
@@ -368,14 +368,14 @@
                     value="native" 
                     class="radio radio-primary"
                   />
-                  <span class="label-text">Native</span>
+                  <span class="label-text">{{ $t('calendar.native') }}</span>
                 </label>
               </div>
             </div>
 
             <div class="mt-4">
               <button @click="submitCalendar" :disabled="loading || itemsInCalendar.length === 0" class="btn btn-success">
-                {{ loading ? 'Submitting...' : 'Submit Calendar' }}
+                {{ loading ? $t('calendar.submitting') : $t('calendar.submit') }}
               </button>
             </div>
 
@@ -386,7 +386,7 @@
           
           <div class="card-body">
             <div class="flex flex-col gap-4">
-              <h3 class="font-bold">Items in Calendar</h3>
+              <h3 class="font-bold">{{ $t('calendar.itemsInCalendar') }}</h3>
               <div class="overflow-y-auto max-h-[400px] min-h-[400px] p-2 border rounded">
                 <div class="flex flex-col gap-1">
                   <div 
@@ -407,17 +407,17 @@
                             />
                           </div>
                           <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                            <span class="text-xs">No image</span>
+                            <span class="text-xs">{{ $t('calendar.noImage') }}</span>
                           </div>
                         </div>
                         <div class="flex-grow">
                           <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
                           <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
-                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">Episodes: {{ item.episode_duration }}</p>
+                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">{{ $t('calendar.episodes') }}: {{ item.episode_duration }}</p>
                         </div>
                       </div>
                       <button @click="removeItemFromCalendar(item.id)" class="btn btn-sm btn-error mt-2">
-                        Remove
+                        {{ $t('calendar.remove') }}
                       </button>
                     </div>
                   </div>
@@ -425,7 +425,7 @@
               </div>
               
               <button @click="clearCalendar" class="btn btn-warning w-full" :disabled="itemsInCalendar.length === 0">
-                Clear Calendar
+                {{ $t('calendar.clear') }}
               </button>
             </div>
           </div>
@@ -434,23 +434,23 @@
         <!-- Search Block -->
         <div class="card bg-base-100 shadow-md">
           <div class="card-body">
-            <h2 class="card-title">Search</h2>
+            <h2 class="card-title">{{ $t('calendar.search') }}</h2>
             <div class="form-control">
               <label class="label">
-                <span class="label-text">Item Name:</span>
+                <span class="label-text">{{ $t('calendar.itemName') }}:</span>
               </label>
               <input 
-                id="nameInput" 
-                v-model="nameInput" 
+                id="nameInput"
+                v-model="nameInput"
                 type="text" 
-                placeholder="Enter item name"
+                :placeholder="$t('calendar.itemNamePlaceholder')"
                 class="input input-bordered ml-2"
               />
             </div>
             
             <div class="form-control">
               <label class="label mb-2">
-                <span class="label-text">Media Type:</span>
+                <span class="label-text">{{ $t('calendar.mediaType') }}:</span>
               </label>
               <div class="flex gap-4">
                 <label class="label cursor-pointer">
@@ -460,7 +460,7 @@
                     value="" 
                     class="radio radio-primary"
                   />
-                  <span class="label-text">Any</span>
+                  <span class="label-text">{{ $t('calendar.mediaTypeAny') }}</span>
                 </label>
                 <label class="label cursor-pointer">
                   <input 
@@ -469,7 +469,7 @@
                     value="ANIME" 
                     class="radio radio-primary"
                   />
-                  <span class="label-text">Anime</span>
+                  <span class="label-text">{{ $t('calendar.mediaTypeAnime') }}</span>
                 </label>
                 <label class="label cursor-pointer">
                   <input 
@@ -478,14 +478,14 @@
                     value="MANGA" 
                     class="radio radio-primary"
                   />
-                  <span class="label-text">Manga</span>
+                  <span class="label-text">{{ $t('calendar.mediaTypeManga') }}</span>
                 </label>
               </div>
             </div>
             
             <div class="mt-4">
               <button @click="fetchItems" :disabled="loading" class="btn btn-primary">
-                {{ loading ? 'Fetching...' : 'Fetch Items' }}
+                {{ loading ? $t('calendar.fetching') : $t('calendar.fetchItems') }}
               </button>
             </div>
             
@@ -496,7 +496,7 @@
           
           <div class="card-body">
             <div class="flex flex-col gap-4">
-              <h3 class="font-bold">Fetched Items</h3>
+              <h3 class="font-bold">{{ $t('calendar.fetchedItems') }}</h3>
               <div class="overflow-y-auto max-h-[400px] min-h-[400px] p-2 border rounded">
                 <div class="flex flex-col gap-1">
                   <div 
@@ -522,17 +522,17 @@
                             />
                           </div>
                           <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                            <span class="text-xs">No image</span>
+                            <span class="text-xs">{{ $t('calendar.noImage') }}</span>
                           </div>
                         </div>
                         <div class="flex-grow">
                           <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
                           <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
-                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">Episodes: {{ item.episode_duration }}</p>
+                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">{{ $t('calendar.episodes') }}: {{ item.episode_duration }}</p>
                         </div>
                       </div>
                       <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="absolute top-2 right-2 bg-success text-white text-xs px-2 py-1 rounded">
-                        Already in calendar
+                        {{ $t('calendar.alreadyInCalendar') }}
                       </div>
                       <!-- Background image for selected items -->
                       <div 
@@ -574,7 +574,7 @@
                 </div>
               </div>
               <button @click="addItemToCalendar" :disabled="selectedItems.length === 0" class="btn btn-primary w-full">
-                Add Selected Items to Calendar
+                {{ $t('calendar.addSelectedToCalendar') }}
               </button>
             </div>
           </div>
@@ -583,7 +583,7 @@
     <div class="max-w-6xl mx-auto">
       <div v-if="!isMobile" class="card bg-base-100 shadow-md mt-4">
         <div class="card-body">
-          <h2 class="card-title">Recommended Items</h2>
+          <h2 class="card-title">{{ $t('calendar.recommendedItems') }}</h2>
           <!-- Recommendations Section -->
           <div v-if="recommendations.length > 0" class="mt-4">
             <!-- DaisyUI Carousel for Desktop Layout Only -->
@@ -607,7 +607,7 @@
                           />
                         </div>
                         <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                          <span class="text-xs">No image</span>
+                          <span class="text-xs">{{ $t('calendar.noImage') }}</span>
                         </div>
                       </div>
                       <div class="flex-grow">
@@ -618,7 +618,7 @@
                             @click.stop="addItemToCalendarSingle(item)"
                             class="btn btn-primary btn-xs absolute bottom-2 right-2"
                           >
-                            Add
+                            {{ $t('calendar.add') }}
                       </button>
                     </div>
                   </div>
@@ -627,10 +627,10 @@
             </div>
           </div>
           <div v-else-if="itemsInCalendar.length > 0" class="flex justify-center items-center h-full">
-            <p>No recommendations for your current selected items.</p>
+            <p>{{ $t('calendar.noRecommendations') }}</p>
           </div>
           <div v-else class="flex justify-center items-center h-full">
-            <p>Add items to your calendar to see recommendations.</p>
+            <p>{{ $t('calendar.addItemsToSeeRecommendations') }}</p>
           </div>
         </div>
       </div>
@@ -646,6 +646,9 @@ import type { Calendar } from '@/types/calendar'
 import api from '@/config/api'
 import { toastService } from '@/services/toastService'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
+import { i18n } from '@/plugins/i18n'
+
+const { t } = i18n.global
 
 // Router
 const router = useRouter()
@@ -762,7 +765,7 @@ onBeforeMount(async () => {
       // Calculate recommendations when loading an existing calendar
       calculateRecommendations()
     } catch (err) {
-      calendarError.value = err instanceof Error ? err.message : 'Failed to load calendar'
+      calendarError.value = t('calendar.failedToLoad')
       console.error('Failed to load calendar:', err)
     } finally {
       loading.value = false
@@ -849,7 +852,7 @@ const calculateRecommendations = () => {
 // Fetch items by name
 const fetchItems = async () => {
   if (!nameInput.value) {
-    searchError.value = 'Please enter a name'
+    searchError.value = t('calendar.enterName')
     return
   }
 
@@ -868,7 +871,7 @@ const fetchItems = async () => {
     fetchedItems.value = items
     selectedItems.value = [] // Reset selection when new search is performed
   } catch (err) {
-    searchError.value = err instanceof Error ? err.message : 'Failed to fetch items'
+    searchError.value = t('calendar.failedToFetchItems')
     console.error('Failed to fetch items:', err)
   } finally {
     loading.value = false
@@ -939,17 +942,17 @@ const submitCalendar = async () => {
   // Validate calendar name length on frontend
   const MAX_NAME_LENGTH = 100;
   if (!calendarName.value) {
-    calendarError.value = 'Please enter a name for the calendar'
+    calendarError.value = t('calendar.enterCalendarName')
     return
   }
 
   if (calendarName.value.length > MAX_NAME_LENGTH) {
-    calendarError.value = `Calendar name must be ${MAX_NAME_LENGTH} characters or less`
+    calendarError.value = t('calendar.nameMaxLength', {max_length: MAX_NAME_LENGTH})
     return
   }
 
   if (itemsInCalendar.value.length === 0) {
-    calendarError.value = 'Please add at least one item to the calendar'
+    calendarError.value = t('calendar.noItemsSelected')
     return
   }
 
@@ -983,7 +986,7 @@ const submitCalendar = async () => {
       response = await api.put('/calendar', calendar)
     }
     
-    toastService.success(`${response.data.name} updated`)
+    toastService.success(t('calendar.updatedSuccess', {name: response.data.name}))
     
     // Reset form
     calendarName.value = ''
@@ -992,7 +995,7 @@ const submitCalendar = async () => {
     // Redirect to my-calendars page
     router.push('/my-calendars')
   } catch (err) {
-    calendarError.value = err instanceof Error ? err.message : 'Failed to submit calendar'
+    calendarError.value = t('calendar.updatedFail')
   } finally {
     loading.value = false
   }

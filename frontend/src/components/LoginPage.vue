@@ -3,6 +3,9 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import GoogleLoginButton from './GoogleLoginButton.vue'
+import { i18n } from '@/plugins/i18n'
+
+const { t } = i18n.global
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -27,7 +30,7 @@ const handleSubmit = async (e: Event) => {
     }
     router.push('/my-calendars')
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'An error occurred'
+    error.value = t('errors.generic')
   } finally {
     loading.value = false
   }
@@ -43,11 +46,11 @@ const toggleMode = () => {
   <div class="min-h-[calc(100vh-6rem)] bg-base-200 flex items-center justify-center">
     <div class="card bg-base-100 w-full max-w-md shadow-xl">
       <div class="card-body">
-        <h2 class="card-title">{{ isRegistering ? 'Register' : 'Login' }}</h2>
+        <h2 class="card-title">{{ isRegistering ? $t('components.register.title') : $t('components.login.title') }}</h2>
         <form @submit="handleSubmit" class="space-y-4">
           <div v-if="isRegistering" class="form-control w-full">
             <label class="label mb-2">
-              <span class="label-text">Username</span>
+              <span class="label-text">{{ $t('components.register.name') }}</span>
             </label>
             <input 
               id="username" 
@@ -55,14 +58,14 @@ const toggleMode = () => {
               type="text" 
               required 
               class="input input-bordered w-full"
-              placeholder="Enter your username"
+              :placeholder="$t('components.register.usernamePlaceholder')"
               maxlength="50"
             />
           </div>
           
           <div class="form-control w-full">
             <label class="label mb-2">
-              <span class="label-text">Email</span>
+              <span class="label-text">{{ $t('components.login.email') }}</span>
             </label>
             <input 
               id="email" 
@@ -70,13 +73,13 @@ const toggleMode = () => {
               type="email" 
               required 
               class="input input-bordered w-full"
-              placeholder="Enter your email"
+              :placeholder="$t('components.login.emailPlaceholder')"
             />
           </div>
           
           <div class="form-control w-full">
             <label class="label mb-2">
-              <span class="label-text">Password</span>
+              <span class="label-text">{{ $t('components.login.password') }}</span>
             </label>
             <input 
               id="password" 
@@ -84,7 +87,7 @@ const toggleMode = () => {
               type="password" 
               required 
               class="input input-bordered w-full"
-              placeholder="Enter your password"
+              :placeholder="$t('components.login.passwordPlaceholder')"
               maxlength="128"
             />
           </div>
@@ -94,7 +97,7 @@ const toggleMode = () => {
             :disabled="loading" 
             class="btn btn-primary w-full"
           >
-            {{ loading ? (isRegistering ? 'Registering...' : 'Logging in...') : (isRegistering ? 'Register' : 'Login') }}
+            {{ loading ? (isRegistering ? $t('components.register.registering') : $t('components.login.submit')) : (isRegistering ? $t('components.register.submit') : $t('components.login.submit')) }}
           </button>
           
           <div v-if="error" class="alert alert-error mt-2">
@@ -102,16 +105,16 @@ const toggleMode = () => {
           </div>
         </form>
         
-        <div class="divider">Or continue with</div>
+        <div class="divider">{{ $t('app.orContinueWith') }}</div>
         <div class="flex flex-col gap-3">
           <GoogleLoginButton />
         </div>
         
         <div class="card-actions justify-center mt-4">
           <p class="text-center">
-            {{ isRegistering ? 'Already have an account?' : "Don't have an account?" }}
+            {{ isRegistering ? $t('components.register.alreadyHaveAccount') : $t('components.register.noAccount') }}
             <button @click="toggleMode" class="link link-primary">
-              {{ isRegistering ? 'Login' : 'Register' }}
+              {{ isRegistering ? $t('components.login.submit') : $t('components.register.submit') }}
             </button>
           </p>
         </div>

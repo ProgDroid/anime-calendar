@@ -23,6 +23,7 @@
     "pinia": "^3.0.4",
     "toml": "^3.0.0",
     "vue": "^3.5.25",
+    "vue-i18n": "^11.3.0",
     "vue-router": "^4.6.3"
   },
   "devDependencies": {

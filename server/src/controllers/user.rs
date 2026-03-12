@@ -247,3 +247,6 @@ pub async fn update_user_settings(
 }
 
 // TODO actually use these settings
+// TODO default to user's browser locale (navigator.langauges?)
+// TODO finish translations for rest of files (it refuses to go beyond Login and Register)
+// TODO refactor frontend. Use frontend and Vue expertise skills. It's a mess rn

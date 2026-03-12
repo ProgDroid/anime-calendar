@@ -5,6 +5,9 @@ import { toastService } from '@/services/toastService'
 import type { UserSettings } from '@/types/userSettings'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { applySettings } from '@/services/applySettings'
+import { i18n } from '@/plugins/i18n'
+
+const { t } = i18n.global
 
 const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
@@ -21,7 +24,7 @@ const fetchUserSettings = async () => {
     console.log('Fetched settings:', fetchedSettings)
     settings.value = fetchedSettings
   } catch (err) {
-    error.value = 'Failed to fetch user settings'
+    error.value = t('userSettings.fetchError')
     console.error('Error fetching user settings:', err)
   } finally {
     loading.value = false
@@ -35,10 +38,15 @@ const handleUpdateSettings = async () => {
     // Apply the theme immediately after updating
     applySettings(settings.value)
     
+    // Update i18n locale if language changed
+    if (settings.value.language_preference) {
+      i18n.global.locale.value = settings.value.language_preference
+    }
+    
     // Show success notification
-    toastService.success('Settings updated successfully!')
+    toastService.success(t('userSettings.updateSuccess'))
   } catch (err) {
-    error.value = 'Failed to update user settings'
+    error.value = t('userSettings.updateError')
     console.error('Error updating user settings:', err)
   }
 }
@@ -61,11 +69,11 @@ onMounted(() => {
     <div class="max-w-2xl mx-auto">
       <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
-          <h1 class="card-title text-2xl">User Settings</h1>
+          <h1 class="card-title text-2xl">{{ $t('userSettings.title') }}</h1>
           
           <div v-if="loading" class="flex justify-center items-center py-8">
             <span class="loading loading-spinner"></span>
-            <span class="ml-2">Loading settings...</span>
+            <span class="ml-2">{{ $t('app.loading') }}</span>
           </div>
           
           <div v-if="error" class="alert alert-error mb-4">
@@ -76,7 +84,7 @@ onMounted(() => {
             <!-- Theme Preference -->
             <div class="form-control">
               <label class="label">
-                <span class="label-text">Theme</span>
+                <span class="label-text">{{ $t('userSettings.theme') }}</span>
               </label>
               <div class="mt-2 flex space-x-4">
                 <label class="flex items-center space-x-2 cursor-pointer">
@@ -87,7 +95,7 @@ onMounted(() => {
                     v-model="settings.theme_preference" 
                     value="light"
                   />
-                  <span>Light</span>
+                  <span>{{ $t('userSettings.light') }}</span>
                 </label>
                 <label class="flex items-center space-x-2 cursor-pointer">
                   <input 
@@ -97,7 +105,7 @@ onMounted(() => {
                     v-model="settings.theme_preference" 
                     value="dark"
                   />
-                  <span>Dark</span>
+                  <span>{{ $t('userSettings.dark') }}</span>
                 </label>
               </div>
             </div>
@@ -105,42 +113,42 @@ onMounted(() => {
             <!-- Language Preference -->
             <div class="form-control">
               <label class="label">
-                <span class="label-text">Language</span>
+                <span class="label-text">{{ $t('userSettings.language') }}</span>
               </label>
               <select 
                 v-model="settings.language_preference" 
                 class="ml-2 select select-bordered w-full max-w-xs"
               >
-                <option value="en">English</option>
-                <option value="pt">Portuguese</option>
+                <option value="en">{{ $t('userSettings.english') }}</option>
+                <option value="pt">{{ $t('userSettings.portuguese') }}</option>
               </select>
             </div>
             
             <!-- Title Language Preference -->
             <div class="form-control">
               <label class="label">
-                <span class="label-text">Title Language</span>
+                <span class="label-text">{{ $t('userSettings.titleLanguage') }}</span>
               </label>
               <select 
                 v-model="settings.title_language_preference" 
                 class="ml-2 select select-bordered w-full max-w-xs"
               >
-                <option value="English">English</option>
-                <option value="Romaji">Romaji</option>
-                <option value="Native">Native</option>
+                <option value="English">{{ $t('userSettings.english') }}</option>
+                <option value="Romaji">{{ $t('userSettings.romaji') }}</option>
+                <option value="Native">{{ $t('userSettings.native') }}</option>
               </select>
             </div>
 
             <!-- Timezone -->
             <div class="form-control">
               <label class="label">
-                <span class="label-text">Timezone</span>
+                <span class="label-text">{{ $t('userSettings.timezone') }}</span>
               </label>
               <input 
                 v-model="settings.timezone" 
                 type="text" 
                 class="ml-2 input input-bordered w-full max-w-xs"
-                placeholder="e.g., UTC, Europe/London, America/New_York"
+                :placeholder="$t('userSettings.timezonePlaceholder')"
               />
             </div>
             
@@ -150,7 +158,7 @@ onMounted(() => {
                 @click="handleSave"
                 class="btn btn-primary"
               >
-                Save Settings
+                {{ $t('userSettings.save') }}
               </button>
             </div>
           </div>
@@ -159,3 +167,5 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<!-- TODO improve account removal alert (currently native popup) -->

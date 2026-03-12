@@ -1,123 +1,114 @@
-<template>
-  <div class="register-container">
-    <h2>Register</h2>
-    <form @submit.prevent="handleRegister">
-      <div>
-        <label for="username">Username:</label>
-        <input
-          id="username"
-          v-model="registerForm.username"
-          type="text"
-          required
-          maxlength="50"
-        />
-      </div>
-      <div>
-        <label for="email">Email:</label>
-        <input
-          id="email"
-          v-model="registerForm.email"
-          type="email"
-          required
-        />
-      </div>
-      <div>
-        <label for="password">Password:</label>
-        <input
-          id="password"
-          v-model="registerForm.password"
-          type="password"
-          required
-          maxlength="128"
-        />
-      </div>
-      <button type="submit" :disabled="loading">Register</button>
-      <div v-if="error" class="error">{{ error }}</div>
-    </form>
-    <p>
-      Already have an account?
-      <router-link to="/login">Login</router-link>
-    </p>
-  </div>
-</template>
-
-<script setup>
+<script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
+import { useAuthStore } from '@/stores/auth'
+import GoogleLoginButton from './GoogleLoginButton.vue'
+import { i18n } from '@/plugins/i18n'
+
+const { t } = i18n.global
 
 const router = useRouter()
 const authStore = useAuthStore()
 
-const registerForm = ref({
-  username: '',
-  email: '',
-  password: ''
-})
-
+const email = ref('')
+const password = ref('')
+const username = ref('')
 const loading = ref(false)
-const error = ref('')
+const error = ref<string | null>(null)
 
-const handleRegister = async () => {
+const handleSubmit = async (e: Event) => {
+  e.preventDefault()
   loading.value = true
-  error.value = ''
+  error.value = null
 
   try {
-    await authStore.register(registerForm.value.username, registerForm.value.email, registerForm.value.password)
-    router.push('/calendar')
+    await authStore.register(username.value, email.value, password.value)
+    router.push('/my-calendars')
   } catch (err) {
-    error.value = err.message || 'Registration failed'
+    error.value = t('errors.generic')
   } finally {
     loading.value = false
   }
 }
 </script>
 
-<style scoped>
-.register-container {
-  max-width: 400px;
-  margin: 50px auto;
-  padding: 20px;
-  border: 1px solid #ddd;
-  border-radius: 5px;
-}
-
-.register-container h2 {
-  text-align: center;
-}
-
-.register-container div {
-  margin-bottom: 15px;
-}
-
-.register-container label {
-  display: block;
-  margin-bottom: 5px;
-}
-
-.register-container input {
-  width: 100%;
-  padding: 8px;
-  box-sizing: border-box;
-}
-
-.register-container button {
-  width: 100%;
-  padding: 10px;
-  background-color: #28a745;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-}
-
-.register-container button:disabled {
-  background-color: #ccc;
-  cursor: not-allowed;
-}
-
-.error {
-  color: red;
-  margin-top: 10px;
-}
-</style>
+<template>
+  <div class="min-h-[calc(100vh-6rem)] bg-base-200 flex items-center justify-center">
+    <div class="card bg-base-100 w-full max-w-md shadow-xl">
+      <div class="card-body">
+        <h2 class="card-title">{{ $t('components.register.title') }}</h2>
+        <form @submit="handleSubmit" class="space-y-4">
+          <div class="form-control w-full">
+            <label class="label mb-2">
+              <span class="label-text">{{ $t('components.register.name') }}</span>
+            </label>
+            <input 
+              id="username" 
+              v-model="username" 
+              type="text" 
+              required 
+              class="input input-bordered w-full"
+              :placeholder="$t('components.register.usernamePlaceholder')"
+              maxlength="50"
+            />
+          </div>
+          
+          <div class="form-control w-full">
+            <label class="label mb-2">
+              <span class="label-text">{{ $t('components.register.email') }}</span>
+            </label>
+            <input 
+              id="email" 
+              v-model="email" 
+              type="email" 
+              required 
+              class="input input-bordered w-full"
+              :placeholder="$t('components.login.emailPlaceholder')"
+            />
+          </div>
+          
+          <div class="form-control w-full">
+            <label class="label mb-2">
+              <span class="label-text">{{ $t('components.register.password') }}</span>
+            </label>
+            <input 
+              id="password" 
+              v-model="password" 
+              type="password" 
+              required 
+              class="input input-bordered w-full"
+              :placeholder="$t('components.login.passwordPlaceholder')"
+              maxlength="128"
+            />
+          </div>
+          
+          <button 
+            type="submit" 
+            :disabled="loading" 
+            class="btn btn-primary w-full"
+          >
+            {{ loading ? $t('components.register.registering') : $t('components.register.submit') }}
+          </button>
+          
+          <div v-if="error" class="alert alert-error mt-2">
+            {{ error }}
+          </div>
+        </form>
+        
+        <div class="divider">{{ $t('app.orContinueWith') }}</div>
+        <div class="flex flex-col gap-3">
+          <GoogleLoginButton />
+        </div>
+        
+        <div class="card-actions justify-center mt-4">
+          <p class="text-center">
+            {{ $t('components.register.noAccount') }}
+            <router-link to="/login" class="link link-primary">
+              {{ $t('components.login.submit') }}
+            </router-link>
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>

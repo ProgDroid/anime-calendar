@@ -6,6 +6,9 @@ import api from '@/config/api'
 import { toastService } from '@/services/toastService'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { applySettings } from '@/services/applySettings'
+import { i18n } from '@/plugins/i18n'
+
+const { t } = i18n.global
 
 interface User {
   username: string
@@ -49,7 +52,7 @@ const fetchUserDetails = async () => {
     updatedUsername.value = response.data.username
     updatedEmail.value = response.data.email
   } catch (err) {
-    error.value = 'Failed to fetch user details'
+    error.value = t('userDetails.failedToFetch')
     console.error('Error fetching user details:', err)
   } finally {
     loading.value = false
@@ -71,9 +74,9 @@ const handleUpdate = async (e: Event) => {
     authStore.user = response.data
     
     // Show success notification
-    toastService.success('User details updated successfully!')
+    toastService.success(t('userDetails.updateSuccess'))
   } catch (err) {
-    error.value = 'Failed to update user details'
+    error.value = t('userDetails.updateFailed')
     console.error('Error updating user:', err)
   }
 }
@@ -83,24 +86,24 @@ const handleUpdatePassword = async (e: Event) => {
   
   // Validate passwords
   if (newPassword.value !== confirmPassword.value) {
-    error.value = 'New passwords do not match'
+    error.value = t('userDetails.passwordsDontMatch')
     return
   }
 
   if (newPassword.value.length < 12) {
-    error.value = 'New password must be at least 12 characters long'
+    error.value = t('userDetails.passwordLength', {min: 12})
     return
   }
 
   // Check password strength requirements
   if (!/(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?":{}|<>]).+/.test(newPassword.value)) {
-    error.value = 'New password must contain at least one uppercase letter, one lowercase letter, one digit, and one special character'
+    error.value = t('userDetails.passwordContent')
     return
   }
 
   // Check that new password is different from current password
   if (newPassword.value === currentPassword.value) {
-    error.value = 'New password must be different from the current password'
+    error.value = t('userDetails.passwordMustBeDifferent')
     return
   }
 
@@ -120,12 +123,12 @@ const handleUpdatePassword = async (e: Event) => {
     showPasswordUpdate.value = false
     
     // Show success notification
-    toastService.success('Password updated successfully!')
+    toastService.success(t('userDetails.passwordUpdateSuccess'))
   } catch (err: any) {
     if (err.response && err.response.status === 401) {
-      error.value = 'Current password is incorrect'
+      error.value = t('userDetails.currentPasswordIncorrect')
     } else {
-      error.value = 'Failed to update password'
+      error.value = t('userDetails.passwordUpdateFailed')
     }
     console.error('Error updating password:', err)
   } finally {
@@ -134,7 +137,7 @@ const handleUpdatePassword = async (e: Event) => {
 }
 
 const handleDelete = async () => {
-  if (!confirm('Are you sure you want to delete your account? This action cannot be undone.')) {
+  if (!confirm(t('userDetails.accountDelete'))) {
     return
   }
 
@@ -146,7 +149,7 @@ const handleDelete = async () => {
     applySettings(userSettingsStore.getDefaultSettings())
     router.push('/login')
   } catch (err) {
-    error.value = 'Failed to delete account'
+    error.value = t('userDetails.accountDeleteFailed')
     console.error('Error deleting account:', err)
   } finally {
     isDeleting.value = false
@@ -167,11 +170,11 @@ onMounted(() => {
     <div class="max-w-2xl mx-auto">
       <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
-          <h1 class="card-title text-2xl">User Details</h1>
+          <h1 class="card-title text-2xl">{{ $t('userDetails.title') }}</h1>
           
           <div v-if="loading" class="flex justify-center items-center py-8">
             <span class="loading loading-spinner"></span>
-            <span class="ml-2">Loading user details...</span>
+            <span class="ml-2">{{ $t('userDetails.loading') }}</span>
           </div>
           
           <div v-if="error" class="alert alert-error mb-4">
@@ -191,7 +194,7 @@ onMounted(() => {
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div class="form-control">
                   <label class="label mb-2">
-                    <span class="label-text">Name</span>
+                    <span class="label-text">{{ $t('userDetails.name') }}</span>
                   </label>
                   <input 
                     type="text" 
@@ -203,7 +206,7 @@ onMounted(() => {
                 
                 <div class="form-control">
                   <label class="label mb-2">
-                    <span class="label-text">Email</span>
+                    <span class="label-text">{{ $t('userDetails.email') }}</span>
                   </label>
                   <input 
                     type="email" 
@@ -220,13 +223,13 @@ onMounted(() => {
                   @click="isEditing = true"
                   class="btn btn-primary w-full"
                 >
-                  Edit Details
+                  {{ $t('userDetails.editDetails') }}
                 </button>
               </div>
               
               <div class="flex justify-end space-x-3 mt-4">
                 <RouterLink to="/user/settings" class="btn btn-outline w-full">
-                  View Settings
+                  {{ $t('userDetails.viewSettings') }}
                 </RouterLink>
               </div>
             </div>
@@ -236,7 +239,7 @@ onMounted(() => {
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="form-control">
                     <label class="label">
-                      <span class="label-text">Username</span>
+                      <span class="label-text">{{ $t('userDetails.username') }}</span>
                     </label>
                     <input 
                       v-model="updatedUsername"
@@ -248,7 +251,7 @@ onMounted(() => {
 
                   <div class="form-control">
                     <label class="label">
-                      <span class="label-text">Email</span>
+                      <span class="label-text">{{ $t('userDetails.email') }}</span>
                     </label>
                     <input 
                       v-model="updatedEmail"
@@ -265,13 +268,13 @@ onMounted(() => {
                     @click="isEditing = false"
                     class="btn btn-ghost"
                   >
-                    Cancel
+                    {{ $t('userDetails.cancel') }}
                   </button>
                   <button 
                     type="submit"
                     class="btn btn-primary"
                   >
-                    Save Changes
+                    {{ $t('userDetails.update')}}
                   </button>
                 </div>
               </form>
@@ -282,12 +285,12 @@ onMounted(() => {
             <div class="space-y-6">
               <!-- Password update section hidden for OAuth users -->
               <div v-if="!user.is_oauth" class="flex justify-between items-center">
-                <h2 class="card-title">Update Password</h2>
+                <h2 class="card-title">{{ $t('userDetails.changePassword') }}</h2>
                 <button 
                   @click="showPasswordUpdate = !showPasswordUpdate"
                   class="btn btn-outline"
                 >
-                  {{ showPasswordUpdate ? 'Cancel' : 'Update Password' }}
+                  {{ showPasswordUpdate ? $t('userDetails.cancel') : $t('userDetails.changePassword') }}
                 </button>
               </div>
               
@@ -295,7 +298,7 @@ onMounted(() => {
                 <form @submit="handleUpdatePassword" class="space-y-6">
                   <div class="form-control">
                     <label class="label mb-2">
-                      <span class="label-text">Current Password</span>
+                      <span class="label-text">{{ $t('userDetails.currentPassword') }}</span>
                     </label>
                     <input 
                       v-model="currentPassword"
@@ -307,7 +310,7 @@ onMounted(() => {
 
                   <div class="form-control">
                     <label class="label mb-2">
-                      <span class="label-text">New Password</span>
+                      <span class="label-text">{{ $t('userDetails.newPassword') }}</span>
                     </label>
                     <input 
                       v-model="newPassword"
@@ -316,13 +319,13 @@ onMounted(() => {
                       required
                     />
                     <label class="label mb-2">
-                      <span class="label-text text-sm text-wrap text-center">Password must be at least 12 characters with uppercase, lowercase, digit, and special character</span>
+                      <span class="label-text text-sm text-wrap text-center">{{ $t('userDetails.passwordHint') }}</span>
                     </label>
                   </div>
 
                   <div class="form-control">
                     <label class="label mb-2">
-                      <span class="label-text">Confirm New Password</span>
+                      <span class="label-text">{{ $t('userDetails.confirmPassword') }}</span>
                     </label>
                     <input 
                       v-model="confirmPassword"
@@ -338,15 +341,15 @@ onMounted(() => {
                       @click="showPasswordUpdate = false"
                       class="btn btn-ghost"
                     >
-                      Cancel
+                      {{ $t('userDetails.cancel') }}
                     </button>
                     <button 
                       type="submit"
                       :disabled="isUpdatingPassword"
                       class="btn btn-primary"
                     >
-                      <span v-if="isUpdatingPassword">Updating...</span>
-                      <span v-else>Update Password</span>
+                      <span v-if="isUpdatingPassword">{{ $t('userDetails.passwordUpdating') }}</span>
+                      <span v-else>{{ $t('userDetails.passwordUpdate') }}</span>
                     </button>
                   </div>
                 </form>
@@ -357,8 +360,8 @@ onMounted(() => {
               <div class="alert alert-warning">
                 <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
                 <div>
-                  <h3 class="font-bold">Delete Account</h3>
-                  <p>Deleting your account will remove all your data permanently. This action cannot be undone.</p>
+                  <h3 class="font-bold">{{ $t('userDetails.accountDeleteButton') }}</h3>
+                  <p>{{ $t('userDetails.accountDeleteWarning') }}</p>
                 </div>
               </div>
               
@@ -368,8 +371,8 @@ onMounted(() => {
                   :disabled="isDeleting"
                   class="btn btn-error w-full"
                 >
-                  <span v-if="isDeleting">Deleting...</span>
-                  <span v-else>Delete Account</span>
+                  <span v-if="isDeleting">{{ $t('userDetails.accountDeleting') }}</span>
+                  <span v-else>{{ $t('userDetails.accountDeleteButton') }}</span>
                 </button>
               </div>
             </div>

@@ -13,4 +13,4 @@ yarn-error.log*
 pnpm-debug.log*
 
 .vscode
-RefactoringPlan.md
+.plans
