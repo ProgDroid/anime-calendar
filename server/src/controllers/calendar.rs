@@ -169,6 +169,67 @@ async fn export(
     }
 }
 
+#[get("/calendars/subscribe/{token}")]
+async fn subscribe_feed(
+    calendar_mapper: web::Data<CalendarMapper>,
+    anilist: web::Data<Anilist>,
+    cache: web::Data<Cache>,
+    token: web::Path<String>,
+) -> HttpResponse {
+    match calendar_mapper.get_calendar_by_token(&token).await {
+        Ok(calendar_data) => {
+            let item_ids: Vec<Id> = calendar_data
+                .item_ids
+                .iter()
+                .filter_map(|id| Id::new(i64::from(*id)))
+                .collect();
+
+            let items = anilist.get_items(item_ids).await;
+
+            if items.is_empty() {
+                return Error::NotFound.error_response();
+            }
+
+            let Some(id) = Id::new(calendar_data.id.into()) else {
+                return Error::NotFound.error_response();
+            };
+
+            let calendar = Calendar {
+                id: id.clone(),
+                items,
+                language: calendar_data.language.to_common_language(),
+                name: calendar_data.name,
+                created_at: calendar_data.created_at,
+                updated_at: calendar_data.updated_at,
+            };
+
+            let file = generate_calendar_export(&calendar);
+
+            let cache_key = format!("subscribe:{}", token.as_str());
+            let cache_ttl = 3600; // 1 hour
+
+            match cache
+                .cached_response(&cache_key, cache_ttl, || async { Ok(format!("{file}")) })
+                .await
+            {
+                Ok(cached_file) => {
+                    return HttpResponse::Ok()
+                        .append_header(("Content-Type", "text/calendar; charset=utf-8"))
+                        .body(cached_file);
+                }
+                Err(e) => {
+                    eprintln!("Cache error: {e:?}");
+                }
+            }
+
+            HttpResponse::Ok()
+                .append_header(("Content-Type", "text/calendar; charset=utf-8"))
+                .body(format!("{file}"))
+        }
+        Err(e) => e.error_response(),
+    }
+}
+
 #[allow(clippy::cast_possible_truncation)]
 #[put("/calendar")]
 async fn put(
@@ -204,6 +265,7 @@ async fn put(
         item_ids,
         language: LanguageEntity::from_common_language(&body.language),
         name: body.name.clone(),
+        subscription_token: String::new(),
         user_id: user.id,
         created_at: NaiveDateTime::default(),
         updated_at: NaiveDateTime::default(),
@@ -250,6 +312,7 @@ struct PageCalendar {
     pub id: Id,
     pub item_count: usize,
     pub name: String,
+    pub subscription_token: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
 }
@@ -297,6 +360,7 @@ async fn get_calendars(
                         id,
                         item_count: calendar.item_ids.len(),
                         name: calendar.name,
+                        subscription_token: calendar.subscription_token,
                         created_at: calendar.created_at,
                         updated_at: calendar.updated_at,
                     });

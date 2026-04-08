@@ -85,7 +85,11 @@
     "deleteFailed": "Failed to delete calendar",
     "deleteConfirmTitle": "Delete Calendar",
     "deleteConfirmMessage": "Are you sure you want to delete this calendar? This cannot be undone.",
-    "exportFailed": "Failed to export calendar"
+    "exportFailed": "Failed to export calendar",
+    "exportDownload": "Download .ics",
+    "copyLink": "Copy subscription link",
+    "linkCopied": "Subscription link copied to clipboard!",
+    "openInGoogle": "Add to Google Calendar"
   },
   "login": {
     "google": {

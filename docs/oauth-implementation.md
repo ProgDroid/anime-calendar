@@ -1,95 +1,42 @@
-# OAuth Implementation Guide
+# OAuth Implementation
 
-This document explains the Google OAuth implementation for the anime-calendar application.
+Google OAuth is implemented using the `google-oauth` crate for server-side ID token verification.
 
-## Overview
+## Flow
 
-The application now supports OAuth login through Google, allowing users to authenticate using their existing social accounts instead of creating new credentials.
+1. User clicks "Continue with Google" in `GoogleLoginButton.vue`
+2. Frontend initiates the Google OAuth flow
+3. Google redirects back with an authorization code / ID token
+4. Frontend sends the token to `POST /auth/google`
+5. Backend verifies the ID token via `google-oauth` crate using the configured `google_client_id`
+6. Backend creates or updates the user record, then issues a JWT session token
+7. Frontend stores the JWT and proceeds as with a regular login
 
-## Backend Implementation
+## Backend
 
-### Services
+- **Controller**: `server/src/controllers/oauth.rs` — handles `POST /auth/google`
+- **Service**: `server/src/services/google_oauth.rs` — token verification logic using `google-oauth` crate
+- **Mapper**: `server/src/mappers/google_oauth.rs` — user creation/lookup from OAuth claims
 
-1. **Google OAuth Service** (`server/src/services/google_oauth.rs`)
-   - Handles Google ID token verification
-   - Extracts user information from verified tokens
-   - Provides mock implementation for demonstration
+OAuth users are stored in the same `users` table as regular users. JWT tokens are used for all subsequent session management.
 
-### Controllers
+## Configuration
 
-1. **OAuth Controller** (`server/src/controllers/oauth.rs`)
-   - `/auth/google` - Google OAuth endpoint
-   - The endpoint verifies tokens and creates/logs in users
-
-## Frontend Implementation
-
-### Components
-
-1. **GoogleLoginButton.vue**
-   - Shows Google OAuth button with proper styling
-   - Demonstrates the OAuth flow (redirect → callback → token exchange)
-
-3. **LoginPage.vue**
-   - Integrated OAuth buttons alongside regular login
-   - Maintains existing login functionality
-
-## OAuth Flow
-
-### Google OAuth Flow
-
-1. User clicks "Continue with Google"
-2. Frontend redirects to Google OAuth consent screen
-3. User authenticates and grants permissions
-4. Google redirects back to callback URL with authorization code
-5. Backend exchanges code for ID token
-6. Backend verifies token and creates/updates user
-7. Backend returns JWT token for session
-
-## Security Considerations
-
-1. **Token Verification**: All OAuth tokens must be properly verified using official APIs
-2. **HTTPS**: All OAuth flows must use HTTPS in production
-3. **Token Storage**: Access tokens should be stored securely
-4. **Rate Limiting**: Implement rate limiting for OAuth endpoints
-5. **Error Handling**: Proper error handling for invalid tokens
-
-## Configuration Requirements
-
-### Server Configuration
-
-Add to `config.toml`:
+`config.toml`:
 ```toml
-[oauth.google]
-client_id = "your-google-client-id"
-client_secret = "your-google-client-secret"
+google_client_id = "your-google-client-id"
 ```
 
-### Environment Variables
+The client secret is not needed server-side — verification uses the public Google certs.
 
-```bash
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-```
+## Frontend
 
-## Implementation Notes
+- `GoogleLoginButton.vue` — renders the OAuth button and handles the redirect/callback
+- `LoginPage.vue` — integrates the Google button alongside regular login form
 
-1. **Mock Implementation**: The current implementation uses mock functions for demonstration
-2. **Real Implementation**: Production code would use proper OAuth libraries:
-   - Google: `googleapis` or similar
-3. **Database Integration**: OAuth users are stored in the same database as regular users
-4. **Session Management**: JWT tokens are used for session management
+## Security Notes
 
-## Testing
-
-1. Run unit tests for OAuth services
-2. Test OAuth endpoint integration
-3. Verify user creation/update logic
-4. Test error scenarios (invalid tokens, etc.)
-
-## Future Improvements
-
-1. Add proper error handling for network failures
-2. Implement refresh token handling
-3. Add OAuth provider selection
-4. Implement better logging and monitoring
-5. Add support for more OAuth providers
+- ID tokens are verified against Google's public certificates (not just decoded)
+- All OAuth flows must use HTTPS in production
+- JWT tokens are short-lived; no refresh token implementation yet
+- Rate limiting for `/auth/google` is a known TODO

@@ -69,6 +69,7 @@ pub fn start(
             .service(items::get)
             .service(items::search)
             .service(calendar::export)
+            .service(calendar::subscribe_feed)
             .service(calendar::put)
             .service(calendar::get_calendar)
             .service(calendar::get_calendars)

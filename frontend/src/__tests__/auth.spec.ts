@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { setActivePinia, createPinia } from 'pinia'
 import { useAuthStore } from '../stores/auth'
 import api from '../config/api'
 
-// Mock the api calls
 vi.mock('../config/api', () => ({
   default: {
     post: vi.fn(),
@@ -10,15 +10,20 @@ vi.mock('../config/api', () => ({
   }
 }))
 
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push: vi.fn() })
+}))
+
 describe('Auth Store', () => {
   beforeEach(() => {
-    // Clear all mocks before each test
+    setActivePinia(createPinia())
     vi.clearAllMocks()
-    // Reset the store by creating a new instance
-    const store = useAuthStore()
-    // Manually reset the store state
-    store.token = ''
-    store.user = ''
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn().mockReturnValue(null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    })
   })
 
   it('should initialize with empty user and token', () => {
@@ -31,22 +36,18 @@ describe('Auth Store', () => {
     const mockResponse = {
       data: {
         token: 'mock-jwt-token',
-        user: {
-          id: 1,
-          username: 'testuser',
-          email: 'test@example.com'
-        }
+        username: 'testuser'
       }
     }
-    
+
     vi.mocked(api.post).mockResolvedValue(mockResponse)
-    
+
     const store = useAuthStore()
     const result = await store.login('test@example.com', 'password123')
-    
+
     expect(result).toEqual(mockResponse.data)
     expect(store.token).toBe('mock-jwt-token')
-    expect(store.user).toEqual(mockResponse.data.user)
+    expect(store.user).toBe('testuser')
     expect(api.post).toHaveBeenCalledWith('/login', {
       email: 'test@example.com',
       password: 'password123'
@@ -102,9 +103,9 @@ describe('Auth Store', () => {
     store.user = 'username'
     
     store.logout()
-    
+
     expect(store.token).toBe('')
-    expect(store.user).toBeNull()
+    expect(store.user).toBe('')
   })
 
   it('should get current user', async () => {
@@ -124,7 +125,7 @@ describe('Auth Store', () => {
     const result = await store.getCurrentUser()
     
     expect(result).toEqual(mockResponse.data)
-    expect(api.get).toHaveBeenCalledWith('/me')
+    expect(api.get).toHaveBeenCalledWith('/user')
   })
 
   it('should handle get current user failure', async () => {

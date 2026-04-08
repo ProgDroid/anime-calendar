@@ -42,9 +42,25 @@
             </div>
           </div>
           <div class="card-actions justify-end mt-4">
-            <button class="btn btn-sm btn-success" @click.stop="exportCalendar(calendar.id)">
-              {{ $t('calendars.export') }}
-            </button>
+            <div class="dropdown dropdown-end">
+              <div tabindex="0" role="button" class="btn btn-sm btn-success">
+                {{ $t('calendars.export') }}
+                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
+                </svg>
+              </div>
+              <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-10 w-52 p-2 shadow-lg border border-base-200">
+                <li>
+                  <button @click.stop="exportCalendar(calendar.id)">{{ $t('calendars.exportDownload') }}</button>
+                </li>
+                <li>
+                  <button @click.stop="copySubscriptionLink(calendar.subscription_token)">{{ $t('calendars.copyLink') }}</button>
+                </li>
+                <li>
+                  <button @click.stop="openInGoogleCalendar(calendar.subscription_token)">{{ $t('calendars.openInGoogle') }}</button>
+                </li>
+              </ul>
+            </div>
             <button class="btn btn-sm btn-primary" @click.stop="editCalendar(calendar.id)">
               {{ $t('calendars.edit') }}
             </button>
@@ -81,7 +97,8 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { PageCalendar } from '@/types/calendar'
-import api from '@/config/api'
+import api, { getApiUrl } from '@/config/api'
+import { toastService } from '@/services/toastService'
 import PaginationControls from '@/components/shared/PaginationControls.vue'
 import ConfirmModal from '@/components/shared/ConfirmModal.vue'
 
@@ -98,8 +115,10 @@ const calendarToDelete = ref<number | null>(null)
 onMounted(() => loadCalendars(1))
 
 const loadCalendars = async (page: number = 1) => {
-  loading.value = true
   error.value = null
+  const loadingTimer = setTimeout(() => {
+    loading.value = true
+  }, 150)
   try {
     const response = await api.get('/calendars', { params: { page, page_size: pagination.value.page_size } })
     calendars.value = response.data.data
@@ -107,6 +126,7 @@ const loadCalendars = async (page: number = 1) => {
   } catch {
     error.value = t('calendars.loadingFailed')
   } finally {
+    clearTimeout(loadingTimer)
     loading.value = false
   }
 }
@@ -133,6 +153,24 @@ const executeDelete = async () => {
 }
 
 const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString()
+
+const copySubscriptionLink = async (token: string) => {
+  try {
+    await navigator.clipboard.writeText(getApiUrl(`/calendars/subscribe/${token}`))
+    toastService.success(t('calendars.linkCopied'))
+  } catch {
+    error.value = t('errors.generic')
+  }
+}
+
+const openInGoogleCalendar = (token: string) => {
+  const icalUrl = getApiUrl(`/calendars/subscribe/${token}`)
+  window.open(
+    `https://calendar.google.com/calendar/r?cid=${encodeURIComponent(icalUrl)}`,
+    '_blank',
+    'noopener,noreferrer',
+  )
+}
 
 const exportCalendar = async (id: number) => {
   try {

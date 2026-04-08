@@ -5,6 +5,7 @@ use crate::{
     mappers::database::Database,
     ServerResult,
 };
+use rand::{distr::Alphanumeric, Rng};
 use sqlx::{Postgres, QueryBuilder};
 
 #[derive(Clone)]
@@ -13,6 +14,14 @@ pub struct CalendarMapper {
 }
 
 impl CalendarMapper {
+    fn generate_subscription_token() -> String {
+        rand::rng()
+            .sample_iter(&Alphanumeric)
+            .take(43)
+            .map(char::from)
+            .collect()
+    }
+
     /// # Errors
     /// Fails if database connection fails
     pub async fn new(config: DatabaseConfig) -> ServerResult<Self> {
@@ -29,6 +38,7 @@ impl CalendarMapper {
                 id,
                 language as \"language: Language\",
                 name,
+                subscription_token,
                 user_id,
                 created_at,
                 updated_at FROM calendars WHERE id = $1 AND user_id = $2",
@@ -45,17 +55,52 @@ impl CalendarMapper {
         .fetch_all(&self.db.pool)
         .await?;
 
-        let calendar_result = Calendar {
+        Ok(Calendar {
             id: calendar.id,
             name: calendar.name,
             item_ids,
             language: calendar.language,
+            subscription_token: calendar.subscription_token,
             user_id: calendar.user_id,
             created_at: calendar.created_at,
             updated_at: calendar.updated_at,
-        };
+        })
+    }
 
-        Ok(calendar_result)
+    /// # Errors
+    /// Returns an error if the query fails or the token is not found
+    pub async fn get_calendar_by_token(&self, token: &str) -> ServerResult<Calendar> {
+        let calendar = sqlx::query!(
+            "SELECT
+                id,
+                language as \"language: Language\",
+                name,
+                subscription_token,
+                user_id,
+                created_at,
+                updated_at FROM calendars WHERE subscription_token = $1",
+            token
+        )
+        .fetch_one(&self.db.pool)
+        .await?;
+
+        let item_ids: Vec<i32> = sqlx::query_scalar!(
+            "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
+            calendar.id
+        )
+        .fetch_all(&self.db.pool)
+        .await?;
+
+        Ok(Calendar {
+            id: calendar.id,
+            name: calendar.name,
+            item_ids,
+            language: calendar.language,
+            subscription_token: calendar.subscription_token,
+            user_id: calendar.user_id,
+            created_at: calendar.created_at,
+            updated_at: calendar.updated_at,
+        })
     }
 
     #[allow(
@@ -89,6 +134,7 @@ impl CalendarMapper {
                 ARRAY[]::INTEGER[] as \"item_ids!\",
                 language as \"language: Language\",
                 name,
+                subscription_token,
                 user_id,
                 created_at,
                 updated_at FROM calendars WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
@@ -114,6 +160,7 @@ impl CalendarMapper {
                 name: calendar_entity.name,
                 item_ids,
                 language: calendar_entity.language,
+                subscription_token: calendar_entity.subscription_token,
                 user_id: calendar_entity.user_id,
                 created_at: calendar_entity.created_at,
                 updated_at: calendar_entity.updated_at,
@@ -135,11 +182,13 @@ impl CalendarMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn insert_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
+        let token = Self::generate_subscription_token();
         let inserted_calendar = sqlx::query!(
-            "INSERT INTO calendars (name, language, user_id) VALUES ($1, $2, $3) RETURNING id, name, language as \"language: Language\", user_id, created_at, updated_at",
+            "INSERT INTO calendars (name, language, user_id, subscription_token) VALUES ($1, $2, $3, $4) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
             calendar.name,
             calendar.language as Language,
             calendar.user_id,
+            token,
         )
         .fetch_one(&self.db.pool)
         .await?;
@@ -147,24 +196,23 @@ impl CalendarMapper {
         self.update_calendar_items(inserted_calendar.id, calendar.item_ids.clone())
             .await?;
 
-        let result = Calendar {
+        Ok(Calendar {
             id: inserted_calendar.id,
             name: inserted_calendar.name,
             item_ids: calendar.item_ids,
             language: inserted_calendar.language,
+            subscription_token: inserted_calendar.subscription_token,
             user_id: inserted_calendar.user_id,
             created_at: inserted_calendar.created_at,
             updated_at: inserted_calendar.updated_at,
-        };
-
-        Ok(result)
+        })
     }
 
     /// # Errors
     /// Returns an error if the query fails.
     pub async fn update_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
         let updated_calendar = sqlx::query!(
-            "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 RETURNING id, name, language as \"language: Language\", user_id, created_at, updated_at",
+            "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
             calendar.name,
             calendar.language as Language,
             calendar.id,
@@ -176,17 +224,16 @@ impl CalendarMapper {
         self.update_calendar_items(updated_calendar.id, calendar.item_ids.clone())
             .await?;
 
-        let result = Calendar {
+        Ok(Calendar {
             id: updated_calendar.id,
             name: updated_calendar.name,
             item_ids: calendar.item_ids,
             language: updated_calendar.language,
+            subscription_token: updated_calendar.subscription_token,
             user_id: updated_calendar.user_id,
             created_at: updated_calendar.created_at,
             updated_at: updated_calendar.updated_at,
-        };
-
-        Ok(result)
+        })
     }
 
     async fn update_calendar_items(

@@ -85,7 +85,11 @@
     "deleteFailed": "Falha ao remover calendário",
     "deleteConfirmTitle": "Excluir Calendário",
     "deleteConfirmMessage": "Tem certeza que deseja excluir este calendário? Isso não pode ser desfeito.",
-    "exportFailed": "Falha ao exportar o calendário"
+    "exportFailed": "Falha ao exportar o calendário",
+    "exportDownload": "Baixar .ics",
+    "copyLink": "Copiar link de assinatura",
+    "linkCopied": "Link de assinatura copiado para a área de transferência!",
+    "openInGoogle": "Adicionar ao Google Agenda"
   },
   "login": {
     "google": {

@@ -36,6 +36,7 @@ pub struct Calendar {
     pub item_ids: Vec<i32>,
     pub language: Language,
     pub name: String,
+    pub subscription_token: String,
     pub user_id: i32,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,

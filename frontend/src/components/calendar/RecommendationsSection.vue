@@ -30,11 +30,10 @@ const getTitle = (item: Item): string => {
     <div class="card-body">
       <h2 class="card-title">{{ t('calendar.recommendedItems') }}</h2>
 
-      <div v-if="recommendations.length > 0" class="carousel carousel-center w-full gap-1">
+      <div v-if="recommendations.length > 0" class="grid grid-cols-5 gap-2">
         <div
           v-for="item in recommendations"
           :key="item.id"
-          class="carousel-item w-[calc(20%-6px)]"
         >
           <MediaItemCard
             :item="item"

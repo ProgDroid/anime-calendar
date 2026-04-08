@@ -91,11 +91,8 @@ describe('MediaItemCard', () => {
       props: { item: bannerItem, displayTitle: 'Attack on Titan', isSelected: true, isInCalendar: false },
       ...mountOpts
     })
-    // The overlay div should be visible (v-show)
     const overlays = wrapper.findAll('.absolute.inset-0')
-    const visible = overlays.filter(el => !el.isVisible())
     expect(overlays.length).toBeGreaterThan(0)
-    // At least one overlay should be visible when selected
-    expect(wrapper.findAll('.absolute.inset-0').some(el => el.isVisible())).toBe(true)
+    expect(overlays.some(el => el.isVisible())).toBe(true)
   })
 })

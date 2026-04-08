@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 RETURNING id, name, language as \"language: Language\", user_id, created_at, updated_at",
+  "query": "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -31,16 +31,21 @@
       },
       {
         "ordinal": 3,
+        "name": "subscription_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
         "name": "user_id",
         "type_info": "Int4"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "created_at",
         "type_info": "Timestamp"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "updated_at",
         "type_info": "Timestamp"
       }
@@ -70,8 +75,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "5d9a0f3d9cbda56231f80eec1204aa63b8586cea9a4cd6eb6906ce0e4a5f62f1"
+  "hash": "05306d339fbc5ff7ed2d60c344e5eb4596a1c33859fa337da6ec2695b73efe2f"
 }

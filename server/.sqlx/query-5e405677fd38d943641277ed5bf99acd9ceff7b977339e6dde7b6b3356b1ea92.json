@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                id,\n                ARRAY[]::INTEGER[] as \"item_ids!\",\n                language as \"language: Language\",\n                name,\n                user_id,\n                created_at,\n                updated_at FROM calendars WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+  "query": "SELECT\n                id,\n                language as \"language: Language\",\n                name,\n                subscription_token,\n                user_id,\n                created_at,\n                updated_at FROM calendars WHERE id = $1 AND user_id = $2",
   "describe": {
     "columns": [
       {
@@ -10,11 +10,6 @@
       },
       {
         "ordinal": 1,
-        "name": "item_ids!",
-        "type_info": "Int4Array"
-      },
-      {
-        "ordinal": 2,
         "name": "language: Language",
         "type_info": {
           "Custom": {
@@ -30,9 +25,14 @@
         }
       },
       {
-        "ordinal": 3,
+        "ordinal": 2,
         "name": "name",
         "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "subscription_token",
+        "type_info": "Text"
       },
       {
         "ordinal": 4,
@@ -53,13 +53,12 @@
     "parameters": {
       "Left": [
         "Int4",
-        "Int8",
-        "Int8"
+        "Int4"
       ]
     },
     "nullable": [
       false,
-      null,
+      false,
       false,
       false,
       false,
@@ -67,5 +66,5 @@
       false
     ]
   },
-  "hash": "98911b360a9d6772690016ef01a16f70cbc45e81e7b209d041dfd8eeb38565b6"
+  "hash": "5e405677fd38d943641277ed5bf99acd9ceff7b977339e6dde7b6b3356b1ea92"
 }

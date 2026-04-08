@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO calendars (name, language, user_id) VALUES ($1, $2, $3) RETURNING id, name, language as \"language: Language\", user_id, created_at, updated_at",
+  "query": "INSERT INTO calendars (name, language, user_id, subscription_token) VALUES ($1, $2, $3, $4) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -31,16 +31,21 @@
       },
       {
         "ordinal": 3,
+        "name": "subscription_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
         "name": "user_id",
         "type_info": "Int4"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "created_at",
         "type_info": "Timestamp"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "updated_at",
         "type_info": "Timestamp"
       }
@@ -60,7 +65,8 @@
             }
           }
         },
-        "Int4"
+        "Int4",
+        "Text"
       ]
     },
     "nullable": [
@@ -69,8 +75,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "08433ef23814498304dfb6f88dab8f676dc5feb2ca1f6906dc9140cd787f8176"
+  "hash": "b7b12a0430182067f2ec9a871da20afab616ee5286ec109139ba7e0f7c1bffbf"
 }

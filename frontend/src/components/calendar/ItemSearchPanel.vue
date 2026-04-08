@@ -39,7 +39,7 @@ const handleSearch = () => {
 </script>
 
 <template>
-  <div class="flex flex-col gap-4">
+  <div class="flex flex-col gap-4 flex-1 min-h-0">
     <!-- Search form -->
     <div class="form-control">
       <label class="label">
@@ -86,7 +86,8 @@ const handleSearch = () => {
     <div v-if="searchError" class="alert alert-error">{{ searchError }}</div>
 
     <!-- Results list -->
-    <div class="overflow-y-auto max-h-[400px] min-h-[250px] p-2 border rounded flex flex-col gap-1">
+    <h3 class="font-bold">{{ t('calendar.fetchedItems') }}</h3>
+    <div class="overflow-y-auto max-h-[400px] flex-1 min-h-0 p-2 border rounded space-y-1">
       <MediaItemCard
         v-for="item in fetchedItems"
         :key="item.id"

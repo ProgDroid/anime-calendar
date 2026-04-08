@@ -14,3 +14,4 @@ pnpm-debug.log*
 
 .vscode
 .plans
+.playwright-mcp

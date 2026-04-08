@@ -1,11 +1,10 @@
 <template>
   <div class="min-h-[calc(100vh-6.1rem)] bg-base-200 p-4">
-    <h1 class="text-2xl font-bold mb-6">{{ $t('calendar.edit') }}</h1>
-
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl mx-auto">
       <!-- Calendar settings + items list -->
       <div class="card bg-base-100 shadow-md">
         <div class="card-body flex flex-col gap-4">
+          <h2 class="card-title">{{ $t('calendar.edit') }}</h2>
           <CalendarSettingsForm
             :name="calendarName"
             :language="calendarLanguage"
@@ -27,7 +26,7 @@
 
       <!-- Search panel -->
       <div class="card bg-base-100 shadow-md">
-        <div class="card-body">
+        <div class="card-body flex flex-col gap-4">
           <h2 class="card-title">{{ $t('calendar.search') }}</h2>
           <ItemSearchPanel
             :fetched-items="fetchedItems"
@@ -94,7 +93,7 @@ const handleSearch = async ({ name, mediaType }: { name: string; mediaType: '' |
   loading.value = true
   searchError.value = null
   try {
-    let url = `/items/search?name=${encodeURIComponent(name)}`
+    let url = `/search?name=${encodeURIComponent(name)}`
     if (mediaType) url += `&media_type=${mediaType}`
     const response = await api.get(url)
     fetchedItems.value = response.data
