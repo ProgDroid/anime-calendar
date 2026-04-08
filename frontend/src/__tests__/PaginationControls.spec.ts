@@ -32,7 +32,7 @@ describe('PaginationControls', () => {
     })
     const buttons = wrapper.findAll('button')
     // Click page 2 (third button: prev, page1, page2...)
-    await buttons[2].trigger('click')
+    await buttons[2]!.trigger('click')
     expect(wrapper.emitted('page-change')).toBeTruthy()
   })
 

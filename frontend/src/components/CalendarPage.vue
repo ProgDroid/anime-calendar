@@ -1,661 +1,80 @@
 <template>
   <div class="min-h-[calc(100vh-6.1rem)] bg-base-200 p-4">
     <h1 class="text-2xl font-bold mb-6">{{ $t('calendar.edit') }}</h1>
-    
-    <!-- Mobile Layout -->
-    <div v-if="isMobile" class="flex flex-col gap-6">
-      <!-- Search Section -->
+
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl mx-auto">
+      <!-- Calendar settings + items list -->
+      <div class="card bg-base-100 shadow-md">
+        <div class="card-body flex flex-col gap-4">
+          <CalendarSettingsForm
+            :name="calendarName"
+            :language="calendarLanguage"
+            :loading="loading"
+            :can-submit="itemsInCalendar.length > 0"
+            :error="calendarError"
+            @update:name="calendarName = $event"
+            @update:language="calendarLanguage = $event"
+            @submit="submitCalendar"
+          />
+          <CalendarItemsList
+            :items="itemsInCalendar"
+            :calendar-language="calendarLanguage"
+            @remove="removeItemFromCalendar"
+            @clear="clearCalendar"
+          />
+        </div>
+      </div>
+
+      <!-- Search panel -->
       <div class="card bg-base-100 shadow-md">
         <div class="card-body">
           <h2 class="card-title">{{ $t('calendar.search') }}</h2>
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">{{ $t('calendar.itemName') }}:</span>
-            </label>
-            <input 
-              id="nameInput" 
-              v-model="nameInput" 
-              type="text" 
-              :placeholder="$t('calendar.itemNamePlaceholder')"
-              class="input input-bordered mt-2"
-            />
-          </div>
-          
-          <div class="form-control">
-            <label class="label mb-2">
-              <span class="label-text">{{ $t('calendar.mediaType') }}:</span>
-            </label>
-            <div class="flex gap-4 mb-2">
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="mediaType" 
-                  type="radio" 
-                  value=""
-                  class="radio radio-primary"
-                />
-                <span class="label-text">{{ $t('calendar.mediaTypeAny') }}</span>
-              </label>
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="mediaType" 
-                  type="radio" 
-                  value="ANIME" 
-                  class="radio radio-primary"
-                />
-                <span class="label-text">{{ $t('calendar.mediaTypeAnime') }}</span>
-              </label>
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="mediaType" 
-                  type="radio" 
-                  value="MANGA" 
-                  class="radio radio-primary"
-                />
-                <span class="label-text">{{ $t('calendar.mediaTypeManga') }}</span>
-              </label>
-            </div>
-          </div>
-          
-          <button @click="fetchItems" :disabled="loading" class="btn btn-primary w-full">
-            {{ loading ? $t('calendar.fetchingItems') : $t('calendar.fetchItems') }}
-          </button>
-          
-          <div v-if="searchError" class="alert alert-error mt-4">
-            {{ searchError }}
-          </div>
-        </div>
-      </div>
-
-      <!-- Fetched Items Section -->
-      <div class="card bg-base-100 shadow-md">
-        <div class="card-body">
-          <h3 class="font-bold mb-2">{{ $t('calendar.fetchedItems') }}</h3>
-          <div class="overflow-y-auto max-h-96 p-2 border rounded max-h-[250px] min-h-[250px]">
-            <div class="flex flex-col gap-1">
-                  <div 
-                    v-for="item in fetchedItems" 
-                    :key="item.id" 
-                    class="card bg-base-100 shadow-sm border"
-                    :class="{ 
-                      'border-primary': selectedItems.includes(item.id),
-                      'border-success': itemsInCalendar.some(calendarItem => calendarItem.id === item.id)
-                    }"
-                    @click="!itemsInCalendar.some(calendarItem => calendarItem.id === item.id) && toggleItemSelection(item.id)"
-                  >
-                    <div class="card-body p-3 relative overflow-hidden">
-                      <div class="flex items-start gap-2">
-                        <div class="flex-shrink-0">
-                          <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
-                            <img 
-                              :src="item.cover_image.medium" 
-                              :alt="item.title.romaji" 
-                              class="w-full h-full object-cover"
-                              @error="onImageError"
-                              @load="onImageLoad"
-                            />
-                          </div>
-                          <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                            <span class="text-xs">{{ $t('calendar.noImage') }}</span>
-                          </div>
-                        </div>
-                        <div class="flex-grow">
-                          <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
-                          <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
-                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">{{ $t('calendar.episodes')}}: {{ item.episode_duration }}</p>
-                        </div>
-                      </div>
-                      <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="absolute top-2 right-2 bg-success text-white text-xs px-2 py-1 rounded">
-                        {{ $t('calendar.alreadyInCalendar') }}
-                      </div>
-                      <!-- Background image for selected items -->
-                      <div 
-                        v-if="selectedItems.includes(item.id) && item.banner_image"
-                        class="absolute inset-0 transition-all duration-300 ease-in-out"
-                        :class="{ 
-                          'opacity-0': !selectedItems.includes(item.id),
-                          'opacity-100': selectedItems.includes(item.id)
-                        }"
-                        :style="{ 
-                          'background-image': `url(${item.banner_image})`,
-                          'background-size': 'cover',
-                          'background-position': 'center',
-                          'background-repeat': 'no-repeat',
-                          'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 65%, rgba(0,0,0,1) 95%)',
-                          'border-radius': '8px 8px 8px 8px'
-                        }"
-                      >
-                      </div>
-                      <div
-                        v-if="!item.banner_image && item.cover_image?.medium && selectedItems.includes(item.id)"
-                        class="absolute inset-0 transition-all duration-300 ease-in-out"
-                        :class="{ 
-                          'opacity-0': !selectedItems.includes(item.id),
-                          'opacity-100': selectedItems.includes(item.id)
-                        }"
-                        :style="{ 
-                          'background-image': `url(${item.cover_image?.medium})`,
-                          'background-size': 'fit',
-                          'background-position': 'right',
-                          'background-repeat': 'no-repeat',
-                          'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.0) 83.5%, rgba(0,0,0,1) 95%)',
-                          'border-radius': '8px 8px 8px 8px'
-                        }"
-                      >
-                      </div>
-                    </div>
-                  </div>
-            </div>
-          </div>
-          
-          <div class="mt-4">
-            <button @click="addItemToCalendar" :disabled="selectedItems.length === 0" class="btn btn-primary w-full">
-              {{ $t('calendar.addSelectedToCalendar') }}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <!-- Calendar Section -->
-      <div class="card bg-base-100 shadow-md">
-        <div class="card-body">
-          <h2 class="card-title">{{ $t('calendar.title') }}</h2>
-          <div class="form-control">
-            <label class="label">
-              <span class="label-text">{{ $t('calendar.name') }}:</span>
-            </label>
-            <div class="relative">
-              <input 
-                id="calendarName" 
-                v-model="calendarName" 
-                type="text" 
-                placeholder="{{ $t('calendar.namePlaceholder') }}"
-                class="input input-bordered mt-2 w-full pr-16"
-              />
-              <div class="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500">
-                {{ calendarName.length }}/100
-              </div>
-            </div>
-          </div>
-
-          <div class="form-control">
-            <label class="label mb-2">
-              <span class="label-text">{{ $t('calendar.language') }}:</span>
-            </label>
-            <div class="flex gap-4">
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="calendarLanguage" 
-                  type="radio" 
-                  value="english" 
-                  class="radio radio-primary"
-                />
-                <span class="label-text">{{ $t('calendar.english') }}</span>
-              </label>
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="calendarLanguage" 
-                  type="radio" 
-                  value="romaji" 
-                  class="radio radio-primary"
-                />
-                <span class="label-text">{{ $t('calendar.romaji') }}</span>
-              </label>
-              <label class="label cursor-pointer">
-                <input 
-                  v-model="calendarLanguage" 
-                  type="radio" 
-                  value="native" 
-                  class="radio radio-primary"
-                />
-                <span class="label-text">{{ $t('calendar.native') }}</span>
-              </label>
-            </div>
-          </div>
-
-          <div v-if="calendarError" class="alert alert-error mt-4">
-            {{ calendarError }}
-          </div>
-
-          <div v-if="itemsInCalendar.length > 0" class="mt-4">
-            <h3 class="font-bold mb-2">{{ $t('calendar.itemsInCalendar') }}</h3>
-            <div class="overflow-y-auto max-h-[400px] min-h-[400px] p-2 border rounded">
-              <div class="flex flex-col gap-1">
-                <div 
-                  v-for="item in itemsInCalendar" 
-                  :key="item.id" 
-                  class="card bg-base-100 shadow-sm border"
-                >
-                  <div class="card-body p-3">
-                    <div class="flex items-start gap-2">
-                      <div class="flex-shrink-0">
-                        <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
-                          <img 
-                            :src="item.cover_image.medium" 
-                            :alt="item.title.romaji" 
-                            class="w-full h-full object-cover"
-                            @error="onImageError"
-                            @load="onImageLoad"
-                          />
-                        </div>
-                        <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                          <span class="text-xs">{{ $t('calendar.noImage') }}</span>
-                        </div>
-                      </div>
-                      <div class="flex-grow">
-                        <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
-                        <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
-                        <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">{{ $t('calendar.episodes') }}: {{ item.episode_duration }}</p>
-                      </div>
-                    </div>
-                    <button @click="removeItemFromCalendar(item.id)" class="btn btn-sm btn-error mt-2">
-                      {{ $t('calendar.remove') }}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-            
-            <!-- Recommendations Section -->
-            <div v-if="recommendations.length > 0" class="mt-6">
-              <h3 class="font-bold mb-2">{{ $t('calendar.recommendedItems') }}</h3>
-              <div class="carousel w-full gap-4">
-                <div 
-                  v-for="item in recommendations" 
-                  :key="item.id" 
-                  class="card bg-base-100 shadow-sm border carousel-item w-64"
-                >
-                  <div class="card-body p-3">
-                    <div class="flex items-start gap-2">
-                      <div class="flex-shrink-0">
-                        <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
-                          <img 
-                            :src="item.cover_image.medium" 
-                            :alt="item.title.romaji" 
-                            class="w-full h-full object-cover"
-                            @error="onImageError"
-                            @load="onImageLoad"
-                          />
-                        </div>
-                        <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                          <span class="text-xs">{{ $t('calendar.noImage') }}</span>
-                        </div>
-                      </div>
-                      <div class="flex-grow">
-                        <h4 class="font-bold line-clamp-1 text-sm">{{ getSelectedItemTitle(item) }}</h4>
-                        <div class="badge badge-secondary mt-1 text-xs">{{ item.media_type }}</div>
-                        <div class="mt-1">
-                          <button 
-                            @click.stop="addItemToCalendarSingle(item)"
-                            class="btn btn-primary btn-xs absolute bottom-2 right-2"
-                          >
-                            {{ $t('calendar.add') }}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div class="mt-4">
-              <button @click="clearCalendar" class="btn btn-warning w-full" :disabled="itemsInCalendar.length === 0">
-                {{ $t('calendar.clear') }}
-              </button>
-            </div>
-          </div>
-
-          <div class="mt-4">
-            <button @click="submitCalendar" :disabled="loading || itemsInCalendar.length === 0" class="btn btn-success w-full">
-              {{ loading ? $t('calendar.submitting') : $t('calendar.submit') }}
-            </button>
-          </div>
+          <ItemSearchPanel
+            :fetched-items="fetchedItems"
+            :selected-items="selectedItems"
+            :items-in-calendar="itemsInCalendar"
+            :loading="loading"
+            :calendar-language="calendarLanguage"
+            :search-error="searchError"
+            @search="handleSearch"
+            @toggle-selection="toggleItemSelection"
+            @add-selected="addItemToCalendar"
+          />
         </div>
       </div>
     </div>
 
-      <!-- Desktop/Tablet Layout -->
-      <div v-else class="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl mx-auto">
-        <!-- Calendar Block -->
-        <div class="card bg-base-100 shadow-md">
-          <div class="card-body">
-            <h2 class="card-title">{{ $t('calendar.title') }}</h2>
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">{{ $t('calendar.name') }}:</span>
-              </label>
-              <div class="relative">
-                <input 
-                  id="calendarName" 
-                  v-model="calendarName" 
-                  type="text" 
-                  placeholder="{{ $t('calendar.namePlaceholder') }}"
-                  class="input input-bordered ml-2 w-full pr-19"
-                />
-                <div class="absolute right-3 top-1/2 transform -translate-y-1/2 text-sm text-gray-500">
-                  {{ calendarName.length }}/100
-                </div>
-              </div>
-            </div>
-
-            <div class="form-control">
-              <label class="label mb-2">
-                <span class="label-text">{{ $t('calendar.language') }}:</span>
-              </label>
-              <div class="flex gap-4">
-                <label class="label cursor-pointer">
-                  <input 
-                    v-model="calendarLanguage" 
-                    type="radio" 
-                    value="english" 
-                    class="radio radio-primary"
-                  />
-                  <span class="label-text">{{ $t('calendar.english') }}</span>
-                </label>
-                <label class="label cursor-pointer">
-                  <input 
-                    v-model="calendarLanguage" 
-                    type="radio" 
-                    value="romaji" 
-                    class="radio radio-primary"
-                  />
-                  <span class="label-text">{{ $t('calendar.romaji') }}</span>
-                </label>
-                <label class="label cursor-pointer">
-                  <input 
-                    v-model="calendarLanguage" 
-                    type="radio" 
-                    value="native" 
-                    class="radio radio-primary"
-                  />
-                  <span class="label-text">{{ $t('calendar.native') }}</span>
-                </label>
-              </div>
-            </div>
-
-            <div class="mt-4">
-              <button @click="submitCalendar" :disabled="loading || itemsInCalendar.length === 0" class="btn btn-success">
-                {{ loading ? $t('calendar.submitting') : $t('calendar.submit') }}
-              </button>
-            </div>
-
-            <div v-if="calendarError" class="alert alert-error mt-4">
-              {{ calendarError }}
-            </div>
-          </div>
-          
-          <div class="card-body">
-            <div class="flex flex-col gap-4">
-              <h3 class="font-bold">{{ $t('calendar.itemsInCalendar') }}</h3>
-              <div class="overflow-y-auto max-h-[400px] min-h-[400px] p-2 border rounded">
-                <div class="flex flex-col gap-1">
-                  <div 
-                    v-for="item in itemsInCalendar" 
-                    :key="item.id" 
-                    class="card bg-base-100 shadow-sm border"
-                  >
-                    <div class="card-body p-3">
-                      <div class="flex items-start gap-2">
-                        <div class="flex-shrink-0">
-                          <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
-                            <img 
-                              :src="item.cover_image.medium" 
-                              :alt="item.title.romaji" 
-                              class="w-full h-full object-cover"
-                              @error="onImageError"
-                              @load="onImageLoad"
-                            />
-                          </div>
-                          <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                            <span class="text-xs">{{ $t('calendar.noImage') }}</span>
-                          </div>
-                        </div>
-                        <div class="flex-grow">
-                          <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
-                          <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
-                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">{{ $t('calendar.episodes') }}: {{ item.episode_duration }}</p>
-                        </div>
-                      </div>
-                      <button @click="removeItemFromCalendar(item.id)" class="btn btn-sm btn-error mt-2">
-                        {{ $t('calendar.remove') }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              <button @click="clearCalendar" class="btn btn-warning w-full" :disabled="itemsInCalendar.length === 0">
-                {{ $t('calendar.clear') }}
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <!-- Search Block -->
-        <div class="card bg-base-100 shadow-md">
-          <div class="card-body">
-            <h2 class="card-title">{{ $t('calendar.search') }}</h2>
-            <div class="form-control">
-              <label class="label">
-                <span class="label-text">{{ $t('calendar.itemName') }}:</span>
-              </label>
-              <input 
-                id="nameInput"
-                v-model="nameInput"
-                type="text" 
-                :placeholder="$t('calendar.itemNamePlaceholder')"
-                class="input input-bordered ml-2"
-              />
-            </div>
-            
-            <div class="form-control">
-              <label class="label mb-2">
-                <span class="label-text">{{ $t('calendar.mediaType') }}:</span>
-              </label>
-              <div class="flex gap-4">
-                <label class="label cursor-pointer">
-                  <input 
-                    v-model="mediaType" 
-                    type="radio" 
-                    value="" 
-                    class="radio radio-primary"
-                  />
-                  <span class="label-text">{{ $t('calendar.mediaTypeAny') }}</span>
-                </label>
-                <label class="label cursor-pointer">
-                  <input 
-                    v-model="mediaType" 
-                    type="radio" 
-                    value="ANIME" 
-                    class="radio radio-primary"
-                  />
-                  <span class="label-text">{{ $t('calendar.mediaTypeAnime') }}</span>
-                </label>
-                <label class="label cursor-pointer">
-                  <input 
-                    v-model="mediaType" 
-                    type="radio" 
-                    value="MANGA" 
-                    class="radio radio-primary"
-                  />
-                  <span class="label-text">{{ $t('calendar.mediaTypeManga') }}</span>
-                </label>
-              </div>
-            </div>
-            
-            <div class="mt-4">
-              <button @click="fetchItems" :disabled="loading" class="btn btn-primary">
-                {{ loading ? $t('calendar.fetching') : $t('calendar.fetchItems') }}
-              </button>
-            </div>
-            
-            <div v-if="searchError" class="alert alert-error mt-4">
-              {{ searchError }}
-            </div>
-          </div>
-          
-          <div class="card-body">
-            <div class="flex flex-col gap-4">
-              <h3 class="font-bold">{{ $t('calendar.fetchedItems') }}</h3>
-              <div class="overflow-y-auto max-h-[400px] min-h-[400px] p-2 border rounded">
-                <div class="flex flex-col gap-1">
-                  <div 
-                    v-for="item in fetchedItems" 
-                    :key="item.id" 
-                    class="card bg-base-100 shadow-sm border"
-                    :class="{ 
-                      'border-primary': selectedItems.includes(item.id),
-                      'border-success': itemsInCalendar.some(calendarItem => calendarItem.id === item.id)
-                    }"
-                    @click="!itemsInCalendar.some(calendarItem => calendarItem.id === item.id) && toggleItemSelection(item.id)"
-                  >
-                    <div class="card-body p-3">
-                      <div class="flex items-start gap-2">
-                        <div class="flex-shrink-0">
-                          <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
-                            <img 
-                              :src="item.cover_image.medium" 
-                              :alt="item.title.romaji" 
-                              class="w-full h-full object-cover"
-                              @error="onImageError"
-                              @load="onImageLoad"
-                            />
-                          </div>
-                          <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                            <span class="text-xs">{{ $t('calendar.noImage') }}</span>
-                          </div>
-                        </div>
-                        <div class="flex-grow">
-                          <h4 class="font-bold line-clamp-1">{{ getSelectedItemTitle(item) }}</h4>
-                          <div class="badge badge-secondary mt-1">{{ item.media_type }}</div>
-                          <p v-if="item.media_type === 'ANIME'" class="text-xs mt-1">{{ $t('calendar.episodes') }}: {{ item.episode_duration }}</p>
-                        </div>
-                      </div>
-                      <div v-if="itemsInCalendar.some(calendarItem => calendarItem.id === item.id)" class="absolute top-2 right-2 bg-success text-white text-xs px-2 py-1 rounded">
-                        {{ $t('calendar.alreadyInCalendar') }}
-                      </div>
-                      <!-- Background image for selected items -->
-                      <div 
-                        v-if="selectedItems.includes(item.id) && item.banner_image"
-                        class="absolute inset-0 transition-all duration-300 ease-in-out"
-                        :class="{ 
-                          'opacity-0': !selectedItems.includes(item.id),
-                          'opacity-100': selectedItems.includes(item.id)
-                        }"
-                        :style="{ 
-                          'background-image': `url(${item.banner_image})`,
-                          'background-size': 'cover',
-                          'background-position': 'center',
-                          'background-repeat': 'no-repeat',
-                          'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 65%, rgba(0,0,0,1) 95%)',
-                          'border-radius': '8px 8px 8px 8px'
-                        }"
-                      >
-                      </div>
-                      <div
-                        v-if="!item.banner_image && item.cover_image?.medium && selectedItems.includes(item.id)"
-                        class="absolute inset-0 transition-all duration-300 ease-in-out"
-                        :class="{ 
-                          'opacity-0': !selectedItems.includes(item.id),
-                          'opacity-100': selectedItems.includes(item.id)
-                        }"
-                        :style="{ 
-                          'background-image': `url(${item.cover_image?.medium})`,
-                          'background-size': 'fit',
-                          'background-position': 'right',
-                          'background-repeat': 'no-repeat',
-                          'mask-image': 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.0) 83.5%, rgba(0,0,0,1) 95%)',
-                          'border-radius': '8px 8px 8px 8px'
-                        }"
-                      >
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <button @click="addItemToCalendar" :disabled="selectedItems.length === 0" class="btn btn-primary w-full">
-                {{ $t('calendar.addSelectedToCalendar') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    <div class="max-w-6xl mx-auto">
-      <div v-if="!isMobile" class="card bg-base-100 shadow-md mt-4">
-        <div class="card-body">
-          <h2 class="card-title">{{ $t('calendar.recommendedItems') }}</h2>
-          <!-- Recommendations Section -->
-          <div v-if="recommendations.length > 0" class="mt-4">
-            <!-- DaisyUI Carousel for Desktop Layout Only -->
-            <div class="hidden lg:block">
-              <div class="carousel carousel-center w-full gap-1">
-                <div 
-                  v-for="item in recommendations" 
-                  :key="item.id" 
-                  class="card bg-base-100 shadow-sm border carousel-item w-[calc(20%-6px)]"
-                >
-                  <div class="card-body p-3">
-                    <div class="flex items-start gap-2">
-                      <div class="flex-shrink-0">
-                        <div v-if="item.cover_image?.medium" class="bg-gray-200 border rounded w-16 h-20 overflow-hidden">
-                          <img 
-                            :src="item.cover_image.medium" 
-                            :alt="item.title.romaji" 
-                            class="w-full h-full object-cover"
-                            @error="onImageError"
-                            @load="onImageLoad"
-                          />
-                        </div>
-                        <div v-else class="bg-gray-200 border rounded w-16 h-20 flex items-center justify-center">
-                          <span class="text-xs">{{ $t('calendar.noImage') }}</span>
-                        </div>
-                      </div>
-                      <div class="flex-grow">
-                        <h4 class="font-bold line-clamp-1 text-sm">{{ getSelectedItemTitle(item) }}</h4>
-                        <div class="badge badge-secondary mt-1 text-xs">{{ item.media_type }}</div>
-                      </div>
-                      <button 
-                            @click.stop="addItemToCalendarSingle(item)"
-                            class="btn btn-primary btn-xs absolute bottom-2 right-2"
-                          >
-                            {{ $t('calendar.add') }}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <div v-else-if="itemsInCalendar.length > 0" class="flex justify-center items-center h-full">
-            <p>{{ $t('calendar.noRecommendations') }}</p>
-          </div>
-          <div v-else class="flex justify-center items-center h-full">
-            <p>{{ $t('calendar.addItemsToSeeRecommendations') }}</p>
-          </div>
-        </div>
-      </div>
+    <!-- Recommendations (desktop only) -->
+    <div class="max-w-6xl mx-auto hidden lg:block">
+      <RecommendationsSection
+        :recommendations="recommendations"
+        :calendar-has-items="itemsInCalendar.length > 0"
+        :calendar-language="calendarLanguage"
+        @add="addItemToCalendarSingle"
+      />
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, computed, onBeforeMount, onBeforeUnmount } from 'vue'
+import { ref, onMounted, watch, onBeforeMount, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
 import type { Calendar } from '@/types/calendar'
 import api from '@/config/api'
 import { toastService } from '@/services/toastService'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
-import { i18n } from '@/plugins/i18n'
+import CalendarSettingsForm from '@/components/calendar/CalendarSettingsForm.vue'
+import CalendarItemsList from '@/components/calendar/CalendarItemsList.vue'
+import ItemSearchPanel from '@/components/calendar/ItemSearchPanel.vue'
+import RecommendationsSection from '@/components/calendar/RecommendationsSection.vue'
 
-const { t } = i18n.global
-
-// Router
+const { t } = useI18n()
 const router = useRouter()
+const route = useRoute()
+const userSettingsStore = useUserSettingsStore()
 
-// State
-const nameInput = ref('')
-const mediaType = ref<'ANIME' | 'MANGA' | ''>('')
 const fetchedItems = ref<Item[]>([])
 const selectedItems = ref<number[]>([])
 const calendarName = ref('')
@@ -665,292 +84,71 @@ const loading = ref(false)
 const searchError = ref<string | null>(null)
 const calendarError = ref<string | null>(null)
 const recommendations = ref<Item[]>([])
-const userSettingsStore = useUserSettingsStore()
-
-// Route
-const route = useRoute()
-
-// Helper function to get title based on selected language
-const getSelectedItemTitle = (item: Item): string => {
-  switch (calendarLanguage.value) {
-    case 'english':
-      return item.title.english.length > 0 ? item.title.english : item.title.romaji
-    case 'romaji':
-      return item.title.romaji
-    case 'native':
-      return item.title.native
-    default:
-      return item.title.romaji
-  }
-}
-
-// Determine layout based on screen width (mobile: vertical, desktop/tablet: horizontal-cards)
-const isMobile = computed(() => {
-  return window.innerWidth < 768
-})
-
-// Load persisted state on component mount
-onMounted(() => {
-  try {
-    const persistedState = sessionStorage.getItem('calendarPageState')
-    if (persistedState) {
-      const state = JSON.parse(persistedState)
-      if (state.nameInput !== undefined) nameInput.value = state.nameInput
-      if (state.mediaType !== undefined) mediaType.value = state.mediaType
-      if (state.fetchedItems !== undefined) fetchedItems.value = state.fetchedItems
-      if (state.selectedItems !== undefined) selectedItems.value = state.selectedItems
-      if (state.itemsInCalendar !== undefined) itemsInCalendar.value = state.itemsInCalendar
-      if (state.calendarName !== undefined) calendarName.value = state.calendarName
-      if (state.calendarLanguage !== undefined) calendarLanguage.value = state.calendarLanguage
-    }
-  } catch (e) {
-    console.error('Failed to restore persisted state:', e)
-  }
-})
-
-// Watch for changes and save state to sessionStorage
-watch([nameInput, mediaType, fetchedItems, selectedItems, itemsInCalendar, calendarName, calendarLanguage], () => {
-  try {
-    const state = {
-      nameInput: nameInput.value,
-      mediaType: mediaType.value,
-      fetchedItems: fetchedItems.value,
-      selectedItems: selectedItems.value,
-      itemsInCalendar: itemsInCalendar.value,
-      calendarName: calendarName.value,
-      calendarLanguage: calendarLanguage.value
-    }
-    sessionStorage.setItem('calendarPageState', JSON.stringify(state))
-  } catch (e) {
-    console.error('Failed to save state:', e)
-  }
-})
-
-// Clear persisted state when navigating away from the page (but not on refresh)
-onBeforeUnmount(() => {
-  // Only clear the state if we're not editing an existing calendar
-  // If we're editing an existing calendar, we want to preserve the state
-  // If we're creating a new calendar, we want to clear it when navigating away
-  if (route.params.id && route.params.id !== 'new') {
-    // We're editing an existing calendar, so don't clear the state
-    // This allows the user to refresh the page and retain their data
-  } else {
-    // We're creating a new calendar, so clear the state when navigating away
-    sessionStorage.removeItem('calendarPageState')
-  }
-})
-
-// Load calendar data when in edit mode
 const currentCalendar = ref<Calendar | null>(null)
-  
-onBeforeMount(async () => {
-  // Check if we're in edit mode (route contains calendar ID)
-  const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
-  if (calendarId && calendarId !== 'new') {
-    loading.value = true
-    calendarError.value = null
-    
-    try {
-      const response = await api.get(`/calendars/${route.params.id}`)
-      const calendar: Calendar = response.data
-      
-      // Pre-populate form with calendar data
-      calendarName.value = calendar.name
-      calendarLanguage.value = calendar.language
-      
-      // Load items into the calendar
-      itemsInCalendar.value = calendar.items
-      currentCalendar.value = calendar
-      
-      // Calculate recommendations when loading an existing calendar
-      calculateRecommendations()
-    } catch (err) {
-      calendarError.value = t('calendar.failedToLoad')
-      console.error('Failed to load calendar:', err)
-    } finally {
-      loading.value = false
-    }
-  } else { // If new calendar, use user setting
-    const settings = await userSettingsStore.fetchSettings()
-    switch (settings.title_language_preference) {
-      case 'English':
-        calendarLanguage.value = 'english'
-        break
-      case 'Romaji':
-        calendarLanguage.value = 'romaji'
-        break
-      case 'Native':
-        calendarLanguage.value = 'native'
-        break
-      default:
-        calendarLanguage.value = 'english'
-    }
-  }
-})
 
-// Calculate recommendations from items in calendar
-const calculateRecommendations = () => {
-  if (itemsInCalendar.value.length === 0) {
-    recommendations.value = []
-    return
-  }
-
-  // Create a map to count frequency of each recommended item
-  const recommendationCounts: Map<number, { count: number; totalRating: number; item: Item }> = new Map()
-
-  // Iterate through all items in the calendar
-  itemsInCalendar.value.forEach(item => {
-    if (item.recommendations && item.recommendations.length > 0) {
-      item.recommendations.forEach(recommendation => {
-        const mediaId = recommendation.media.id
-        // Skip if this recommendation is already in the calendar
-        if (!itemsInCalendar.value.some(calendarItem => calendarItem.id === mediaId)) {
-          if (recommendationCounts.has(mediaId)) {
-            const existing = recommendationCounts.get(mediaId)!
-            existing.count += 1
-            existing.totalRating += recommendation.rating
-          } else {
-            recommendationCounts.set(mediaId, {
-              count: 1,
-              totalRating: recommendation.rating,
-              item: {
-                id: recommendation.media.id,
-                id_mal: recommendation.media.id_mal,
-                title: recommendation.media.title,
-                media_type: item.media_type, // Use the same type as the source item
-                episode_duration: 0, // Default value, could be improved
-                airing_schedule: [],
-                cover_image: recommendation.media.cover_image,
-                banner_image: '', // Default value
-                recommendations: [] // No nested recommendations
-              }
-            })
-          }
-        }
-      })
-    }
-  })
-
-  // Convert map to array and sort by frequency (descending), then by average rating (descending)
-  const sortedRecommendations = Array.from(recommendationCounts.values())
-    .sort((a, b) => {
-      // First sort by frequency (count) descending
-      if (b.count !== a.count) {
-        return b.count - a.count
-      }
-      // Then sort by average rating descending
-      const avgRatingA = a.totalRating / a.count
-      const avgRatingB = b.totalRating / b.count
-      return avgRatingB - avgRatingA
-    })
-    .slice(0, 5) // Take top 5
-    .map(item => item.item)
-
-  recommendations.value = sortedRecommendations
-}
-
-// Fetch items by name
-const fetchItems = async () => {
-  if (!nameInput.value) {
+const handleSearch = async ({ name, mediaType }: { name: string; mediaType: '' | 'ANIME' | 'MANGA' }) => {
+  if (!name) {
     searchError.value = t('calendar.enterName')
     return
   }
-
   loading.value = true
   searchError.value = null
-  
   try {
-    // Build search URL with optional media type parameter
-    let url = `/search?name=${encodeURIComponent(nameInput.value)}`
-    if (mediaType.value) {
-      url += `&media_type=${mediaType.value}`
-    }
-    
+    let url = `/items/search?name=${encodeURIComponent(name)}`
+    if (mediaType) url += `&media_type=${mediaType}`
     const response = await api.get(url)
-    const items: Item[] = response.data
-    fetchedItems.value = items
-    selectedItems.value = [] // Reset selection when new search is performed
-  } catch (err) {
+    fetchedItems.value = response.data
+    selectedItems.value = []
+  } catch {
     searchError.value = t('calendar.failedToFetchItems')
-    console.error('Failed to fetch items:', err)
   } finally {
     loading.value = false
   }
 }
 
-// Add item to calendar
+const toggleItemSelection = (id: number) => {
+  const idx = selectedItems.value.indexOf(id)
+  if (idx === -1) selectedItems.value.push(id)
+  else selectedItems.value.splice(idx, 1)
+}
+
 const addItemToCalendar = () => {
-  if (selectedItems.value.length > 0) {
-    const selectedItemsData = fetchedItems.value.filter(item => selectedItems.value.includes(item.id))
-    
-    // Filter out items that are already in the calendar
-    const newItems = selectedItemsData.filter(item => 
-      !itemsInCalendar.value.some(calendarItem => calendarItem.id === item.id)
-    )
-    
-    itemsInCalendar.value.push(...newItems)
-    selectedItems.value = []
-    nameInput.value = ''
-    
-    // Recalculate recommendations when items are added
-    if (itemsInCalendar.value.length > 0) {
-      calculateRecommendations()
-    }
-  }
+  const newItems = fetchedItems.value.filter(
+    item => selectedItems.value.includes(item.id) &&
+    !itemsInCalendar.value.some(c => c.id === item.id)
+  )
+  itemsInCalendar.value.push(...newItems)
+  selectedItems.value = []
+  if (itemsInCalendar.value.length > 0) calculateRecommendations()
 }
 
-// Add single item to calendar
 const addItemToCalendarSingle = (item: Item) => {
-  // Check if item is already in calendar
-  if (itemsInCalendar.value.some(calendarItem => calendarItem.id === item.id)) {
-    return
-  }
-  
-  // Add item to calendar
-  itemsInCalendar.value.push(item)
-  
-  // Recalculate recommendations when item is added
-  if (itemsInCalendar.value.length > 0) {
+  if (!itemsInCalendar.value.some(c => c.id === item.id)) {
+    itemsInCalendar.value.push(item)
     calculateRecommendations()
   }
 }
 
-// Remove item from calendar
-const removeItemFromCalendar = (itemId: number) => {
-  itemsInCalendar.value = itemsInCalendar.value.filter(item => item.id !== itemId)
-  
-  // Recalculate recommendations when items are removed
-  if (itemsInCalendar.value.length > 0) {
-    calculateRecommendations()
-  } else {
-    recommendations.value = []
-  }
+const removeItemFromCalendar = (id: number) => {
+  itemsInCalendar.value = itemsInCalendar.value.filter(item => item.id !== id)
+  calculateRecommendations()
 }
 
-// Toggle item selection
-const toggleItemSelection = (itemId: number) => {
-  const index = selectedItems.value.indexOf(itemId)
-  if (index > -1) {
-    selectedItems.value.splice(index, 1)
-  } else {
-    selectedItems.value.push(itemId)
-  }
+const clearCalendar = () => {
+  itemsInCalendar.value = []
+  recommendations.value = []
 }
 
-// Submit calendar
 const submitCalendar = async () => {
-  // Validate calendar name length on frontend
-  const MAX_NAME_LENGTH = 100;
+  const MAX_NAME_LENGTH = 100
   if (!calendarName.value) {
     calendarError.value = t('calendar.enterCalendarName')
     return
   }
-
   if (calendarName.value.length > MAX_NAME_LENGTH) {
-    calendarError.value = t('calendar.nameMaxLength', {max_length: MAX_NAME_LENGTH})
+    calendarError.value = t('calendar.nameMaxLength', { max_length: MAX_NAME_LENGTH })
     return
   }
-
   if (itemsInCalendar.value.length === 0) {
     calendarError.value = t('calendar.noItemsSelected')
     return
@@ -958,23 +156,15 @@ const submitCalendar = async () => {
 
   loading.value = true
   calendarError.value = null
-
-  try {      
+  try {
     let response
-    
-    // Check if we're editing an existing calendar (has an ID)
-    if (route.params.id && route.params.id !== 'new') {
-      // For editing an existing calendar, we should send the items that are currently in the calendar
-      const calendarId = parseInt(String(route.params.id))
-      
-      // When editing, we send the items that are currently in the calendar (which should include both existing and new items)
+    if (currentCalendar.value) {
       const calendar: Omit<Calendar, 'created_at' | 'updated_at'> = {
-        id: calendarId,
+        id: currentCalendar.value.id,
         name: calendarName.value,
         language: calendarLanguage.value,
         items: itemsInCalendar.value
       }
-
       response = await api.put('/calendar', calendar)
     } else {
       const calendar: Omit<Calendar, 'id' | 'created_at' | 'updated_at'> = {
@@ -982,51 +172,112 @@ const submitCalendar = async () => {
         language: calendarLanguage.value,
         items: itemsInCalendar.value
       }
-
       response = await api.put('/calendar', calendar)
     }
-    
-    toastService.success(t('calendar.updatedSuccess', {name: response.data.name}))
-    
-    // Reset form
+    toastService.success(t('calendar.updatedSuccess', { name: response.data.name }))
     calendarName.value = ''
     itemsInCalendar.value = []
-    
-    // Redirect to my-calendars page
     router.push('/my-calendars')
-  } catch (err) {
+  } catch {
     calendarError.value = t('calendar.updatedFail')
   } finally {
     loading.value = false
   }
 }
 
-// Clear all items from calendar
-const clearCalendar = () => {
-  itemsInCalendar.value = []
-  recommendations.value = []
-}
-
-const onImageError = (event: Event) => {
-  const img = event.target as HTMLImageElement
-  img.style.display = 'none'
-  console.error('Image failed to load:', (event.target as HTMLImageElement).src)
-}
-
-const onImageLoad = (event: Event) => {
-  console.log('Image loaded successfully', (event.target as HTMLImageElement).src)
-}
-
-// Scroll recommendations carousel
-const scrollRecommendations = (direction: 'left' | 'right') => {
-  const carousel = document.querySelector('.overflow-x-auto')
-  if (carousel) {
-    const scrollAmount = 300 // Adjust scroll amount as needed
-    if (direction === 'right') {
-      carousel.scrollBy({ left: scrollAmount, behavior: 'smooth' })
-    } else {
-      carousel.scrollBy({ left: -scrollAmount, behavior: 'smooth' })
-    }
+const calculateRecommendations = () => {
+  if (itemsInCalendar.value.length === 0) {
+    recommendations.value = []
+    return
   }
+  const counts = new Map<number, { count: number; totalRating: number; item: Item }>()
+  itemsInCalendar.value.forEach(item => {
+    item.recommendations?.forEach(rec => {
+      const id = rec.media.id
+      if (itemsInCalendar.value.some(c => c.id === id)) return
+      if (counts.has(id)) {
+        const e = counts.get(id)!
+        e.count++
+        e.totalRating += rec.rating
+      } else {
+        counts.set(id, {
+          count: 1,
+          totalRating: rec.rating,
+          item: {
+            id: rec.media.id,
+            id_mal: rec.media.id_mal,
+            title: rec.media.title,
+            media_type: item.media_type,
+            episode_duration: 0,
+            airing_schedule: [],
+            cover_image: rec.media.cover_image,
+            banner_image: '',
+            recommendations: []
+          }
+        })
+      }
+    })
+  })
+  recommendations.value = Array.from(counts.values())
+    .sort((a, b) => b.count !== a.count ? b.count - a.count : (b.totalRating / b.count) - (a.totalRating / a.count))
+    .slice(0, 5)
+    .map(e => e.item)
 }
+
+onMounted(() => {
+  try {
+    const saved = sessionStorage.getItem('calendarPageState')
+    if (saved) {
+      const state = JSON.parse(saved)
+      if (state.fetchedItems !== undefined) fetchedItems.value = state.fetchedItems
+      if (state.selectedItems !== undefined) selectedItems.value = state.selectedItems
+      if (state.itemsInCalendar !== undefined) itemsInCalendar.value = state.itemsInCalendar
+      if (state.calendarName !== undefined) calendarName.value = state.calendarName
+      if (state.calendarLanguage !== undefined) calendarLanguage.value = state.calendarLanguage
+    }
+  } catch { /* ignore */ }
+})
+
+watch([fetchedItems, selectedItems, itemsInCalendar, calendarName, calendarLanguage], () => {
+  try {
+    sessionStorage.setItem('calendarPageState', JSON.stringify({
+      fetchedItems: fetchedItems.value,
+      selectedItems: selectedItems.value,
+      itemsInCalendar: itemsInCalendar.value,
+      calendarName: calendarName.value,
+      calendarLanguage: calendarLanguage.value
+    }))
+  } catch { /* ignore */ }
+})
+
+onBeforeUnmount(() => {
+  if (!route.params.id || route.params.id === 'new') {
+    sessionStorage.removeItem('calendarPageState')
+  }
+})
+
+onBeforeMount(async () => {
+  const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
+  if (calendarId && calendarId !== 'new') {
+    loading.value = true
+    try {
+      const response = await api.get(`/calendars/${calendarId}`)
+      const calendar: Calendar = response.data
+      calendarName.value = calendar.name
+      calendarLanguage.value = calendar.language
+      itemsInCalendar.value = calendar.items
+      currentCalendar.value = calendar
+      calculateRecommendations()
+    } catch {
+      calendarError.value = t('calendar.failedToLoad')
+    } finally {
+      loading.value = false
+    }
+  } else {
+    const settings = await userSettingsStore.fetchSettings()
+    calendarLanguage.value =
+      settings.title_language_preference === 'Romaji' ? 'romaji' :
+      settings.title_language_preference === 'Native' ? 'native' : 'english'
+  }
+})
 </script>

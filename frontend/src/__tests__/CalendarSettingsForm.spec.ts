@@ -22,7 +22,7 @@ describe('CalendarSettingsForm', () => {
       ...mountOpts
     })
     await wrapper.find('input[type="text"]').setValue('New Name')
-    expect(wrapper.emitted('update:name')?.[0]).toEqual(['New Name'])
+    expect(wrapper.emitted('update:name')?.[0]?.[0]).toBe('New Name')
   })
 
   it('emits update:language when language changes', async () => {
@@ -31,7 +31,7 @@ describe('CalendarSettingsForm', () => {
       ...mountOpts
     })
     const radios = wrapper.findAll('input[type="radio"]')
-    await radios[1].trigger('change')
+    await radios[1]!.trigger('change')
     expect(wrapper.emitted('update:language')).toBeTruthy()
   })
 

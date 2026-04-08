@@ -54,6 +54,6 @@ describe('RecommendationsSection', () => {
       ...mountOpts
     })
     await wrapper.find('[data-testid="add-reco-1"]').trigger('click')
-    expect(wrapper.emitted('add')?.[0][0]).toMatchObject({ id: 1 })
+    expect(wrapper.emitted('add')?.[0]?.[0]).toMatchObject({ id: 1 })
   })
 })

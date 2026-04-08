@@ -33,7 +33,7 @@ describe('ItemSearchPanel', () => {
     await wrapper.find('button[type="button"]').trigger('click')
     const emitted = wrapper.emitted('search')
     expect(emitted).toBeTruthy()
-    expect(emitted![0][0]).toMatchObject({ name: 'Naruto' })
+    expect(emitted?.[0]?.[0]).toMatchObject({ name: 'Naruto' })
   })
 
   it('renders fetched items', () => {
