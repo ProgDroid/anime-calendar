@@ -3,9 +3,9 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import GoogleLoginButton from './GoogleLoginButton.vue'
-import { i18n } from '@/plugins/i18n'
+import { useI18n } from 'vue-i18n'
 
-const { t } = i18n.global
+const { t } = useI18n()
 
 const router = useRouter()
 const authStore = useAuthStore()

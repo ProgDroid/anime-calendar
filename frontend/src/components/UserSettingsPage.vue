@@ -6,8 +6,9 @@ import type { UserSettings } from '@/types/userSettings'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { applySettings } from '@/services/applySettings'
 import { i18n } from '@/plugins/i18n'
+import { useI18n } from 'vue-i18n'
 
-const { t } = i18n.global
+const { t } = useI18n()
 
 const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
@@ -20,9 +21,7 @@ const fetchUserSettings = async () => {
     loading.value = true
     error.value = null
     
-    let fetchedSettings = await userSettingsStore.fetchSettings()
-    console.log('Fetched settings:', fetchedSettings)
-    settings.value = fetchedSettings
+    settings.value = await userSettingsStore.fetchSettings()
   } catch (err) {
     error.value = t('userSettings.fetchError')
     console.error('Error fetching user settings:', err)
