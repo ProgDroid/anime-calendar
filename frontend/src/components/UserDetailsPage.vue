@@ -6,9 +6,10 @@ import api from '@/config/api'
 import { toastService } from '@/services/toastService'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { applySettings } from '@/services/applySettings'
-import { i18n } from '@/plugins/i18n'
+import { useI18n } from 'vue-i18n'
+import ConfirmModal from '@/components/shared/ConfirmModal.vue'
 
-const { t } = i18n.global
+const { t } = useI18n()
 
 interface User {
   username: string
@@ -32,6 +33,7 @@ const currentPassword = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const isUpdatingPassword = ref(false)
+const confirmDeleteOpen = ref(false)
 
 // Computed properties to handle localStorage access safely
 const userAvatar = computed(() => {
@@ -137,10 +139,7 @@ const handleUpdatePassword = async (e: Event) => {
 }
 
 const handleDelete = async () => {
-  if (!confirm(t('userDetails.accountDelete'))) {
-    return
-  }
-
+  confirmDeleteOpen.value = false
   try {
     isDeleting.value = true
     await api.delete('/user')
@@ -148,9 +147,8 @@ const handleDelete = async () => {
     userSettingsStore.clearCache()
     applySettings(userSettingsStore.getDefaultSettings())
     router.push('/login')
-  } catch (err) {
+  } catch {
     error.value = t('userDetails.accountDeleteFailed')
-    console.error('Error deleting account:', err)
   } finally {
     isDeleting.value = false
   }
@@ -167,6 +165,15 @@ onMounted(() => {
 
 <template>
   <div class="min-h-[calc(100vh-6.2rem)] bg-base-200 p-4">
+    <ConfirmModal
+      :open="confirmDeleteOpen"
+      :title="$t('userDetails.accountDeleteButton')"
+      :message="$t('userDetails.accountDeleteWarning')"
+      :confirm-label="$t('userDetails.accountDeleteButton')"
+      :danger="true"
+      @confirm="handleDelete"
+      @cancel="confirmDeleteOpen = false"
+    />
     <div class="max-w-2xl mx-auto">
       <div class="card bg-base-100 shadow-xl">
         <div class="card-body">
@@ -200,7 +207,7 @@ onMounted(() => {
                     type="text" 
                     class="input input-bordered"
                     :value="user.is_oauth ? userName : user.username"
-                    disabled=true
+                    :disabled="true"
                   />
                 </div>
                 
@@ -212,7 +219,7 @@ onMounted(() => {
                     type="email" 
                     class="input input-bordered"
                     :value="user.email"
-                    disabled=true
+                    :disabled="true"
                   />
                 </div>
               </div>
@@ -366,8 +373,8 @@ onMounted(() => {
               </div>
               
               <div class="flex justify-end">
-                <button 
-                  @click="handleDelete"
+                <button
+                  @click="confirmDeleteOpen = true"
                   :disabled="isDeleting"
                   class="btn btn-error w-full"
                 >
