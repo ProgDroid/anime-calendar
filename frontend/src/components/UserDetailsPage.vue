@@ -54,7 +54,7 @@ const fetchUserDetails = async () => {
     updatedUsername.value = response.data.username
     updatedEmail.value = response.data.email
   } catch (err) {
-    error.value = t('userDetails.failedToFetch')
+    error.value = t('userDetails.fetchFailed')
     console.error('Error fetching user details:', err)
   } finally {
     loading.value = false

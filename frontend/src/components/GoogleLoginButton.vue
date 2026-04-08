@@ -30,7 +30,7 @@ const handleGoogleLogin = async (data: GoogleResponse) => {
     
     router.push('/my-calendars')
   } catch (err) {
-    error.value = t('login.google.failed')
+    error.value = t('auth.google.failed')
     console.error('Google login error:', err)
   } finally {
     loading.value = false

@@ -36,58 +36,58 @@ const handleSubmit = async (e: Event) => {
   <div class="min-h-[calc(100vh-6rem)] bg-base-200 flex items-center justify-center">
     <div class="card bg-base-100 w-full max-w-md shadow-xl">
       <div class="card-body">
-        <h2 class="card-title">{{ $t('components.register.title') }}</h2>
+        <h2 class="card-title">{{ $t('auth.register.title') }}</h2>
         <form @submit="handleSubmit" class="space-y-4">
           <div class="form-control w-full">
             <label class="label mb-2">
-              <span class="label-text">{{ $t('components.register.name') }}</span>
+              <span class="label-text">{{ $t('auth.register.name') }}</span>
             </label>
-            <input 
-              id="username" 
-              v-model="username" 
-              type="text" 
-              required 
+            <input
+              id="username"
+              v-model="username"
+              type="text"
+              required
               class="input input-bordered w-full"
-              :placeholder="$t('components.register.usernamePlaceholder')"
+              :placeholder="$t('auth.register.usernamePlaceholder')"
               maxlength="50"
             />
           </div>
-          
+
           <div class="form-control w-full">
             <label class="label mb-2">
-              <span class="label-text">{{ $t('components.register.email') }}</span>
+              <span class="label-text">{{ $t('auth.register.email') }}</span>
             </label>
-            <input 
-              id="email" 
-              v-model="email" 
-              type="email" 
-              required 
+            <input
+              id="email"
+              v-model="email"
+              type="email"
+              required
               class="input input-bordered w-full"
-              :placeholder="$t('components.login.emailPlaceholder')"
+              :placeholder="$t('auth.login.emailPlaceholder')"
             />
           </div>
-          
+
           <div class="form-control w-full">
             <label class="label mb-2">
-              <span class="label-text">{{ $t('components.register.password') }}</span>
+              <span class="label-text">{{ $t('auth.register.password') }}</span>
             </label>
-            <input 
-              id="password" 
-              v-model="password" 
-              type="password" 
-              required 
+            <input
+              id="password"
+              v-model="password"
+              type="password"
+              required
               class="input input-bordered w-full"
-              :placeholder="$t('components.login.passwordPlaceholder')"
+              :placeholder="$t('auth.login.passwordPlaceholder')"
               maxlength="128"
             />
           </div>
-          
-          <button 
-            type="submit" 
-            :disabled="loading" 
+
+          <button
+            type="submit"
+            :disabled="loading"
             class="btn btn-primary w-full"
           >
-            {{ loading ? $t('components.register.registering') : $t('components.register.submit') }}
+            {{ loading ? $t('auth.register.registering') : $t('auth.register.submit') }}
           </button>
           
           <div v-if="error" class="alert alert-error mt-2">
@@ -102,9 +102,9 @@ const handleSubmit = async (e: Event) => {
         
         <div class="card-actions justify-center mt-4">
           <p class="text-center">
-            {{ $t('components.register.noAccount') }}
+            {{ $t('auth.register.noAccount') }}
             <router-link to="/login" class="link link-primary">
-              {{ $t('components.login.submit') }}
+              {{ $t('auth.login.submit') }}
             </router-link>
           </p>
         </div>

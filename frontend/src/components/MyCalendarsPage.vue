@@ -124,7 +124,7 @@ const loadCalendars = async (page: number = 1) => {
     calendars.value = response.data.data
     pagination.value = response.data.pagination
   } catch {
-    error.value = t('calendars.loadingFailed')
+    error.value = t('calendars.loadFailed')
   } finally {
     clearTimeout(loadingTimer)
     loading.value = false

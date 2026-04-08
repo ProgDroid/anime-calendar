@@ -46,58 +46,58 @@ const toggleMode = () => {
   <div class="min-h-[calc(100vh-6rem)] bg-base-200 flex items-center justify-center">
     <div class="card bg-base-100 w-full max-w-md shadow-xl">
       <div class="card-body">
-        <h2 class="card-title">{{ isRegistering ? $t('components.register.title') : $t('components.login.title') }}</h2>
+        <h2 class="card-title">{{ isRegistering ? $t('auth.register.title') : $t('auth.login.title') }}</h2>
         <form @submit="handleSubmit" class="space-y-4">
           <div v-if="isRegistering" class="form-control w-full">
             <label class="label mb-2">
-              <span class="label-text">{{ $t('components.register.name') }}</span>
+              <span class="label-text">{{ $t('auth.register.name') }}</span>
             </label>
-            <input 
-              id="username" 
-              v-model="username" 
-              type="text" 
-              required 
+            <input
+              id="username"
+              v-model="username"
+              type="text"
+              required
               class="input input-bordered w-full"
-              :placeholder="$t('components.register.usernamePlaceholder')"
+              :placeholder="$t('auth.register.usernamePlaceholder')"
               maxlength="50"
             />
           </div>
-          
+
           <div class="form-control w-full">
             <label class="label mb-2">
-              <span class="label-text">{{ $t('components.login.email') }}</span>
+              <span class="label-text">{{ $t('auth.login.email') }}</span>
             </label>
-            <input 
-              id="email" 
-              v-model="email" 
-              type="email" 
-              required 
+            <input
+              id="email"
+              v-model="email"
+              type="email"
+              required
               class="input input-bordered w-full"
-              :placeholder="$t('components.login.emailPlaceholder')"
+              :placeholder="$t('auth.login.emailPlaceholder')"
             />
           </div>
-          
+
           <div class="form-control w-full">
             <label class="label mb-2">
-              <span class="label-text">{{ $t('components.login.password') }}</span>
+              <span class="label-text">{{ $t('auth.login.password') }}</span>
             </label>
-            <input 
-              id="password" 
-              v-model="password" 
-              type="password" 
-              required 
+            <input
+              id="password"
+              v-model="password"
+              type="password"
+              required
               class="input input-bordered w-full"
-              :placeholder="$t('components.login.passwordPlaceholder')"
+              :placeholder="$t('auth.login.passwordPlaceholder')"
               maxlength="128"
             />
           </div>
-          
-          <button 
-            type="submit" 
-            :disabled="loading" 
+
+          <button
+            type="submit"
+            :disabled="loading"
             class="btn btn-primary w-full"
           >
-            {{ loading ? (isRegistering ? $t('components.register.registering') : $t('components.login.submit')) : (isRegistering ? $t('components.register.submit') : $t('components.login.submit')) }}
+            {{ loading ? (isRegistering ? $t('auth.register.registering') : $t('auth.login.submit')) : (isRegistering ? $t('auth.register.submit') : $t('auth.login.submit')) }}
           </button>
           
           <div v-if="error" class="alert alert-error mt-2">
@@ -112,9 +112,9 @@ const toggleMode = () => {
         
         <div class="card-actions justify-center mt-4">
           <p class="text-center">
-            {{ isRegistering ? $t('components.register.alreadyHaveAccount') : $t('components.register.noAccount') }}
+            {{ isRegistering ? $t('auth.register.alreadyHaveAccount') : $t('auth.register.noAccount') }}
             <button @click="toggleMode" class="link link-primary">
-              {{ isRegistering ? $t('components.login.submit') : $t('components.register.submit') }}
+              {{ isRegistering ? $t('auth.login.submit') : $t('auth.register.submit') }}
             </button>
           </p>
         </div>

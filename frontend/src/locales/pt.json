@@ -7,7 +7,35 @@
     "logout": "Sair",
     "orContinueWith": "Ou continue com",
     "cancel": "Cancelar",
-    "confirm": "Confirmar"
+    "confirm": "Confirmar",
+    "loading": "A carregar..."
+  },
+  "auth": {
+    "google": {
+      "failed": "Falhou ao entrar com Google"
+    },
+    "login": {
+      "title": "Entrar",
+      "email": "Email",
+      "password": "Senha",
+      "rememberMe": "Lembrar-me",
+      "forgotPassword": "Esqueceu a Senha?",
+      "submit": "Entrar",
+      "emailPlaceholder": "Digite seu email",
+      "passwordPlaceholder": "Digite sua senha"
+    },
+    "register": {
+      "title": "Registar",
+      "name": "Nome",
+      "email": "Email",
+      "password": "Senha",
+      "confirmPassword": "Confirmar Senha",
+      "submit": "Registar",
+      "noAccount": "Não tem uma conta?",
+      "alreadyHaveAccount": "Já tem uma conta?",
+      "usernamePlaceholder": "Digite seu nome de usuário",
+      "registering": "Registando..."
+    }
   },
   "userSettings": {
     "title": "Configurações do Usuário",
@@ -24,8 +52,8 @@
     "timezonePlaceholder": "ex: UTC, Europe/London, America/New_York",
     "save": "Guardar Configurações",
     "updateSuccess": "Configurações atualizadas com sucesso!",
-    "updateError": "Atualização de configurações falhou",
-    "fetchError": "Erro a carregar configurações"
+    "updateFailed": "Atualização de configurações falhou",
+    "fetchFailed": "Erro a carregar configurações"
   },
   "calendar": {
     "edit": "Editar Calendário",
@@ -59,14 +87,14 @@
     "submit": "Submeter Calendar",
     "noRecommendations": "Sem recomendações para a sua seleção atual.",
     "addItemsToSeeRecommendations": "Adicione items ao seu calendário para ver recomendações.",
-    "failedToLoad": "Falha ao carregar calendário",
+    "loadFailed": "Falha ao carregar calendário",
     "enterName": "Por favor introduza um nome",
-    "failedToFetchItems": "Falha ao procurar items",
+    "fetchItemsFailed": "Falha ao procurar items",
     "enterCalendarName": "Por favor introduza um nome para o calendário",
-    "calendarNameMaxLength": "Nome do calendário deve ser {max_length} caracteres ou menos",
+    "nameMaxLength": "Nome do calendário deve ser {max_length} caracteres ou menos",
     "noItemsSelected": "Por favor acrescente pelo menos um item no calendário",
-    "updatedSuccess": "Calendário {name} atualizado",
-    "updatedFail": "Falha ao atualizar calendário"
+    "updateSuccess": "Calendário {name} atualizado",
+    "updateFailed": "Falha ao atualizar calendário"
   },
   "calendars": {
     "title": "Meus Calendários",
@@ -81,7 +109,7 @@
     "pagePrevious": "Anterior",
     "pageNext": "Seguinte",
     "paginationText": "A mostrar {first} até {last} de {total} calendários",
-    "loadingFailed": "Falha ao carregar calendários",
+    "loadFailed": "Falha ao carregar calendários",
     "deleteFailed": "Falha ao remover calendário",
     "deleteConfirmTitle": "Excluir Calendário",
     "deleteConfirmMessage": "Tem certeza que deseja excluir este calendário? Isso não pode ser desfeito.",
@@ -91,39 +119,8 @@
     "linkCopied": "Link de assinatura copiado para a área de transferência!",
     "openInGoogle": "Adicionar ao Google Agenda"
   },
-  "login": {
-    "google": {
-      "failed": "Falhou ao entrar com Google"
-    }
-  },
-  "components": {
-    "login": {
-      "title": "Entrar",
-      "email": "Email",
-      "password": "Senha",
-      "rememberMe": "Lembrar-me",
-      "forgotPassword": "Esqueceu a Senha?",
-      "submit": "Entrar",
-      "emailPlaceholder": "Digite seu email",
-      "passwordPlaceholder": "Digite sua senha",
-      "failed": "Ocorreu um error"
-    },
-    "register": {
-      "title": "Registar",
-      "name": "Nome",
-      "email": "Email",
-      "password": "Senha",
-      "confirmPassword": "Confirmar Senha",
-      "submit": "Registar",
-      "noAccount": "Não tem uma conta?",
-      "alreadyHaveAccount": "Já tem uma conta?",
-      "usernamePlaceholder": "Digite seu nome de usuário",
-      "registering": "Registando...",
-      "orContinueWith": "Ou continue com"
-    }
-  },
   "userDetails": {
-    "failedToFetch": "Falha ao obter detalhes de usuário",
+    "fetchFailed": "Falha ao obter detalhes de usuário",
     "updateSuccess": "Detalhes de usuário atualizados com successo!",
     "updateFailed": "Falha ao atualizar detalhes de usuário",
     "passwordsDontMatch": "Novas palavras pass não correspondem",

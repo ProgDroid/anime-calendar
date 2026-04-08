@@ -99,7 +99,7 @@ const handleSearch = async ({ name, mediaType }: { name: string; mediaType: '' |
     fetchedItems.value = response.data
     selectedItems.value = []
   } catch {
-    searchError.value = t('calendar.failedToFetchItems')
+    searchError.value = t('calendar.fetchItemsFailed')
   } finally {
     loading.value = false
   }
@@ -173,12 +173,12 @@ const submitCalendar = async () => {
       }
       response = await api.put('/calendar', calendar)
     }
-    toastService.success(t('calendar.updatedSuccess', { name: response.data.name }))
+    toastService.success(t('calendar.updateSuccess', { name: response.data.name }))
     calendarName.value = ''
     itemsInCalendar.value = []
     router.push('/my-calendars')
   } catch {
-    calendarError.value = t('calendar.updatedFail')
+    calendarError.value = t('calendar.updateFailed')
   } finally {
     loading.value = false
   }
@@ -268,7 +268,7 @@ onBeforeMount(async () => {
       currentCalendar.value = calendar
       calculateRecommendations()
     } catch {
-      calendarError.value = t('calendar.failedToLoad')
+      calendarError.value = t('calendar.loadFailed')
     } finally {
       loading.value = false
     }
