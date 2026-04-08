@@ -5,7 +5,9 @@
     "myAccount": "Minha Conta",
     "settings": "Configurações",
     "logout": "Sair",
-    "orContinueWith": "Ou continue com"
+    "orContinueWith": "Ou continue com",
+    "cancel": "Cancelar",
+    "confirm": "Confirmar"
   },
   "userSettings": {
     "title": "Configurações do Usuário",
