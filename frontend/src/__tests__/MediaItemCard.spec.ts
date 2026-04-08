@@ -57,4 +57,45 @@ describe('MediaItemCard', () => {
     })
     expect(wrapper.classes()).toContain('border-success')
   })
+
+  it('hides episode count when compact', () => {
+    const wrapper = mount(MediaItemCard, {
+      props: { item, displayTitle: 'Attack on Titan', isSelected: false, isInCalendar: false, compact: true },
+      ...mountOpts
+    })
+    // episode count text should not be present in compact mode
+    expect(wrapper.find('p.text-xs').exists()).toBe(false)
+  })
+
+  it('emits click when card is clicked', async () => {
+    const wrapper = mount(MediaItemCard, {
+      props: { item, displayTitle: 'Attack on Titan', isSelected: false, isInCalendar: false },
+      ...mountOpts
+    })
+    await wrapper.trigger('click')
+    expect(wrapper.emitted('click')).toBeTruthy()
+  })
+
+  it('renders no-image placeholder when cover_image is absent', () => {
+    const noImageItem = { ...item, cover_image: undefined }
+    const wrapper = mount(MediaItemCard, {
+      props: { item: noImageItem, displayTitle: 'Attack on Titan', isSelected: false, isInCalendar: false },
+      ...mountOpts
+    })
+    expect(wrapper.find('img').exists()).toBe(false)
+  })
+
+  it('shows overlay div when selected with banner image', () => {
+    const bannerItem = { ...item, banner_image: 'http://img.test/banner.jpg' }
+    const wrapper = mount(MediaItemCard, {
+      props: { item: bannerItem, displayTitle: 'Attack on Titan', isSelected: true, isInCalendar: false },
+      ...mountOpts
+    })
+    // The overlay div should be visible (v-show)
+    const overlays = wrapper.findAll('.absolute.inset-0')
+    const visible = overlays.filter(el => !el.isVisible())
+    expect(overlays.length).toBeGreaterThan(0)
+    // At least one overlay should be visible when selected
+    expect(wrapper.findAll('.absolute.inset-0').some(el => el.isVisible())).toBe(true)
+  })
 })

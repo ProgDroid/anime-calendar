@@ -75,27 +75,25 @@ const onImageError = (e: Event) => {
 
       <!-- Background image overlay when selected -->
       <div
-        v-if="isSelected && item.banner_image"
+        v-show="isSelected && !!item.banner_image"
         class="absolute inset-0 pointer-events-none transition-opacity duration-300"
         :style="{
           backgroundImage: `url(${item.banner_image})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center',
           backgroundRepeat: 'no-repeat',
-          maskImage: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 65%, rgba(0,0,0,1) 95%)',
-          borderRadius: '8px'
+          maskImage: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 65%, rgba(0,0,0,1) 95%)'
         }"
       />
       <div
-        v-else-if="isSelected && item.cover_image?.medium"
+        v-show="isSelected && !item.banner_image && !!item.cover_image?.medium"
         class="absolute inset-0 pointer-events-none transition-opacity duration-300"
         :style="{
-          backgroundImage: `url(${item.cover_image.medium})`,
+          backgroundImage: `url(${item.cover_image?.medium})`,
           backgroundSize: 'auto 100%',
           backgroundPosition: 'right',
           backgroundRepeat: 'no-repeat',
-          maskImage: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.0) 83.5%, rgba(0,0,0,1) 95%)',
-          borderRadius: '8px'
+          maskImage: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.0) 83.5%, rgba(0,0,0,1) 95%)'
         }"
       />
 
