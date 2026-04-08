@@ -1,39 +1,38 @@
 <template>
   <div class="min-h-[calc(100vh-6.1rem)] bg-base-200 p-4">
     <h1 class="text-2xl font-bold mb-6">{{ $t('calendars.title') }}</h1>
-    
+
     <div class="flex justify-center mb-6">
-      <button @click="createNewCalendar" class="btn btn-primary">
+      <button class="btn btn-primary" @click="createNewCalendar">
         {{ $t('calendars.createNew') }}
       </button>
     </div>
-    
-    <div v-if="loading" class="alert alert-info">
-      {{ $t('calendars.loading') }}
-    </div>
-    
-    <div v-else-if="error" class="alert alert-error">
-      {{ error }}
-    </div>
-    
+
+    <div v-if="loading" class="alert alert-info">{{ $t('calendars.loading') }}</div>
+    <div v-else-if="error" class="alert alert-error">{{ error }}</div>
     <div v-else-if="calendars.length === 0" class="alert alert-info">
-      {{ $t('calendars.notFound') }} <button @click="createNewCalendar" class="btn btn-sm btn-primary">{{ $t('calendars.createNew') }}</button>
+      {{ $t('calendars.notFound') }}
+      <button class="btn btn-sm btn-primary ml-2" @click="createNewCalendar">
+        {{ $t('calendars.createNew') }}
+      </button>
     </div>
-    
+
     <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      <div 
-        v-for="calendar in calendars" 
-        :key="calendar.id" 
+      <div
+        v-for="calendar in calendars"
+        :key="calendar.id"
         class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow duration-300"
       >
         <div class="card-body">
           <h2 class="card-title text-lg font-bold">{{ calendar.name }}</h2>
           <div class="space-y-1">
-            <p class="text-sm text-gray">{{ $t('calendars.created') }}: <span class="font-semibold">{{ formatDate(calendar.created_at) }}</span></p>
-            <p class="text-sm text-gray">{{ $t('calendars.updated') }}: <span class="font-semibold">{{ formatDate(calendar.updated_at) }}</span></p>
+            <p class="text-sm text-base-content/60">
+              {{ $t('calendars.created') }}: <span class="font-semibold">{{ formatDate(calendar.created_at) }}</span>
+            </p>
+            <p class="text-sm text-base-content/60">
+              {{ $t('calendars.updated') }}: <span class="font-semibold">{{ formatDate(calendar.updated_at) }}</span>
+            </p>
           </div>
-          
-          <!-- Icon indicators with counts for Anime and Manga -->
           <div class="mt-3 flex items-center gap-4">
             <div class="flex items-center gap-2">
               <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" class="text-blue-500" viewBox="0 0 16 16">
@@ -42,162 +41,102 @@
               <span class="text-sm">{{ calendar.item_count }}</span>
             </div>
           </div>
-          
           <div class="card-actions justify-end mt-4">
-            <button @click.stop="exportCalendar(calendar.id)" class="btn btn-sm btn-success">
+            <button class="btn btn-sm btn-success" @click.stop="exportCalendar(calendar.id)">
               {{ $t('calendars.export') }}
             </button>
-            <button @click.stop="editCalendar(calendar.id)" class="btn btn-sm btn-primary">
+            <button class="btn btn-sm btn-primary" @click.stop="editCalendar(calendar.id)">
               {{ $t('calendars.edit') }}
             </button>
-            <button @click.stop="deleteCalendar(calendar.id)" class="btn btn-sm btn-error">
+            <button class="btn btn-sm btn-error" @click.stop="confirmDelete(calendar.id)">
               {{ $t('calendars.delete') }}
             </button>
           </div>
         </div>
       </div>
     </div>
-    
-    <!-- Pagination Controls -->
-    <div v-if="pagination.total_pages > 1" class="join mt-8 flex justify-center">
-      <button 
-        @click="onPageChange(pagination.page - 1)" 
-        :disabled="pagination.page === 1"
-        class="join-item btn"
-      >
-        {{ $t('calendars.pagePrevious') }}
-      </button>
-      
-      <button 
-        v-for="page in getPaginationRange()" 
-        :key="page"
-        @click="onPageChange(page)"
-        :class="{
-          'join-item btn btn-primary': page === pagination.page,
-          'join-item btn': page !== pagination.page
-        }"
-      >
-        {{ page }}
-      </button>
-      
-      <button 
-        @click="onPageChange(pagination.page + 1)" 
-        :disabled="pagination.page === pagination.total_pages"
-        class="join-item btn"
-      >
-        {{ $t('calendars.pageNext') }}
-      </button>
-    </div>
-    
-    <div v-if="pagination.total_pages > 1" class="text-center mt-4 text-sm text-gray">
-      {{ $t('calendars.paginationText', {first: pagination.page_size * (pagination.page - 1) + 1, last: pagination.page_size * pagination.page, total: pagination.total }) }}
-    </div>
+
+    <PaginationControls
+      :page="pagination.page"
+      :page_size="pagination.page_size"
+      :total="pagination.total"
+      :total_pages="pagination.total_pages"
+      @page-change="loadCalendars"
+    />
+
+    <ConfirmModal
+      :open="confirmModalOpen"
+      :title="$t('calendars.deleteConfirmTitle')"
+      :message="$t('calendars.deleteConfirmMessage')"
+      :confirm-label="$t('calendars.delete')"
+      :danger="true"
+      @confirm="executeDelete"
+      @cancel="confirmModalOpen = false"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import type { PageCalendar } from '@/types/calendar'
 import api from '@/config/api'
-import { useUserSettingsStore } from '@/stores/userSettingsStore'
-import { i18n } from '@/plugins/i18n'
+import PaginationControls from '@/components/shared/PaginationControls.vue'
+import ConfirmModal from '@/components/shared/ConfirmModal.vue'
 
-const { t } = i18n.global
+const { t } = useI18n()
+const router = useRouter()
 
-// State
 const calendars = ref<PageCalendar[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
-const pagination = ref({
-  page: 1,
-  page_size: 6,
-  total: 0,
-  total_pages: 0
-})
-const userSettingsStore = useUserSettingsStore()
+const pagination = ref({ page: 1, page_size: 6, total: 0, total_pages: 0 })
+const confirmModalOpen = ref(false)
+const calendarToDelete = ref<number | null>(null)
 
-// Router
-const router = useRouter()
+onMounted(() => loadCalendars(1))
 
-// Load calendars on component mount
-onMounted(() => {
-  loadCalendars()
-})
-
-// Load calendars from API
 const loadCalendars = async (page: number = 1) => {
   loading.value = true
   error.value = null
-  
   try {
-    const response = await api.get('/calendars', {
-      params: {
-        page,
-        page_size: pagination.value.page_size
-      }
-    })
-    
+    const response = await api.get('/calendars', { params: { page, page_size: pagination.value.page_size } })
     calendars.value = response.data.data
-    pagination.value = {
-      page: response.data.pagination.page,
-      page_size: response.data.pagination.page_size,
-      total: response.data.pagination.total,
-      total_pages: response.data.pagination.total_pages
-    }
-  } catch (err) {
+    pagination.value = response.data.pagination
+  } catch {
     error.value = t('calendars.loadingFailed')
   } finally {
     loading.value = false
   }
 }
 
-// Handle page change
-const onPageChange = (newPage: number) => {
-  if (newPage >= 1 && newPage <= pagination.value.total_pages) {
-    loadCalendars(newPage)
-  }
+const createNewCalendar = () => router.push('/calendar/new')
+const editCalendar = (id: number) => router.push(`/calendar/${id}`)
+
+const confirmDelete = (id: number) => {
+  calendarToDelete.value = id
+  confirmModalOpen.value = true
 }
 
-// Create a new calendar
-const createNewCalendar = () => {
-  router.push('/calendar/new')
-}
-
-// Edit a calendar
-const editCalendar = (id: number) => {
-  router.push(`/calendar/${id}`)
-}
-
-// Delete a calendar
-const deleteCalendar = async (id: number) => {
-  if (!confirm('Are you sure you want to delete this calendar?')) {
-    return
-  }
-  
+const executeDelete = async () => {
+  confirmModalOpen.value = false
+  if (calendarToDelete.value === null) return
   try {
-    await api.delete(`/calendars/${id}`)
-    // Refresh the list
-    await loadCalendars()
-  } catch (err) {
+    await api.delete(`/calendars/${calendarToDelete.value}`)
+    await loadCalendars(pagination.value.page)
+  } catch {
     error.value = t('calendars.deleteFailed')
+  } finally {
+    calendarToDelete.value = null
   }
 }
 
-// Format date for display
-const formatDate = (dateString: string) => {
-  const date = new Date(dateString)
-  return date.toLocaleDateString()
-}
+const formatDate = (dateString: string) => new Date(dateString).toLocaleDateString()
 
-// Export a calendar
 const exportCalendar = async (id: number) => {
   try {
-    const response = await api.get(`/calendar/${id}/export`, {
-      responseType: 'text'
-    })
-    
-    // Create a download link for the ICS file
+    const response = await api.get(`/calendars/${id}/export`, { responseType: 'text' })
     const blob = new Blob([response.data], { type: 'text/calendar' })
     const url = window.URL.createObjectURL(blob)
     const link = document.createElement('a')
@@ -207,35 +146,8 @@ const exportCalendar = async (id: number) => {
     link.click()
     document.body.removeChild(link)
     window.URL.revokeObjectURL(url)
-  } catch (err) {
-    console.error('Failed to export calendar:', err)
-    // Optionally show an error message to the user
+  } catch {
+    error.value = t('calendars.exportFailed')
   }
-}
-
-// Get pagination range for display
-const getPaginationRange = () => {
-  const range = []
-  const delta = 2 // Number of pages to show around current page
-  const start = Math.max(1, pagination.value.page - delta)
-  const end = Math.min(pagination.value.total_pages, pagination.value.page + delta)
-  
-  for (let i = start; i <= end; i++) {
-    range.push(i)
-  }
-  
-  return range
 }
 </script>
-
-<style scoped>
-@media (max-width: 768px) {
-  .my-calendars-page {
-    padding: 10px;
-  }
-  
-  .calendars-grid {
-    grid-template-columns: 1fr;
-  }
-}
-</style>

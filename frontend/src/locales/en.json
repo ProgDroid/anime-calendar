@@ -82,7 +82,10 @@
     "pageNext": "Next",
     "paginationText": "Showing {first} to {last} of {total} calendars",
     "loadingFailed": "Failed to load calendars",
-    "deleteFailed": "Failed to delete calendar"
+    "deleteFailed": "Failed to delete calendar",
+    "deleteConfirmTitle": "Delete Calendar",
+    "deleteConfirmMessage": "Are you sure you want to delete this calendar? This cannot be undone.",
+    "exportFailed": "Failed to export calendar"
   },
   "login": {
     "google": {

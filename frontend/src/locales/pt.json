@@ -82,7 +82,10 @@
     "pageNext": "Seguinte",
     "paginationText": "A mostrar {first} até {last} de {total} calendários",
     "loadingFailed": "Falha ao carregar calendários",
-    "deleteFailed": "Falha ao remove calendário"
+    "deleteFailed": "Falha ao remover calendário",
+    "deleteConfirmTitle": "Excluir Calendário",
+    "deleteConfirmMessage": "Tem certeza que deseja excluir este calendário? Isso não pode ser desfeito.",
+    "exportFailed": "Falha ao exportar o calendário"
   },
   "login": {
     "google": {
