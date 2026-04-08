@@ -10,20 +10,53 @@ describe('useWindowSize', () => {
   })
 
   it('returns current window dimensions', () => {
-    const { width, height } = useWindowSize()
-    expect(width.value).toBe(1024)
-    expect(height.value).toBe(768)
+    const TestComponent = defineComponent({
+      setup() {
+        return useWindowSize()
+      },
+      template: '<div />'
+    })
+
+    const wrapper = mount(TestComponent)
+    const vm = wrapper.vm as any
+
+    expect(vm.width).toBe(1024)
+    expect(vm.height).toBe(768)
+
+    wrapper.unmount()
   })
 
   it('isMobile is false when width >= 768', () => {
-    const { isMobile } = useWindowSize()
-    expect(isMobile.value).toBe(false)
+    const TestComponent = defineComponent({
+      setup() {
+        return useWindowSize()
+      },
+      template: '<div />'
+    })
+
+    const wrapper = mount(TestComponent)
+    const vm = wrapper.vm as any
+
+    expect(vm.isMobile).toBe(false)
+
+    wrapper.unmount()
   })
 
   it('isMobile is true when width < 768', () => {
     Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 375 })
-    const { isMobile } = useWindowSize()
-    expect(isMobile.value).toBe(true)
+    const TestComponent = defineComponent({
+      setup() {
+        return useWindowSize()
+      },
+      template: '<div />'
+    })
+
+    const wrapper = mount(TestComponent)
+    const vm = wrapper.vm as any
+
+    expect(vm.isMobile).toBe(true)
+
+    wrapper.unmount()
   })
 
   it('updates width and isMobile reactively on window resize', async () => {
