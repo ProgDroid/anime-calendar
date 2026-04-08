@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { nextTick } from 'vue'
+import { describe, it, expect, beforeEach } from 'vitest'
+import { defineComponent, nextTick } from 'vue'
+import { mount } from '@vue/test-utils'
 import { useWindowSize } from '@/composables/useWindowSize'
 
 describe('useWindowSize', () => {
@@ -23,5 +24,26 @@ describe('useWindowSize', () => {
     Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 375 })
     const { isMobile } = useWindowSize()
     expect(isMobile.value).toBe(true)
+  })
+
+  it('updates width and isMobile reactively on window resize', async () => {
+    const TestComponent = defineComponent({
+      setup() {
+        return useWindowSize()
+      },
+      template: '<div />'
+    })
+
+    const wrapper = mount(TestComponent)
+    const vm = wrapper.vm as any
+
+    Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 375 })
+    window.dispatchEvent(new Event('resize'))
+    await nextTick()
+
+    expect(vm.width).toBe(375)
+    expect(vm.isMobile).toBe(true)
+
+    wrapper.unmount()
   })
 })
