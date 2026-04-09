@@ -14,7 +14,11 @@
       "mcp__plugin_playwright_playwright__browser_evaluate",
       "mcp__plugin_playwright_playwright__browser_run_code",
       "Bash(grep -E \"\\\\.\\(ts|js\\)$\")",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(npm list:*)",
+      "Bash(xargs cat:*)",
+      "Bash(wc -l /g/rustDev/anime-calendar/server/src/**/*.rs)",
+      "Bash(xargs wc:*)"
     ]
   }
 }

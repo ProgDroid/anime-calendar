@@ -44,6 +44,8 @@ server/src/
 
 frontend/src/
   components/       — Page-level Vue components (LoginPage, MyCalendarsPage, CalendarPage, etc.)
+    calendar/       — CalendarPage sub-components (CalendarItemsList, CalendarSettingsForm, ItemSearchPanel, RecommendationsSection)
+    shared/         — Reusable components (ConfirmModal, MediaItemCard, PaginationControls)
   locales/          — en.json, pt.json
   router/index.ts   — Route definitions + auth guard + settings fetch on navigation
   services/         — applySettings.ts, toastService.ts, userSettingsService.ts
@@ -89,7 +91,7 @@ Copy `config.toml.dist` → `config.toml` and `database.toml.dist` → `database
 ### Frontend
 - All user-facing strings use `$t()` / `t()` — never hardcode text in components
 - When adding translatable text, add the key to **both** `en.json` and `pt.json`
-- Translation key naming: hierarchical, e.g. `components.login.title`, `userSettings.language`
+- Translation key naming: hierarchical, e.g. `auth.login.title`, `userSettings.language` — top-level namespaces: `app`, `auth`, `calendar`, `calendars`, `userDetails`, `userSettings`, `errors`
 - Auth guard lives in `router/index.ts` `beforeEach` — settings fetched on every navigation
 - Pinia stores: `auth.ts` for auth state, `userSettingsStore.ts` for user preferences
 
@@ -107,6 +109,7 @@ GET    /calendars/:id
 PUT    /calendars
 DELETE /calendars/:id
 GET    /calendars/:id/export
+GET    /calendars/subscription/:token   (public iCal feed)
 
 GET    /items/:id
 GET    /items              (by IDs)
@@ -131,18 +134,21 @@ POST   /cache/flush
 
 Core features are complete:
 - User auth (JWT + Google OAuth)
+- User auth (JWT + Google OAuth)
 - Calendar CRUD + iCalendar export
+- Calendar subscription tokens — unique per-calendar URL for iCal feed subscriptions (copy link, Google Calendar import)
 - Anilist item search and fetch
 - Redis caching (calendars, items, search, user settings, paginated lists) with TTL + invalidation
 - Cache metrics/monitoring endpoints
 - User profile management + settings
-- i18n (English + Portuguese)
+- i18n (English + Portuguese), keys normalized to `auth.*`, `calendar.*`, `calendars.*`, `userDetails.*`, `userSettings.*`, `errors.*`
 - Responsive frontend (DaisyUI + Tailwind)
+- CalendarPage decomposed into sub-components under `components/calendar/`
+- Shared components: ConfirmModal (replaces native `confirm()`), MediaItemCard, PaginationControls
 
 ## Known TODOs (from source)
 - Rate limiting for API endpoints
 - More backend tests (controllers + services)
-- Frontend component refactoring
 - Episode-specific times (not just all-day calendar entries)
 - CORS config tightening (currently allow_any_*)
 - Load testing

@@ -1,6 +1,6 @@
 # i18n Key Naming Cleanup Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Normalize all translation keys to a consistent hierarchy, removing duplicate namespaces, fixing mixed error-key suffixes, and patching two bugs (missing `app.loading` key, mismatched `nameMaxLength`/`calendarNameMaxLength` between locales).
 
@@ -78,7 +78,7 @@ Keys removed (unused or duplicate):
 **Files:**
 - Modify: `frontend/src/locales/en.json`
 
-- [ ] **Step 1: Replace locale file content**
+- [x] **Step 1: Replace locale file content**
 
 New content for `frontend/src/locales/en.json`:
 
@@ -243,7 +243,7 @@ New content for `frontend/src/locales/en.json`:
 }
 ```
 
-- [ ] **Step 2: Verify JSON is valid**
+- [x] **Step 2: Verify JSON is valid**
 
 ```bash
 cd frontend && node -e "JSON.parse(require('fs').readFileSync('src/locales/en.json','utf8')); console.log('OK')"
@@ -258,7 +258,7 @@ Expected: `OK`
 **Files:**
 - Modify: `frontend/src/locales/pt.json`
 
-- [ ] **Step 1: Replace locale file content**
+- [x] **Step 1: Replace locale file content**
 
 New content for `frontend/src/locales/pt.json`:
 
@@ -423,7 +423,7 @@ New content for `frontend/src/locales/pt.json`:
 }
 ```
 
-- [ ] **Step 2: Verify JSON is valid**
+- [x] **Step 2: Verify JSON is valid**
 
 ```bash
 cd frontend && node -e "JSON.parse(require('fs').readFileSync('src/locales/pt.json','utf8')); console.log('OK')"
@@ -438,7 +438,7 @@ Expected: `OK`
 **Files:**
 - Modify: `frontend/src/components/GoogleLoginButton.vue`
 
-- [ ] **Step 1: Rename key reference**
+- [x] **Step 1: Rename key reference**
 
 In `frontend/src/components/GoogleLoginButton.vue`, change:
 ```ts
@@ -456,7 +456,7 @@ error.value = t('auth.google.failed')
 **Files:**
 - Modify: `frontend/src/components/LoginPage.vue`
 
-- [ ] **Step 1: Replace all `components.login.` with `auth.login.` and `components.register.` with `auth.register.`**
+- [x] **Step 1: Replace all `components.login.` with `auth.login.` and `components.register.` with `auth.register.`**
 
 Apply every rename from the key map above — all occurrences of `components.login.*` → `auth.login.*` and `components.register.*` → `auth.register.*`.
 
@@ -467,7 +467,7 @@ Apply every rename from the key map above — all occurrences of `components.log
 **Files:**
 - Modify: `frontend/src/components/Register.vue`
 
-- [ ] **Step 1: Replace all `components.register.` and `components.login.` references**
+- [x] **Step 1: Replace all `components.register.` and `components.login.` references**
 
 Apply every rename:
 - `components.register.*` → `auth.register.*`
@@ -482,7 +482,7 @@ Apply every rename:
 **Files:**
 - Modify: `frontend/src/components/CalendarPage.vue`
 
-- [ ] **Step 1: Apply error/success key renames**
+- [x] **Step 1: Apply error/success key renames**
 
 | Old | New |
 |---|---|
@@ -501,7 +501,7 @@ Apply every rename:
 **Files:**
 - Modify: `frontend/src/components/UserSettingsPage.vue`
 
-- [ ] **Step 1: Apply error key renames**
+- [x] **Step 1: Apply error key renames**
 
 | Old | New |
 |---|---|
@@ -515,7 +515,7 @@ Apply every rename:
 **Files:**
 - Modify: `frontend/src/components/UserDetailsPage.vue`
 
-- [ ] **Step 1: Apply error key rename**
+- [x] **Step 1: Apply error key rename**
 
 | Old | New |
 |---|---|
@@ -525,7 +525,7 @@ Apply every rename:
 
 ## Task 9: Verify
 
-- [ ] **Step 1: Run tests**
+- [x] **Step 1: Run tests**
 
 ```bash
 cd frontend && npm run test:unit
@@ -533,7 +533,7 @@ cd frontend && npm run test:unit
 
 Expected: all pass
 
-- [ ] **Step 2: Type-check + build**
+- [x] **Step 2: Type-check + build**
 
 ```bash
 cd frontend && npm run build
@@ -541,7 +541,7 @@ cd frontend && npm run build
 
 Expected: no errors
 
-- [ ] **Step 3: Grep for any remaining old keys**
+- [x] **Step 3: Grep for any remaining old keys**
 
 ```bash
 cd frontend && grep -r "components\.login\|components\.register\|login\.google\|updatedFail\|updatedSuccess\b\|fetchError\|updateError\|loadingFailed\|failedToFetch\b\|failedToLoad\|failedToFetchItems" src/
