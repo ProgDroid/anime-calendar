@@ -116,7 +116,6 @@ impl CalendarMapper {
         page: usize,
         page_size: usize,
     ) -> ServerResult<(Vec<Calendar>, usize)> {
-        // First get the total count
         let total_count: i64 =
             match sqlx::query_scalar!("SELECT COUNT(*) FROM calendars WHERE user_id = $1", user_id)
                 .fetch_one(&self.db.pool)
@@ -126,18 +125,27 @@ impl CalendarMapper {
                 None => return Err(Error::NotFound),
             };
 
-        // Then get the paginated results
-        let calendars: Vec<Calendar> = sqlx::query_as!(
+        let calendars = sqlx::query_as!(
             Calendar,
-            "SELECT
-                id,
-                ARRAY[]::INTEGER[] as \"item_ids!\",
-                language as \"language: Language\",
-                name,
-                subscription_token,
-                user_id,
-                created_at,
-                updated_at FROM calendars WHERE user_id = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3",
+            r#"SELECT
+                c.id,
+                c.language as "language: Language",
+                c.name,
+                c.subscription_token,
+                c.user_id,
+                c.created_at,
+                c.updated_at,
+                COALESCE(
+                    ARRAY_AGG(ci.item_id) FILTER (WHERE ci.item_id IS NOT NULL),
+                    '{}'::integer[]
+                ) as "item_ids!: Vec<i32>"
+            FROM calendars c
+            LEFT JOIN calendar_items ci ON ci.calendar_id = c.id
+            WHERE c.user_id = $1
+            GROUP BY c.id, c.language, c.name, c.subscription_token, c.user_id, c.created_at, c.updated_at
+            ORDER BY c.created_at DESC
+            LIMIT $2
+            OFFSET $3"#,
             user_id,
             page_size as i64,
             ((page - 1) * page_size) as i64
@@ -145,29 +153,7 @@ impl CalendarMapper {
         .fetch_all(&self.db.pool)
         .await?;
 
-        let mut result: Vec<Calendar> = Vec::new();
-
-        for calendar_entity in calendars {
-            let item_ids: Vec<i32> = sqlx::query_scalar!(
-                "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
-                calendar_entity.id
-            )
-            .fetch_all(&self.db.pool)
-            .await?;
-
-            result.push(Calendar {
-                id: calendar_entity.id,
-                name: calendar_entity.name,
-                item_ids,
-                language: calendar_entity.language,
-                subscription_token: calendar_entity.subscription_token,
-                user_id: calendar_entity.user_id,
-                created_at: calendar_entity.created_at,
-                updated_at: calendar_entity.updated_at,
-            });
-        }
-
-        Ok((result, total_count as usize))
+        Ok((calendars, total_count as usize))
     }
 
     /// # Errors
