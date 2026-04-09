@@ -30,7 +30,9 @@ pub enum Error {
 
 impl ResponseError for Error {
     fn error_response(&self) -> actix_web::HttpResponse<actix_web::body::BoxBody> {
-        HttpResponse::build(self.status_code()).body(self.to_string())
+        HttpResponse::build(self.status_code()).json(serde_json::json!({
+            "error": self.to_string()
+        }))
     }
 
     fn status_code(&self) -> actix_web::http::StatusCode {

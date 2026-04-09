@@ -28,7 +28,7 @@ pub async fn login(
 ) -> HttpResponse {
     let user = match db.get_user_by_email(&credentials.email).await {
         Ok(user) => user,
-        Err(e) => return e.error_response(),
+        Err(_) => return Error::Unauthorised.error_response(),
     };
 
     match user.password_hash {
@@ -48,7 +48,7 @@ pub async fn login(
                 Error::Unauthorised.error_response()
             }
         }
-        None => Error::NotImplemented.error_response(),
+        None => Error::Unauthorised.error_response(),
     }
 }
 

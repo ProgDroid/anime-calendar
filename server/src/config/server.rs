@@ -12,6 +12,12 @@ pub struct Server {
     pub redis: RedisConfig,
     pub jwt_secret: String, // TODO secret?
     pub compress: bool,
+    #[serde(default = "default_allowed_origins")]
+    pub allowed_origins: Vec<String>,
+}
+
+fn default_allowed_origins() -> Vec<String> {
+    vec!["http://localhost:5173".to_string()]
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -32,6 +38,7 @@ impl Default for Server {
             redis: RedisConfig::default(),
             jwt_secret: String::new(),
             compress: true,
+            allowed_origins: default_allowed_origins(),
         }
     }
 }

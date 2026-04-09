@@ -45,19 +45,28 @@ pub fn start(
     let host = config.host.clone();
     let port = config.port;
     let compress = config.compress;
+    let allowed_origins = config.allowed_origins.clone();
 
     Ok(HttpServer::new(move || {
         let config = config.clone();
 
+        let cors = if allowed_origins.is_empty() {
+            Cors::default()
+                .allow_any_origin()
+                .allow_any_method()
+                .allow_any_header()
+        } else {
+            let mut cors = Cors::default();
+            for origin in &allowed_origins {
+                cors = cors.allowed_origin(origin);
+            }
+            cors.allow_any_method().allow_any_header()
+        };
+
         App::new()
             .wrap(Condition::new(compress, Compress::default()))
             .wrap(Logger::default())
-            .wrap(
-                Cors::default()
-                    .allow_any_origin()
-                    .allow_any_method()
-                    .allow_any_header(), // TODO ?
-            )
+            .wrap(cors)
             .app_data(web::Data::new(user_mapper.clone()))
             .app_data(web::Data::new(calendar_mapper.clone()))
             .app_data(web::Data::new(user_settings_mapper.clone()))
