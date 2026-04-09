@@ -1,4 +1,3 @@
-use log::info;
 use redis::{aio::MultiplexedConnection, Client, RedisResult};
 use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
@@ -77,10 +76,23 @@ impl Cache {
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn get_keys(&self, pattern: &str) -> RedisResult<Vec<String>> {
-        let keys: Vec<String> = redis::cmd("KEYS")
-            .arg(pattern)
-            .query_async(&mut *self.connection.lock().await)
-            .await?;
+        let mut keys: Vec<String> = Vec::new();
+        let mut cursor: u64 = 0;
+        loop {
+            let (next_cursor, batch): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg(pattern)
+                .arg("COUNT")
+                .arg(100)
+                .query_async(&mut *self.connection.lock().await)
+                .await?;
+            keys.extend(batch);
+            cursor = next_cursor;
+            if cursor == 0 {
+                break;
+            }
+        }
         Ok(keys)
     }
 
@@ -94,15 +106,13 @@ impl Cache {
     }
 
     /// # Errors
-    /// Fails if Redis query fails.
-    /// # Panics
-    /// Panics if value cannot be serialised
+    /// Fails if Redis query fails or value cannot be serialised.
     pub async fn set<T>(&self, key: &str, value: &T, ttl_seconds: u64) -> RedisResult<()>
     where
         T: Serialize + Sync,
     {
-        let serialized =
-            serde_json::to_string(value).expect("Could not serialize value when setting in cache");
+        let serialized = serde_json::to_string(value)
+            .map_err(|e| redis::RedisError::from((redis::ErrorKind::Io, "Serialization failed", e.to_string())))?;
 
         redis::cmd("SET")
             .arg(key)
@@ -141,13 +151,6 @@ impl Cache {
         self.set(cache_key, &result, ttl_seconds).await?;
 
         Ok(result)
-    }
-
-    // Helper function to check if cache is available
-    // TODO is this needed
-    #[must_use]
-    pub const fn is_available(&self) -> bool {
-        true // Since we have a connection, it's available
     }
 
     // Get cache metrics
@@ -261,33 +264,6 @@ impl Cache {
         Ok(performance)
     }
 
-    // Simulate cache warming for popular items (placeholder for future implementation)
-    /// # Errors
-    /// Fails if Redis query fails.
-    pub fn warm_cache_for_popular_items(&self) -> Result<(), Box<dyn std::error::Error>> {
-        // This would be implemented in the future to pre-populate frequently accessed data
-        // For now, it's just a placeholder to show the structure
-        info!("Cache warming for popular items - placeholder implementation");
-        Ok(())
-    }
-
-    // Simulate smart cache warmup for user's recent calendars (placeholder for future implementation)
-    /// # Errors
-    /// Fails if Redis query fails.
-    pub fn warm_cache_for_recent_calendars(&self) -> Result<(), Box<dyn std::error::Error>> {
-        // This would be implemented in the future to warm up cache for user's most recent calendars
-        info!("Cache warming for recent calendars - placeholder implementation");
-        Ok(())
-    }
-
-    // Simulate cache warming for trending content (placeholder for future implementation)
-    /// # Errors
-    /// Fails if Redis query fails.
-    pub fn warm_cache_for_trending_content(&self) -> Result<(), Box<dyn std::error::Error>> {
-        // This would be implemented in the future to warm up cache for trending content
-        info!("Cache warming for trending content - placeholder implementation");
-        Ok(())
-    }
 }
 
 #[must_use]
