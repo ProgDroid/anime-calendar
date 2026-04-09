@@ -88,13 +88,38 @@ Copy `config.toml.dist` → `config.toml` and `database.toml.dist` → `database
 - Mapper structs own a DB connection pool clone; they act as repository layer
 - `#[must_use]` on pure functions; `const fn` where possible
 - Tests go in the same file as the code under test
+- Use `log::error!` for all error logging — never `eprintln!` (bypasses logging infra)
+- Multi-table DB mutations must use a transaction with explicit rollback
+- Redis key scanning: use `SCAN` cursor loop, never blocking `KEYS`
+- All `Error` variants must return `{"error":"..."}` JSON — never plain text
+- Auth failures: always return `Error::Unauthorised` regardless of whether the user exists
+
+### sqlx offline queries
+sqlx verifies queries at compile time, which requires a live DB or a pre-generated cache.
+
+**Preferred: generate the offline cache** (commit `.sqlx/` so CI and teammates don't need a DB):
+```bash
+DATABASE_URL=postgresql://user:pass@host:port/dbname cargo sqlx prepare --workspace
+# generates .sqlx/ directory — commit this
+```
+
+**One-off check against the live DB** (when `.sqlx/` is stale or missing):
+```bash
+DATABASE_URL=postgresql://user:pass@host:port/dbname cargo check --package server
+```
+
+After running `cargo sqlx prepare`, subsequent `cargo build`/`cargo check` work offline without `DATABASE_URL`.
 
 ### Frontend
 - All user-facing strings use `$t()` / `t()` — never hardcode text in components
 - When adding translatable text, add the key to **both** `en.json` and `pt.json`
 - Translation key naming: hierarchical, e.g. `auth.login.title`, `userSettings.language` — top-level namespaces: `app`, `auth`, `calendar`, `calendars`, `userDetails`, `userSettings`, `errors`
-- Auth guard lives in `router/index.ts` `beforeEach` — settings fetched on every navigation
+- Auth guard lives in `router/index.ts` `beforeEach` — settings fetched on non-public navigations only (routes with `meta: { public: true }` skip it)
 - Pinia stores: `auth.ts` for auth state, `userSettingsStore.ts` for user preferences
+- Public routes must declare `meta: { public: true }`; `fetchSettings` is skipped for them
+- Use `axios.isAxiosError(err)` when you need `err.response.status`; use bare `catch` (no binding) when the error value is never read
+- Deduplicate concurrent Pinia async actions with `ref<Promise<T> | null>` — return the in-flight promise if one exists
+- Debounce watchers that write to `sessionStorage`/`localStorage` — at least 1s timeout, cleared in `onBeforeUnmount`
 
 ## API Routes
 
