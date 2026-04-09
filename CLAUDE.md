@@ -9,6 +9,7 @@ Anime Calendar is a web application for tracking anime series and episodes acros
 ### Backend
 - **Language**: Rust (edition 2024), Cargo workspace (`server`, `anilist`, `common` crates)
 - **Framework**: Actix-Web 4 + actix-cors
+- **Rate limiting**: `actix-governor` 0.7 — token bucket per IP (60 burst, 1 req/s steady)
 - **Database**: PostgreSQL via sqlx 0.8 (`runtime-tokio`, `tls-native-tls`, `postgres`, `chrono` features)
 - **Cache**: Redis via `redis` crate 1.0 (`aio`, `tokio-comp`) — custom `Cache` struct in `server/src/cache.rs`
 - **Auth**: JWT (`jsonwebtoken` 10 with `aws_lc_rs` backend) + Google OAuth (`google-oauth` crate)
@@ -134,7 +135,6 @@ POST   /cache/flush
 
 Core features are complete:
 - User auth (JWT + Google OAuth)
-- User auth (JWT + Google OAuth)
 - Calendar CRUD + iCalendar export
 - Calendar subscription tokens — unique per-calendar URL for iCal feed subscriptions (copy link, Google Calendar import)
 - Anilist item search and fetch
@@ -145,10 +145,20 @@ Core features are complete:
 - Responsive frontend (DaisyUI + Tailwind)
 - CalendarPage decomposed into sub-components under `components/calendar/`
 - Shared components: ConfirmModal (replaces native `confirm()`), MediaItemCard, PaginationControls
+- Rate limiting: `actix-governor` (60 burst, 1 req/s per IP)
+- CORS: configurable `allowed_origins` list in `config.toml`; defaults to `http://localhost:5173`
+- All error responses unified to `{"error":"..."}` JSON
+- User enumeration prevention on login
+- Redis `SCAN` cursor loop (replaced blocking `KEYS`)
+- 404 page + catch-all route
+- Router guard skips `fetchSettings` for public routes
+- `fetchSettings` concurrent-call deduplication in Pinia store
 
 ## Known TODOs (from source)
-- Rate limiting for API endpoints
 - More backend tests (controllers + services)
 - Episode-specific times (not just all-day calendar entries)
-- CORS config tightening (currently allow_any_*)
 - Load testing
+- DB indexes: `calendars.user_id`, `calendars.subscription_token`, `calendar_items.calendar_id`
+- JWT in localStorage → httpOnly cookies
+- TypeScript `strict: true`
+- Docker / CI-CD pipeline
