@@ -237,19 +237,29 @@ onMounted(() => {
   } catch { /* ignore */ }
 })
 
+let sessionStorageTimer: ReturnType<typeof setTimeout> | null = null
+
 watch([fetchedItems, selectedItems, itemsInCalendar, calendarName, calendarLanguage], () => {
-  try {
-    sessionStorage.setItem('calendarPageState', JSON.stringify({
-      fetchedItems: fetchedItems.value,
-      selectedItems: selectedItems.value,
-      itemsInCalendar: itemsInCalendar.value,
-      calendarName: calendarName.value,
-      calendarLanguage: calendarLanguage.value
-    }))
-  } catch { /* ignore */ }
+  if (sessionStorageTimer !== null) clearTimeout(sessionStorageTimer)
+  sessionStorageTimer = setTimeout(() => {
+    try {
+      sessionStorage.setItem('calendarPageState', JSON.stringify({
+        fetchedItems: fetchedItems.value,
+        selectedItems: selectedItems.value,
+        itemsInCalendar: itemsInCalendar.value,
+        calendarName: calendarName.value,
+        calendarLanguage: calendarLanguage.value
+      }))
+    } catch { /* ignore */ }
+    sessionStorageTimer = null
+  }, 1000)
 })
 
 onBeforeUnmount(() => {
+  if (sessionStorageTimer !== null) {
+    clearTimeout(sessionStorageTimer)
+    sessionStorageTimer = null
+  }
   if (!route.params.id || route.params.id === 'new') {
     sessionStorage.removeItem('calendarPageState')
   }
