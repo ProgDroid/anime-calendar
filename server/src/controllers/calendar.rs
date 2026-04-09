@@ -219,7 +219,7 @@ async fn subscribe_feed(
                         .body(cached_file);
                 }
                 Err(e) => {
-                    eprintln!("Cache error: {e:?}");
+                    error!("Cache error: {e:?}");
                 }
             }
 
@@ -401,7 +401,7 @@ async fn get_calendars(
                 }
                 Err(e) => {
                     // Log error but continue with regular processing
-                    eprintln!("Cache error: {e:?}");
+                    error!("Cache error: {e:?}");
                 }
             }
 
