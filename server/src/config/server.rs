@@ -10,12 +10,13 @@ pub struct Server {
     pub log_level: String,
     pub google_client_id: String,
     pub redis: RedisConfig,
-    pub jwt_secret: String, // TODO secret?
+    pub jwt_secret: String,
     pub compress: bool,
     #[serde(default = "default_allowed_origins")]
     pub allowed_origins: Vec<String>,
 }
 
+#[must_use]
 fn default_allowed_origins() -> Vec<String> {
     vec!["http://localhost:5173".to_string()]
 }

@@ -73,7 +73,7 @@ pub fn start(
             .app_data(web::Data::new(anilist.clone()))
             .app_data(web::Data::new(google_oauth.clone()))
             .app_data(web::Data::new(cache.clone()))
-            .app_data(web::Data::new(config)) // TODO do I want this data lying around the entire time?
+            .app_data(web::Data::new(config))
             .service(item::get)
             .service(items::get)
             .service(items::search)
@@ -104,18 +104,3 @@ pub fn start(
     .bind(format!("{host}:{port}"))?
     .run())
 }
-// TODO refactor frontend components
-
-// TODO add more tests for the backend services and controllers
-// TODO implement rate limiting for API endpoints
-// TODO optimize database queries and indexes
-// TODO add logging to all critical sections of the code
-// TODO improve error handling and provide meaningful error messages to the client
-// TODO refactor the codebase to follow a more modular architecture
-// TODO update dependencies to their latest versions
-// TODO add support for multiple languages in the frontend
-// TODO optimize image loading and rendering on the frontend
-// TODO improve accessibility features on the frontend
-// TODO add analytics tracking to the frontend
-// TODO cache anilist content as well? separate cache
-// TODO load testing
