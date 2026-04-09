@@ -1,6 +1,7 @@
 use std::str::FromStr;
 
 use actix_cors::Cors;
+use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{
     dev::Server,
     middleware::{Compress, Condition, Logger},
@@ -47,6 +48,12 @@ pub fn start(
     let compress = config.compress;
     let allowed_origins = config.allowed_origins.clone();
 
+    let governor_conf = GovernorConfigBuilder::default()
+        .seconds_per_request(1)
+        .burst_size(60)
+        .finish()
+        .expect("Governor config is valid");
+
     Ok(HttpServer::new(move || {
         let config = config.clone();
 
@@ -66,6 +73,7 @@ pub fn start(
         App::new()
             .wrap(Condition::new(compress, Compress::default()))
             .wrap(Logger::default())
+            .wrap(Governor::new(&governor_conf))
             .wrap(cors)
             .app_data(web::Data::new(user_mapper.clone()))
             .app_data(web::Data::new(calendar_mapper.clone()))
