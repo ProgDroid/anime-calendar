@@ -9,6 +9,7 @@ use crate::{
 };
 
 use actix_web::{delete, get, put, web, HttpResponse, ResponseError};
+use log::error;
 use chrono::NaiveDateTime;
 use common::{
     calendar::Calendar,
@@ -146,7 +147,7 @@ async fn export(
                     }
                     Err(e) => {
                         // Log error but continue with regular processing
-                        eprintln!("Cache error: {e:?}");
+                        error!("Cache error: {e:?}");
                     }
                 }
 
@@ -471,7 +472,7 @@ async fn get_calendar(
                     }
                     Err(e) => {
                         // Log error but continue with regular processing
-                        eprintln!("Cache error: {e:?}");
+                        error!("Cache error: {e:?}");
                     }
                 }
 

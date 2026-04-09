@@ -283,27 +283,32 @@ impl CalendarMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn delete_calendar(&self, id: i32, user_id: i32) -> ServerResult<()> {
-        sqlx::query!(
+        let mut tx = self.db.pool.begin().await?;
+
+        if let Err(e) = sqlx::query!(
+            "DELETE FROM calendar_items WHERE calendar_id = $1",
+            id
+        )
+        .execute(&mut *tx)
+        .await
+        {
+            tx.rollback().await?;
+            return Err(e.into());
+        }
+
+        if let Err(e) = sqlx::query!(
             "DELETE FROM calendars WHERE id = $1 AND user_id = $2",
             id,
             user_id
         )
-        .execute(&self.db.pool)
-        .await?;
+        .execute(&mut *tx)
+        .await
+        {
+            tx.rollback().await?;
+            return Err(e.into());
+        }
 
-        self.delete_calendar_items(id).await?;
-
-        Ok(())
-    }
-
-    async fn delete_calendar_items(&self, calendar_id: i32) -> ServerResult<()> {
-        sqlx::query!(
-            "DELETE FROM calendar_items WHERE calendar_id = $1",
-            calendar_id
-        )
-        .execute(&self.db.pool)
-        .await?;
-
+        tx.commit().await?;
         Ok(())
     }
 }

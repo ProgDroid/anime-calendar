@@ -4,6 +4,7 @@ use common::{
     id::Id,
     item::{Repository, Type},
 };
+use log::error;
 use serde::Deserialize;
 
 use crate::{cache::Cache, mappers::anilist::Anilist};
@@ -49,7 +50,7 @@ async fn get(
         }
         Err(e) => {
             // Log error but continue with regular processing
-            eprintln!("Cache error: {e:?}");
+            error!("Cache error: {e:?}");
         }
     }
 
@@ -101,7 +102,7 @@ async fn search(
         }
         Err(e) => {
             // Log error but continue with regular processing
-            eprintln!("Cache error: {e:?}");
+            error!("Cache error: {e:?}");
         }
     }
 

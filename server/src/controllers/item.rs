@@ -1,5 +1,6 @@
 use actix_web::{get, web, HttpResponse};
 use common::{id::Id, item::Repository};
+use log::error;
 
 use crate::{cache::Cache, mappers::anilist::Anilist};
 
@@ -31,7 +32,7 @@ async fn get(
             }
             Err(e) => {
                 // Log error but continue with regular processing
-                eprintln!("Cache error: {e:?}");
+                error!("Cache error: {e:?}");
             }
         }
 

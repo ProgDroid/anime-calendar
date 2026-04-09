@@ -1,4 +1,5 @@
 use actix_web::{web, HttpResponse, Result};
+use log::error;
 use serde::Serialize;
 
 use crate::cache::Cache;
@@ -55,7 +56,7 @@ pub async fn get_cache_performance(cache: web::Data<Cache>) -> Result<HttpRespon
             Ok(HttpResponse::Ok().json(response))
         }
         Err(e) => {
-            eprintln!("Error monitoring cache performance: {e}");
+            error!("Error monitoring cache performance: {e}");
             Ok(HttpResponse::InternalServerError().json("Failed to monitor cache performance"))
         }
     }
