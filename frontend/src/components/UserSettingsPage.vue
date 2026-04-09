@@ -22,9 +22,8 @@ const fetchUserSettings = async () => {
     error.value = null
     
     settings.value = await userSettingsStore.fetchSettings()
-  } catch (err) {
+  } catch {
     error.value = t('userSettings.fetchFailed')
-    console.error('Error fetching user settings:', err)
   } finally {
     loading.value = false
   }
@@ -44,9 +43,8 @@ const handleUpdateSettings = async () => {
     
     // Show success notification
     toastService.success(t('userSettings.updateSuccess'))
-  } catch (err) {
+  } catch {
     error.value = t('userSettings.updateFailed')
-    console.error('Error updating user settings:', err)
   }
 }
 

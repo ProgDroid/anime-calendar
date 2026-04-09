@@ -29,9 +29,8 @@ const handleGoogleLogin = async (data: GoogleResponse) => {
     await authStore.oauthLogin('google', googleToken)
     
     router.push('/my-calendars')
-  } catch (err) {
+  } catch {
     error.value = t('auth.google.failed')
-    console.error('Google login error:', err)
   } finally {
     loading.value = false
   }

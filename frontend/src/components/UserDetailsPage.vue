@@ -7,6 +7,7 @@ import { toastService } from '@/services/toastService'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { applySettings } from '@/services/applySettings'
 import { useI18n } from 'vue-i18n'
+import axios from 'axios'
 import ConfirmModal from '@/components/shared/ConfirmModal.vue'
 
 const { t } = useI18n()
@@ -55,7 +56,6 @@ const fetchUserDetails = async () => {
     updatedEmail.value = response.data.email
   } catch (err) {
     error.value = t('userDetails.fetchFailed')
-    console.error('Error fetching user details:', err)
   } finally {
     loading.value = false
   }
@@ -79,7 +79,6 @@ const handleUpdate = async (e: Event) => {
     toastService.success(t('userDetails.updateSuccess'))
   } catch (err) {
     error.value = t('userDetails.updateFailed')
-    console.error('Error updating user:', err)
   }
 }
 
@@ -126,13 +125,12 @@ const handleUpdatePassword = async (e: Event) => {
     
     // Show success notification
     toastService.success(t('userDetails.passwordUpdateSuccess'))
-  } catch (err: any) {
-    if (err.response && err.response.status === 401) {
+  } catch (err) {
+    if (axios.isAxiosError(err) && err.response?.status === 401) {
       error.value = t('userDetails.currentPasswordIncorrect')
     } else {
       error.value = t('userDetails.passwordUpdateFailed')
     }
-    console.error('Error updating password:', err)
   } finally {
     isUpdatingPassword.value = false
   }
