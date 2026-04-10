@@ -14,6 +14,7 @@ use crate::{
     cache::Cache,
     config::server::Server as ServerConfig,
     controllers::{auth, cache_metrics, calendar, item, items, oauth, user},
+    error::Error,
     mappers::{
         anilist::Anilist, calendar::CalendarMapper, google_oauth::GoogleOauth, user::UserMapper,
         user_settings::UserSettingsMapper,
@@ -52,7 +53,7 @@ pub fn start(
         .seconds_per_request(1)
         .burst_size(60)
         .finish()
-        .expect("Governor config is valid");
+        .ok_or(Error::GovernorConfig)?;
 
     Ok(HttpServer::new(move || {
         let config = config.clone();

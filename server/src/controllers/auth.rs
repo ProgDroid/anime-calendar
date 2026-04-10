@@ -26,9 +26,8 @@ pub async fn login(
     credentials: web::Json<LoginRequest>,
     config: web::Data<ServerConfig>,
 ) -> HttpResponse {
-    let user = match db.get_user_by_email(&credentials.email).await {
-        Ok(user) => user,
-        Err(_) => return Error::Unauthorised.error_response(),
+    let Ok(user) = db.get_user_by_email(&credentials.email).await else {
+        return Error::Unauthorised.error_response();
     };
 
     match user.password_hash {

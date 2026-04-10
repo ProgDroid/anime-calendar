@@ -26,6 +26,8 @@ pub enum Error {
     CannotHashPassword(#[from] argon2::password_hash::Error),
     #[error("Cannot generate auth token")]
     CannotGenerateAuthToken(#[from] jsonwebtoken::errors::Error),
+    #[error("Governor config invalid")]
+    GovernorConfig,
 }
 
 impl ResponseError for Error {
@@ -44,9 +46,11 @@ impl ResponseError for Error {
             | Self::InvalidPassword
             | Self::CannotHashPassword(_)
             | Self::CannotGenerateAuthToken(_) => StatusCode::BAD_REQUEST,
-            Self::Database(_) | Self::Config(_) | Self::Server(_) | Self::NotImplemented => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            Self::Database(_)
+            | Self::Config(_)
+            | Self::Server(_)
+            | Self::NotImplemented
+            | Self::GovernorConfig => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
