@@ -42,6 +42,7 @@ const onImageError = (e: Event) => {
               :src="item.cover_image.medium"
               :alt="item.title.romaji"
               class="w-full h-full object-cover"
+              loading="lazy"
               @error="onImageError"
             />
           </div>
