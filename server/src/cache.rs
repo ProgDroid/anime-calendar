@@ -3,6 +3,13 @@ use serde::{de::DeserializeOwned, Serialize};
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+/// Cache TTL for item lookups and single-resource responses (1 hour).
+pub const CACHE_TTL_ITEM: u64 = 3600;
+/// Cache TTL for search results (30 minutes).
+pub const CACHE_TTL_SEARCH: u64 = 1800;
+/// Cache TTL for calendar export responses (2 hours).
+pub const CACHE_TTL_CALENDAR: u64 = 7200;
+
 #[derive(Clone)]
 pub struct Cache {
     connection: Arc<Mutex<MultiplexedConnection>>,
@@ -385,7 +392,7 @@ pub struct CacheConfig {
 impl Default for CacheConfig {
     fn default() -> Self {
         Self {
-            ttl_seconds: 3600, // 1 hour default
+            ttl_seconds: CACHE_TTL_ITEM,
             enabled: true,
         }
     }

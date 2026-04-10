@@ -2,7 +2,7 @@ use actix_web::{get, web, HttpResponse};
 use common::{id::Id, item::Repository};
 use log::error;
 
-use crate::{cache::Cache, mappers::anilist::Anilist};
+use crate::{cache::{Cache, CACHE_TTL_ITEM}, mappers::anilist::Anilist};
 
 #[allow(clippy::cast_possible_wrap)]
 #[get("/item/{id}")]
@@ -14,7 +14,7 @@ async fn get(
     if let Some(id) = Id::new(id.into_inner() as i64) {
         // Cache the response for 1 hour (3600 seconds)
         let cache_key = crate::cache::generate_item_key(id.to_int() as i64);
-        let cache_ttl = 3600; // 1 hour
+        let cache_ttl = CACHE_TTL_ITEM;
 
         // If cache is available, try to get from cache
         match cache

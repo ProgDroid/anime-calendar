@@ -8,6 +8,22 @@ use crate::services::auth::{
 use actix_web::{get, post, web, HttpResponse, ResponseError};
 use serde::{Deserialize, Serialize};
 
+fn is_valid_email(email: &str) -> bool {
+    let parts: Vec<&str> = email.split('@').collect();
+    if parts.len() != 2 {
+        return false;
+    }
+    let (local, domain) = (parts[0], parts[1]);
+    if local.is_empty() || domain.is_empty() {
+        return false;
+    }
+    let dot_pos = domain.rfind('.');
+    match dot_pos {
+        None => false,
+        Some(pos) => pos > 0 && pos < domain.len() - 1,
+    }
+}
+
 #[derive(Deserialize)]
 pub struct LoginRequest {
     pub email: String,
@@ -71,6 +87,11 @@ pub async fn register(
 
     // Validate username length
     if user_data.username.len() > 50 {
+        return Error::InvalidRequest.error_response();
+    }
+
+    // Validate email format
+    if !is_valid_email(&user_data.email) {
         return Error::InvalidRequest.error_response();
     }
 
@@ -142,5 +163,25 @@ pub async fn verify_token_endpoint(
     match verify_token(&token.token, config.jwt_secret.clone()) {
         Ok(_) => HttpResponse::Ok().finish(),
         Err(_) => Error::Unauthorised.error_response(),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_is_valid_email() {
+        assert!(is_valid_email("user@example.com"));
+        assert!(is_valid_email("a@b.co"));
+        assert!(is_valid_email("user.name+tag@sub.domain.org"));
+        assert!(!is_valid_email("notanemail"));
+        assert!(!is_valid_email("@domain.com"));
+        assert!(!is_valid_email("user@"));
+        assert!(!is_valid_email("user@nodot"));
+        assert!(!is_valid_email("user@@domain.com"));
+        assert!(!is_valid_email("user@.com"));
+        assert!(!is_valid_email("user@domain."));
+        assert!(!is_valid_email(""));
     }
 }

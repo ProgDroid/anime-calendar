@@ -205,11 +205,9 @@ pub async fn get_user_settings(
     user_settings_mapper: web::Data<UserSettingsMapper>,
     claims: Claims,
 ) -> HttpResponse {
-    let user_id = claims
-        .sub
-        .parse::<i32>()
-        .map_err(|_| Error::Unauthorised)
-        .unwrap();
+    let Ok(user_id) = claims.sub.parse::<i32>() else {
+        return Error::Unauthorised.error_response();
+    };
 
     match user_settings_mapper.get_user_settings(user_id).await {
         Ok(settings) => HttpResponse::Ok().json(settings),
@@ -224,11 +222,9 @@ pub async fn update_user_settings(
     claims: Claims,
     settings_data: web::Json<UserSettings>,
 ) -> HttpResponse {
-    let user_id = claims
-        .sub
-        .parse::<i32>()
-        .map_err(|_| Error::Unauthorised)
-        .unwrap();
+    let Ok(user_id) = claims.sub.parse::<i32>() else {
+        return Error::Unauthorised.error_response();
+    };
 
     info!("{settings_data:?}");
     match user_settings_mapper

@@ -18,8 +18,6 @@ pub enum Error {
     UserAlreadyExists,
     #[error("Invalid password")]
     InvalidPassword,
-    #[error("Not Implemented Yet")] // TODO remove once done
-    NotImplemented,
     #[error("Invalid token")]
     InvalidToken(#[from] google_oauth::Error),
     #[error("Cannot hash password")]
@@ -46,11 +44,9 @@ impl ResponseError for Error {
             | Self::InvalidPassword
             | Self::CannotHashPassword(_)
             | Self::CannotGenerateAuthToken(_) => StatusCode::BAD_REQUEST,
-            Self::Database(_)
-            | Self::Config(_)
-            | Self::Server(_)
-            | Self::NotImplemented
-            | Self::GovernorConfig => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Database(_) | Self::Config(_) | Self::Server(_) | Self::GovernorConfig => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         }
     }
 }

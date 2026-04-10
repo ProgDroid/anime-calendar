@@ -1,6 +1,6 @@
 #![allow(clippy::cast_possible_truncation)]
 use crate::{
-    cache::Cache,
+    cache::{Cache, CACHE_TTL_CALENDAR, CACHE_TTL_ITEM, CACHE_TTL_SEARCH},
     entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
     error::Error,
     mappers::{anilist::Anilist, calendar::CalendarMapper, user::UserMapper},
@@ -125,7 +125,7 @@ async fn export(
 
                 // Cache the response for 2 hours (7200 seconds)
                 let cache_key = crate::cache::generate_calendar_key(id.to_int() as i32);
-                let cache_ttl = 7200; // 2 hours
+                let cache_ttl = CACHE_TTL_CALENDAR;
 
                 // If cache is available, try to get from cache
                 match cache
@@ -207,7 +207,7 @@ async fn subscribe_feed(
             let file = generate_calendar_export(&calendar);
 
             let cache_key = format!("subscribe:{}", token.as_str());
-            let cache_ttl = 3600; // 1 hour
+            let cache_ttl = CACHE_TTL_ITEM;
 
             match cache
                 .cached_response(&cache_key, cache_ttl, || async { Ok(format!("{file}")) })
@@ -389,7 +389,7 @@ async fn get_calendars(
                 params.page,
                 params.page_size,
             );
-            let cache_ttl = 1800; // 30 minutes
+            let cache_ttl = CACHE_TTL_SEARCH;
 
             // If cache is available, try to get from cache
             match cache
@@ -460,7 +460,7 @@ async fn get_calendar(
 
                 // Cache the response for 1 hour (3600 seconds)
                 let cache_key = crate::cache::generate_calendar_key(id.to_int() as i32);
-                let cache_ttl = 3600; // 1 hour
+                let cache_ttl = CACHE_TTL_ITEM;
 
                 // If cache is available, try to get from cache
                 match cache

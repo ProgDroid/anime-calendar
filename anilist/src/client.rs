@@ -1,6 +1,7 @@
 use graphql_client::{GraphQLQuery, Response};
 use log::{debug, error, info};
 use reqwest::Client as ReqwestClient;
+use std::time::Duration;
 
 use crate::{
     Result, error::AnilistError, query::{
@@ -21,7 +22,10 @@ impl Client {
     #[must_use]
     pub fn new() -> Self {
         Self {
-            client: ReqwestClient::new(),
+            client: ReqwestClient::builder()
+                .timeout(Duration::from_secs(10))
+                .build()
+                .expect("Failed to build Anilist HTTP client"),
         }
     }
 

@@ -7,7 +7,7 @@ use common::{
 use log::error;
 use serde::Deserialize;
 
-use crate::{cache::Cache, mappers::anilist::Anilist};
+use crate::{cache::{Cache, CACHE_TTL_ITEM, CACHE_TTL_SEARCH}, mappers::anilist::Anilist};
 
 #[derive(Deserialize)]
 struct Params {
@@ -35,7 +35,7 @@ async fn get(
 
     // Cache the response for 1 hour (3600 seconds)
     let cache_key = crate::cache::generate_items_key(&ids);
-    let cache_ttl = 3600; // 1 hour
+    let cache_ttl = CACHE_TTL_ITEM;
 
     // If cache is available, try to get from cache
     match cache
@@ -85,7 +85,7 @@ async fn search(
 
     // Cache the response for 30 minutes (1800 seconds)
     let cache_key = crate::cache::generate_search_key(query, media_type_string.as_deref());
-    let cache_ttl = 1800; // 30 minutes
+    let cache_ttl = CACHE_TTL_SEARCH;
 
     // If cache is available, try to get from cache
     match cache
