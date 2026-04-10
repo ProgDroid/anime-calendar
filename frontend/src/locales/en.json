@@ -1,6 +1,7 @@
 {
   "app": {
     "title": "Anime Calendar",
+    "home": "Home",
     "myCalendars": "My Calendars",
     "myAccount": "My Account",
     "settings": "Settings",
@@ -153,6 +154,7 @@
     "accountDeleting": "Deleting..."
   },
   "errors": {
-    "generic": "An error occurred. Please try again."
+    "generic": "An error occurred. Please try again.",
+    "notFound": "Page not found"
   }
 }

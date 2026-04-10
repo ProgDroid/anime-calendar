@@ -9,7 +9,6 @@ use crate::{
 };
 
 use actix_web::{delete, get, put, web, HttpResponse, ResponseError};
-use log::error;
 use chrono::NaiveDateTime;
 use common::{
     calendar::Calendar,
@@ -17,6 +16,7 @@ use common::{
     item::{Item, Repository},
     language::Language,
 };
+use log::error;
 use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -66,7 +66,7 @@ const fn default_page_size() -> usize {
     6
 }
 
-#[get("/calendar/{id}/export")]
+#[get("/calendars/{id}/export")]
 async fn export(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
@@ -290,7 +290,9 @@ async fn put(
             if let Some(id) = Id::new(calendar.id.into()) {
                 // Invalidate cache for this calendar (controller-level invalidation)
                 let _ = cache.invalidate_calendar(calendar.id).await;
-                let _ = cache.invalidate_pattern("/calendars:page:*").await;
+                let _ = cache
+                    .invalidate_pattern(format!("{}:calendars:page:*", user.id).as_str())
+                    .await;
 
                 HttpResponse::Ok().json(Calendar {
                     id,

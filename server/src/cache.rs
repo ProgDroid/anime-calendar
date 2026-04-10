@@ -111,8 +111,9 @@ impl Cache {
     where
         T: Serialize + Sync,
     {
-        let serialized = serde_json::to_string(value)
-            .map_err(|e| redis::RedisError::from((redis::ErrorKind::Io, "Serialization failed", e.to_string())))?;
+        let serialized = serde_json::to_string(value).map_err(|e| {
+            redis::RedisError::from((redis::ErrorKind::Io, "Serialization failed", e.to_string()))
+        })?;
 
         redis::cmd("SET")
             .arg(key)
@@ -263,7 +264,6 @@ impl Cache {
 
         Ok(performance)
     }
-
 }
 
 #[must_use]
@@ -317,7 +317,7 @@ pub fn generate_user_details_key(user_id: i32) -> String {
 
 #[must_use]
 pub fn generate_user_paged_calendars_key(user_id: i32) -> String {
-    format!("{user_id}:/calendars:page:*")
+    format!("{user_id}:calendars:page:*")
 }
 
 // Cache metrics structure with atomic counters for thread safety

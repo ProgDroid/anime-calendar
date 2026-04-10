@@ -40,8 +40,8 @@ export const loadConfig = async () => {
         ...parsed.api
       }
     }
-  } catch (error) {
-    console.warn('Failed to load API configuration, using defaults:', error)
+  } catch {
+    // Use defaults if config fails to load
   }
 }
 

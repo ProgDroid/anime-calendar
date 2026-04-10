@@ -20,7 +20,8 @@ const router = createRouter({
     {
       path: '/login',
       name: 'Login',
-      component: LoginPage
+      component: LoginPage,
+      meta: { public: true }
     },
     {
       path: '/my-calendars',
@@ -45,6 +46,11 @@ const router = createRouter({
       name: 'UserSettings',
       component: UserSettingsPage,
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/:pathMatch(.*)*',
+      name: 'NotFound',
+      component: () => import('@/components/NotFoundPage.vue')
     }
   ]
 })
@@ -54,12 +60,12 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   const userSettingsStore = useUserSettingsStore()
 
-  // Fetch settings on every route change
-  const settings = await userSettingsStore.fetchSettings()
-  
-  if (settings) {
-    // Apply theme based on settings
-    applySettings(settings)
+  // Fetch settings on authenticated routes only
+  if (!to.meta.public) {
+    const settings = await userSettingsStore.fetchSettings()
+    if (settings) {
+      applySettings(settings)
+    }
   }
   
   if (to.path === '/login' && authStore.isAuthenticated()) {

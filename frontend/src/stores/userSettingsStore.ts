@@ -8,6 +8,7 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
   const settings = ref<UserSettings | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const fetchPromise = ref<Promise<UserSettings> | null>(null)
   const authStore = useAuthStore()
 
   const getDefaultSettings = (): UserSettings => {
@@ -24,21 +25,30 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
       return getDefaultSettings()
     }
 
-    try {
-      loading.value = true
-      error.value = null
-
-      // getUserSettings will use cache if available
-      const fetchedSettings = await getUserSettings()
-      settings.value = fetchedSettings
-      return fetchedSettings
-    } catch (err) {
-      error.value = 'Failed to fetch user settings'
-      console.error('Error fetching user settings:', err)
-      return getDefaultSettings()
-    } finally {
-      loading.value = false
+    // Return in-flight request if one exists
+    if (fetchPromise.value) {
+      return fetchPromise.value
     }
+
+    const promise = (async () => {
+      try {
+        loading.value = true
+        error.value = null
+
+        const fetchedSettings = await getUserSettings()
+        settings.value = fetchedSettings
+        return fetchedSettings
+      } catch {
+        error.value = 'Failed to fetch user settings'
+        return getDefaultSettings()
+      } finally {
+        loading.value = false
+        fetchPromise.value = null
+      }
+    })()
+
+    fetchPromise.value = promise
+    return promise
   }
 
   const updateSettings = async (newSettings: UserSettings): Promise<void> => {
@@ -47,7 +57,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
       settings.value = newSettings
     } catch (err) {
       error.value = 'Failed to update user settings'
-      console.error('Error updating user settings:', err)
       throw err
     }
   }
@@ -61,6 +70,7 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     settings,
     loading,
     error,
+    fetchPromise,
     fetchSettings,
     updateSettings,
     clearCache,

@@ -23,47 +23,32 @@ export const getUserSettings = async (): Promise<UserSettings> => {
   if (isCacheValid()) {
     const cachedSettings = localStorage.getItem(SETTINGS_STORAGE_KEY)
     if (cachedSettings) {
-      console.log('Using cached user settings')
       return JSON.parse(cachedSettings)
     }
   }
-  
+
   // Fetch from backend if no valid cache or no cache exists
-  try {
-    console.log('Fetching user settings from backend')
-    const response = await api.get('/user/settings')
-    const settings = response.data
-    
-    // Cache the settings
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
-    localStorage.setItem(SETTINGS_TIMESTAMP_KEY, Date.now().toString())
-    
-    return settings
-  } catch (error) {
-    console.error('Failed to fetch user settings:', error)
-    throw error
-  }
+  const response = await api.get('/user/settings')
+  const settings = response.data
+
+  // Cache the settings
+  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+  localStorage.setItem(SETTINGS_TIMESTAMP_KEY, Date.now().toString())
+
+  return settings
 }
 
 // Update user settings and invalidate cache
 export const updateUserSettings = async (settings: UserSettings): Promise<void> => {
-  try {
-    await api.put('/user/settings', settings)
-    
-    // Update cache with new settings
-    localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
-    localStorage.setItem(SETTINGS_TIMESTAMP_KEY, Date.now().toString())
-    
-    console.log('User settings updated and cached')
-  } catch (error) {
-    console.error('Failed to update user settings:', error)
-    throw error
-  }
+  await api.put('/user/settings', settings)
+
+  // Update cache with new settings
+  localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings))
+  localStorage.setItem(SETTINGS_TIMESTAMP_KEY, Date.now().toString())
 }
 
 // Invalidate the cache (useful when settings are updated from elsewhere)
 export const invalidateSettingsCache = (): void => {
   localStorage.removeItem(SETTINGS_STORAGE_KEY)
   localStorage.removeItem(SETTINGS_TIMESTAMP_KEY)
-  console.log('User settings cache invalidated')
 }

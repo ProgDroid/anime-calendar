@@ -1,6 +1,7 @@
 {
   "app": {
     "title": "Calendário de Anime",
+    "home": "Início",
     "myCalendars": "Meus Calendários",
     "myAccount": "Minha Conta",
     "settings": "Configurações",
@@ -153,6 +154,7 @@
     "accountDeleting": "Removendo..."
   },
   "errors": {
-    "generic": "Ocorreu um erro. Tente novamente."
+    "generic": "Ocorreu um erro. Tente novamente.",
+    "notFound": "Página não encontrada"
   }
 }

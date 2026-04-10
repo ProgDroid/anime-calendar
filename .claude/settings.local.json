@@ -17,7 +17,6 @@
       "Bash(grep:*)",
       "Bash(npm list:*)",
       "Bash(xargs cat:*)",
-      "Bash(wc -l /g/rustDev/anime-calendar/server/src/**/*.rs)",
       "Bash(xargs wc:*)"
     ]
   }
