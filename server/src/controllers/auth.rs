@@ -212,12 +212,13 @@ pub async fn verify_token_endpoint(
     }
 }
 
+/// Unit tests for pure functions (no DB / no HTTP stack).
 #[cfg(test)]
-mod tests {
-    use super::*;
+mod unit_tests {
+    use super::is_valid_email;
 
     #[test]
-    fn test_is_valid_email() {
+    fn validates_email_format() {
         assert!(is_valid_email("user@example.com"));
         assert!(is_valid_email("a@b.co"));
         assert!(is_valid_email("user.name+tag@sub.domain.org"));
@@ -229,5 +230,259 @@ mod tests {
         assert!(!is_valid_email("user@.com"));
         assert!(!is_valid_email("user@domain."));
         assert!(!is_valid_email(""));
+    }
+}
+
+/// Integration tests — spin up a real actix-web app backed by an isolated test DB.
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use crate::mappers::user::UserMapper;
+    use crate::services::auth::{generate_token, hash_password};
+    use actix_web::{http::StatusCode, test, web, App};
+    use secrecy::SecretString;
+    use serde_json::Value;
+    use sqlx::PgPool;
+
+    const SECRET: &str = "test-jwt-secret-at-least-32-bytes";
+    const STRONG_PW: &str = "SecurePass12!@";
+
+    fn jwt_data() -> web::Data<JwtSecret> {
+        web::Data::new(JwtSecret::new(SecretString::from(SECRET)))
+    }
+
+    /// Seed a password-based user and return its id.
+    async fn seed_user(pool: &PgPool, username: &str, email: &str) -> i32 {
+        let hash = hash_password(STRONG_PW).unwrap();
+        UserMapper::from_pool(pool.clone())
+            .create_user(username, email, Some(&hash))
+            .await
+            .unwrap()
+            .id
+    }
+
+    // ─── POST /login ──────────────────────────────────────────────────────────
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn login_valid_credentials_returns_token_and_username(pool: PgPool) {
+        seed_user(&pool, "alice", "alice@test.com").await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(login)
+                .service(register)
+                .service(get_current_user),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/login")
+            .set_json(serde_json::json!({ "email": "alice@test.com", "password": STRONG_PW }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: Value = test::read_body_json(resp).await;
+        assert!(body["token"].as_str().is_some_and(|t| !t.is_empty()));
+        assert_eq!(body["username"], "alice");
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn login_wrong_password_returns_401(pool: PgPool) {
+        seed_user(&pool, "bob", "bob@test.com").await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(login),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/login")
+            .set_json(serde_json::json!({ "email": "bob@test.com", "password": "WrongPass99!" }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn login_unknown_email_returns_401_not_404(pool: PgPool) {
+        // User enumeration prevention: unknown user must return 401, not 404.
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(login),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/login")
+            .set_json(serde_json::json!({ "email": "nobody@test.com", "password": STRONG_PW }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn login_oauth_user_without_password_returns_401(pool: PgPool) {
+        // OAuth users have no password_hash; password login must be uniformly refused.
+        UserMapper::from_pool(pool.clone())
+            .create_user("oauth_user", "oauth@test.com", None)
+            .await
+            .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(login),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/login")
+            .set_json(serde_json::json!({ "email": "oauth@test.com", "password": STRONG_PW }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    // ─── POST /register ───────────────────────────────────────────────────────
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn register_new_user_returns_token_and_username(pool: PgPool) {
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(register),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/register")
+            .set_json(serde_json::json!({
+                "username": "carol",
+                "email": "carol@test.com",
+                "password": STRONG_PW
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: Value = test::read_body_json(resp).await;
+        assert!(body["token"].as_str().is_some_and(|t| !t.is_empty()));
+        assert_eq!(body["username"], "carol");
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn register_duplicate_email_returns_400(pool: PgPool) {
+        seed_user(&pool, "dave", "dave@test.com").await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(register),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/register")
+            .set_json(serde_json::json!({
+                "username": "dave2",
+                "email": "dave@test.com",
+                "password": STRONG_PW
+            }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn register_weak_password_returns_400(pool: PgPool) {
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(register),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/register")
+            .set_json(serde_json::json!({
+                "username": "eve",
+                "email": "eve@test.com",
+                "password": "weakpassword"
+            }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn register_invalid_email_returns_400(pool: PgPool) {
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(register),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/register")
+            .set_json(serde_json::json!({
+                "username": "frank",
+                "email": "not-an-email",
+                "password": STRONG_PW
+            }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn register_username_too_long_returns_400(pool: PgPool) {
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(register),
+        )
+        .await;
+        let long_name = "a".repeat(51);
+        let req = test::TestRequest::post()
+            .uri("/register")
+            .set_json(serde_json::json!({
+                "username": long_name,
+                "email": "toolong@test.com",
+                "password": STRONG_PW
+            }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // ─── GET /user ────────────────────────────────────────────────────────────
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn get_current_user_with_valid_jwt_returns_username(pool: PgPool) {
+        let user_id = seed_user(&pool, "grace", "grace@test.com").await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(get_current_user),
+        )
+        .await;
+        let token = generate_token(&user_id, SECRET).unwrap();
+        let req = test::TestRequest::get()
+            .uri("/user")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: Value = test::read_body_json(resp).await;
+        assert_eq!(body["username"], "grace");
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn get_current_user_without_token_returns_401(pool: PgPool) {
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(get_current_user),
+        )
+        .await;
+        let req = test::TestRequest::get().uri("/user").to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
     }
 }

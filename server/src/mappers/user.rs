@@ -160,6 +160,12 @@ impl UserMapper {
 
         self.get_user_by_id(user_id).await
     }
+
+    /// Construct a mapper from a bare pool — for integration tests only.
+    #[cfg(test)]
+    pub fn from_pool(pool: sqlx::PgPool) -> Self {
+        Self { db: Database { pool } }
+    }
 }
 
 #[cfg(test)]

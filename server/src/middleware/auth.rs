@@ -47,3 +47,99 @@ impl FromRequest for Claims {
         Box::pin(fut)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::server::JwtSecret;
+    use crate::services::auth::generate_token;
+    use actix_web::{get, http::StatusCode, test, web, App, HttpResponse};
+    use jsonwebtoken::{encode, EncodingKey, Header};
+    use secrecy::SecretString;
+
+    const SECRET: &str = "test-jwt-secret-at-least-32-bytes";
+
+    /// Minimal protected endpoint: extracts Claims, proves the middleware passed.
+    #[get("/protected")]
+    async fn guarded(claims: Claims) -> HttpResponse {
+        HttpResponse::Ok().json(serde_json::json!({ "sub": claims.sub }))
+    }
+
+    fn secret_data() -> web::Data<JwtSecret> {
+        web::Data::new(JwtSecret::new(SecretString::from(SECRET)))
+    }
+
+    #[actix_web::test]
+    async fn valid_jwt_allows_access() {
+        let app = test::init_service(
+            App::new().app_data(secret_data()).service(guarded),
+        )
+        .await;
+        let token = generate_token(&99, SECRET).unwrap();
+        let req = test::TestRequest::get()
+            .uri("/protected")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
+    }
+
+    #[actix_web::test]
+    async fn expired_jwt_returns_401() {
+        let app = test::init_service(
+            App::new().app_data(secret_data()).service(guarded),
+        )
+        .await;
+        // exp = 0 → 1970-01-01, always expired.
+        let claims = Claims { sub: "1".to_owned(), exp: 0 };
+        let token = encode(
+            &Header::default(),
+            &claims,
+            &EncodingKey::from_secret(SECRET.as_bytes()),
+        )
+        .unwrap();
+        let req = test::TestRequest::get()
+            .uri("/protected")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_web::test]
+    async fn missing_authorization_header_returns_401() {
+        let app = test::init_service(
+            App::new().app_data(secret_data()).service(guarded),
+        )
+        .await;
+        let req = test::TestRequest::get().uri("/protected").to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_web::test]
+    async fn non_bearer_scheme_returns_401() {
+        let app = test::init_service(
+            App::new().app_data(secret_data()).service(guarded),
+        )
+        .await;
+        let token = generate_token(&1, SECRET).unwrap();
+        // "Token " prefix instead of "Bearer "
+        let req = test::TestRequest::get()
+            .uri("/protected")
+            .insert_header(("Authorization", format!("Token {token}")))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[actix_web::test]
+    async fn wrong_secret_returns_401() {
+        let app = test::init_service(
+            App::new().app_data(secret_data()).service(guarded),
+        )
+        .await;
+        let token = generate_token(&1, "a-completely-different-secret!!").unwrap();
+        let req = test::TestRequest::get()
+            .uri("/protected")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+}
