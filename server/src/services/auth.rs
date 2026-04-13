@@ -98,10 +98,94 @@ pub fn verify_token<T: AsRef<[u8]>>(token: &str, jwt_secret: T) -> ServerResult<
 mod tests {
     use super::*;
 
+    // --- password hashing / validation ---
+
     #[test]
-    fn test_password_validation() {
+    fn test_password_validation_correct_password() {
         let password = "password123";
         let hashed = hash_password(password).unwrap();
         assert!(validate_password(password, &hashed));
+    }
+
+    #[test]
+    fn test_password_validation_wrong_password() {
+        let hashed = hash_password("correcthorse").unwrap();
+        assert!(!validate_password("wronghorse", &hashed));
+    }
+
+    #[test]
+    fn test_password_validation_rejects_invalid_hash() {
+        assert!(!validate_password("anything", "notahash"));
+    }
+
+    // --- password strength ---
+
+    #[test]
+    fn test_password_strength_valid() {
+        assert!(validate_password_strength("Correct!Horse1Battery"));
+    }
+
+    #[test]
+    fn test_password_strength_too_short() {
+        assert!(!validate_password_strength("Sh0rt!"));
+    }
+
+    #[test]
+    fn test_password_strength_no_uppercase() {
+        assert!(!validate_password_strength("nouppercase1!aaaaaa"));
+    }
+
+    #[test]
+    fn test_password_strength_no_lowercase() {
+        assert!(!validate_password_strength("NOLOWERCASE1!AAAA"));
+    }
+
+    #[test]
+    fn test_password_strength_no_digit() {
+        assert!(!validate_password_strength("NoDigitsHere!abcde"));
+    }
+
+    #[test]
+    fn test_password_strength_no_special_char() {
+        assert!(!validate_password_strength("NoSpecialChar1abcd"));
+    }
+
+    // --- JWT generation / verification ---
+
+    #[test]
+    fn test_generate_and_verify_token_round_trip() {
+        let secret = "test-jwt-secret";
+        let user_id = 42_i32;
+        let token = generate_token(&user_id, secret).unwrap();
+        let claims = verify_token(&token, secret).unwrap();
+        assert_eq!(claims.sub, "42");
+    }
+
+    #[test]
+    fn test_verify_token_rejects_wrong_secret() {
+        let token = generate_token(&1, "correct-secret").unwrap();
+        let result = verify_token(&token, "wrong-secret");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_verify_token_rejects_garbage_input() {
+        let result = verify_token("not.a.jwt", "secret");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_generate_token_sets_sub_to_user_id_string() {
+        let token = generate_token(&99, "s3cr3t").unwrap();
+        let claims = verify_token(&token, "s3cr3t").unwrap();
+        assert_eq!(claims.sub, "99");
+    }
+
+    #[test]
+    fn test_generate_token_sets_future_expiry() {
+        let token = generate_token(&1, "s").unwrap();
+        let claims = verify_token(&token, "s").unwrap();
+        let now = chrono::Utc::now().timestamp() as usize;
+        assert!(claims.exp > now);
     }
 }
