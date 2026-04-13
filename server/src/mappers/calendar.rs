@@ -46,7 +46,11 @@ impl CalendarMapper {
             user_id
         )
         .fetch_one(&self.db.pool)
-        .await?;
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => Error::NotFound,
+            other => Error::Database(other),
+        })?;
 
         let item_ids: Vec<i32> = sqlx::query_scalar!(
             "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
@@ -285,6 +289,12 @@ impl CalendarMapper {
         .map_err(|_| Error::NotFound)?;
 
         Ok(row.subscription_token)
+    }
+
+    /// Construct a mapper from a bare pool — for integration tests only.
+    #[cfg(test)]
+    pub fn from_pool(pool: sqlx::PgPool) -> Self {
+        Self { db: Database { pool } }
     }
 }
 

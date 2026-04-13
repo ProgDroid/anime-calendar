@@ -589,3 +589,285 @@ async fn delete_calendar(
         Err(e) => e.error_response(),
     }
 }
+
+#[cfg(test)]
+mod integration_tests {
+    use super::*;
+    use crate::cache::Cache;
+    use crate::config::server::JwtSecret;
+    use crate::mappers::calendar::CalendarMapper;
+    use crate::mappers::user::UserMapper;
+    use crate::services::auth::hash_password;
+    use actix_web::{http::StatusCode, test, web, App};
+    use secrecy::SecretString;
+    use serde_json::Value;
+    use sqlx::PgPool;
+
+    const SECRET: &str = "test-jwt-secret-at-least-32-bytes";
+
+    fn jwt_data() -> web::Data<JwtSecret> {
+        web::Data::new(JwtSecret::new(SecretString::from(SECRET)))
+    }
+
+    async fn seed_user(pool: &PgPool, username: &str, email: &str) -> (i32, String) {
+        use crate::services::auth::generate_token;
+        let hash = hash_password("SecurePass12!@").unwrap();
+        let user = UserMapper::from_pool(pool.clone())
+            .create_user(username, email, Some(&hash))
+            .await
+            .unwrap();
+        let token = generate_token(&user.id, SECRET).unwrap();
+        (user.id, token)
+    }
+
+    /// Insert a bare calendar row directly (no items), returning its id and token.
+    async fn seed_calendar(pool: &PgPool, user_id: i32, name: &str) -> (i32, String) {
+        let row = sqlx::query!(
+            "INSERT INTO calendars (name, language, user_id, subscription_token) \
+             VALUES ($1, 'english'::language, $2, encode(gen_random_bytes(32), 'hex')) \
+             RETURNING id, subscription_token",
+            name,
+            user_id
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap();
+        (row.id, row.subscription_token)
+    }
+
+    // ─── PUT /calendar (validation / auth) ───────────────────────────────────
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn put_calendar_without_token_returns_401(pool: PgPool) {
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Anilist::default()))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(put),
+        )
+        .await;
+        let req = test::TestRequest::put()
+            .uri("/calendar")
+            .set_json(serde_json::json!({ "id": 0, "name": "My Cal", "language": "english", "items": [] }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn put_calendar_empty_name_returns_400(pool: PgPool) {
+        let (_, token) = seed_user(&pool, "alice", "alice@test.com").await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Anilist::default()))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(put),
+        )
+        .await;
+        let req = test::TestRequest::put()
+            .uri("/calendar")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .set_json(serde_json::json!({ "id": 0, "name": "", "language": "english", "items": [] }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn put_calendar_name_too_long_returns_400(pool: PgPool) {
+        let (_, token) = seed_user(&pool, "bob", "bob@test.com").await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Anilist::default()))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(put),
+        )
+        .await;
+        let long_name = "a".repeat(101);
+        let req = test::TestRequest::put()
+            .uri("/calendar")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .set_json(serde_json::json!({ "id": 0, "name": long_name, "language": "english", "items": [] }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+    }
+
+    // ─── GET /calendars ───────────────────────────────────────────────────────
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn get_calendars_returns_paginated_list(pool: PgPool) {
+        let (user_id, token) = seed_user(&pool, "carol", "carol@test.com").await;
+        seed_calendar(&pool, user_id, "Cal A").await;
+        seed_calendar(&pool, user_id, "Cal B").await;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(get_calendars),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri("/calendars?page=1&page_size=10")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: Value = test::read_body_json(resp).await;
+        assert_eq!(body["pagination"]["total"], 2);
+        assert_eq!(body["data"].as_array().unwrap().len(), 2);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn get_calendars_without_token_returns_401(pool: PgPool) {
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(get_calendars),
+        )
+        .await;
+        let req = test::TestRequest::get().uri("/calendars").to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn get_calendars_only_returns_own_calendars(pool: PgPool) {
+        let (user_id_a, token_a) = seed_user(&pool, "dave", "dave@test.com").await;
+        let (user_id_b, _) = seed_user(&pool, "eve", "eve@test.com").await;
+        seed_calendar(&pool, user_id_a, "Dave's Cal").await;
+        seed_calendar(&pool, user_id_b, "Eve's Cal").await;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(get_calendars),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri("/calendars")
+            .insert_header(("Authorization", format!("Bearer {token_a}")))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        let body: Value = test::read_body_json(resp).await;
+        // Dave should only see his own calendar
+        assert_eq!(body["pagination"]["total"], 1);
+        let names: Vec<&str> = body["data"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|c| c["name"].as_str().unwrap())
+            .collect();
+        assert!(names.contains(&"Dave's Cal"));
+        assert!(!names.contains(&"Eve's Cal"));
+    }
+
+    // ─── GET /calendars/{id} ─────────────────────────────────────────────────
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn get_calendar_without_token_returns_401(pool: PgPool) {
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Anilist::default()))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(get_calendar),
+        )
+        .await;
+        let req = test::TestRequest::get().uri("/calendars/1").to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn get_calendar_not_found_returns_404(pool: PgPool) {
+        let (_, token) = seed_user(&pool, "frank", "frank@test.com").await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Anilist::default()))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(get_calendar),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri("/calendars/999999")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+    }
+
+    // ─── DELETE /calendars/{id} ───────────────────────────────────────────────
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn delete_calendar_own_returns_200(pool: PgPool) {
+        let (user_id, token) = seed_user(&pool, "grace", "grace@test.com").await;
+        let (cal_id, _) = seed_calendar(&pool, user_id, "To Delete").await;
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(delete_calendar),
+        )
+        .await;
+        let req = test::TestRequest::delete()
+            .uri(&format!("/calendars/{cal_id}"))
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn delete_calendar_non_existent_returns_404(pool: PgPool) {
+        let (_, token) = seed_user(&pool, "henry", "henry@test.com").await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(delete_calendar),
+        )
+        .await;
+        let req = test::TestRequest::delete()
+            .uri("/calendars/999999")
+            .insert_header(("Authorization", format!("Bearer {token}")))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn delete_calendar_without_token_returns_401(pool: PgPool) {
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(delete_calendar),
+        )
+        .await;
+        let req = test::TestRequest::delete().uri("/calendars/1").to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+}
