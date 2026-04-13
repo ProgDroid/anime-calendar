@@ -1,0 +1,14 @@
+host = "0.0.0.0"
+port = 8080
+log_level = "info"
+google_client_id = ""
+google_client_secret = ""
+jwt_secret = ""
+compress = true
+allowed_origins = ["http://localhost"]
+
+[redis]
+host = "redis"
+port = 6379
+password = ""
+db = 0

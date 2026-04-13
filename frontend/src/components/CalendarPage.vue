@@ -56,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, onBeforeMount, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, watch, onBeforeMount, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
@@ -64,6 +64,8 @@ import type { Calendar } from '@/types/calendar'
 import api from '@/config/api'
 import { toastService } from '@/services/toastService'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
+import { useCalendarSearch } from '@/composables/useCalendarSearch'
+import { useRecommendations } from '@/composables/useRecommendations'
 import CalendarSettingsForm from '@/components/calendar/CalendarSettingsForm.vue'
 import CalendarItemsList from '@/components/calendar/CalendarItemsList.vue'
 import ItemSearchPanel from '@/components/calendar/ItemSearchPanel.vue'
@@ -74,42 +76,17 @@ const router = useRouter()
 const route = useRoute()
 const userSettingsStore = useUserSettingsStore()
 
-const fetchedItems = ref<Item[]>([])
-const selectedItems = ref<number[]>([])
+const { fetchedItems, selectedItems, loading: searchLoading, searchError, handleSearch, toggleItemSelection } = useCalendarSearch()
+const { recommendations, calculateRecommendations } = useRecommendations()
+
 const calendarName = ref('')
 const calendarLanguage = ref<'english' | 'romaji' | 'native'>('english')
 const itemsInCalendar = ref<Item[]>([])
-const loading = ref(false)
-const searchError = ref<string | null>(null)
+const submitLoading = ref(false)
 const calendarError = ref<string | null>(null)
-const recommendations = ref<Item[]>([])
 const currentCalendar = ref<Calendar | null>(null)
 
-const handleSearch = async ({ name, mediaType }: { name: string; mediaType: '' | 'ANIME' | 'MANGA' }) => {
-  if (!name) {
-    searchError.value = t('calendar.enterName')
-    return
-  }
-  loading.value = true
-  searchError.value = null
-  try {
-    let url = `/search?name=${encodeURIComponent(name)}`
-    if (mediaType) url += `&media_type=${mediaType}`
-    const response = await api.get(url)
-    fetchedItems.value = response.data
-    selectedItems.value = []
-  } catch {
-    searchError.value = t('calendar.fetchItemsFailed')
-  } finally {
-    loading.value = false
-  }
-}
-
-const toggleItemSelection = (id: number) => {
-  const idx = selectedItems.value.indexOf(id)
-  if (idx === -1) selectedItems.value.push(id)
-  else selectedItems.value.splice(idx, 1)
-}
+const loading = computed(() => searchLoading.value || submitLoading.value)
 
 const addItemToCalendar = () => {
   const newItems = fetchedItems.value.filter(
@@ -118,24 +95,24 @@ const addItemToCalendar = () => {
   )
   itemsInCalendar.value.push(...newItems)
   selectedItems.value = []
-  if (itemsInCalendar.value.length > 0) calculateRecommendations()
+  if (itemsInCalendar.value.length > 0) calculateRecommendations(itemsInCalendar.value)
 }
 
 const addItemToCalendarSingle = (item: Item) => {
   if (!itemsInCalendar.value.some(c => c.id === item.id)) {
     itemsInCalendar.value.push(item)
-    calculateRecommendations()
+    calculateRecommendations(itemsInCalendar.value)
   }
 }
 
 const removeItemFromCalendar = (id: number) => {
   itemsInCalendar.value = itemsInCalendar.value.filter(item => item.id !== id)
-  calculateRecommendations()
+  calculateRecommendations(itemsInCalendar.value)
 }
 
 const clearCalendar = () => {
   itemsInCalendar.value = []
-  recommendations.value = []
+  calculateRecommendations([])
 }
 
 const submitCalendar = async () => {
@@ -153,7 +130,7 @@ const submitCalendar = async () => {
     return
   }
 
-  loading.value = true
+  submitLoading.value = true
   calendarError.value = null
   try {
     let response
@@ -180,47 +157,8 @@ const submitCalendar = async () => {
   } catch {
     calendarError.value = t('calendar.updateFailed')
   } finally {
-    loading.value = false
+    submitLoading.value = false
   }
-}
-
-const calculateRecommendations = () => {
-  if (itemsInCalendar.value.length === 0) {
-    recommendations.value = []
-    return
-  }
-  const counts = new Map<number, { count: number; totalRating: number; item: Item }>()
-  itemsInCalendar.value.forEach(item => {
-    item.recommendations?.forEach(rec => {
-      const id = rec.media.id
-      if (itemsInCalendar.value.some(c => c.id === id)) return
-      if (counts.has(id)) {
-        const e = counts.get(id)!
-        e.count++
-        e.totalRating += rec.rating
-      } else {
-        counts.set(id, {
-          count: 1,
-          totalRating: rec.rating,
-          item: {
-            id: rec.media.id,
-            id_mal: rec.media.id_mal,
-            title: rec.media.title,
-            media_type: item.media_type,
-            episode_duration: 0,
-            airing_schedule: [],
-            cover_image: rec.media.cover_image,
-            banner_image: '',
-            recommendations: []
-          }
-        })
-      }
-    })
-  })
-  recommendations.value = Array.from(counts.values())
-    .sort((a, b) => b.count !== a.count ? b.count - a.count : (b.totalRating / b.count) - (a.totalRating / a.count))
-    .slice(0, 5)
-    .map(e => e.item)
 }
 
 onMounted(() => {
@@ -268,7 +206,7 @@ onBeforeUnmount(() => {
 onBeforeMount(async () => {
   const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
   if (calendarId && calendarId !== 'new') {
-    loading.value = true
+    submitLoading.value = true
     try {
       const response = await api.get(`/calendars/${calendarId}`)
       const calendar: Calendar = response.data
@@ -276,11 +214,11 @@ onBeforeMount(async () => {
       calendarLanguage.value = calendar.language
       itemsInCalendar.value = calendar.items
       currentCalendar.value = calendar
-      calculateRecommendations()
+      calculateRecommendations(itemsInCalendar.value)
     } catch {
       calendarError.value = t('calendar.loadFailed')
     } finally {
-      loading.value = false
+      submitLoading.value = false
     }
   } else {
     const settings = await userSettingsStore.fetchSettings()

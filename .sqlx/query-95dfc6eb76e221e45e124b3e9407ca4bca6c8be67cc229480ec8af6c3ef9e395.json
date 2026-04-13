@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO user_settings (user_id, theme_preference, language_preference, title_language_preference, timezone) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id) DO UPDATE SET theme_preference = EXCLUDED.theme_preference, language_preference = EXCLUDED.language_preference, title_language_preference = EXCLUDED.title_language_preference, timezone = EXCLUDED.timezone",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        {
+          "Custom": {
+            "name": "theme",
+            "kind": {
+              "Enum": [
+                "light",
+                "dark"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "site_language",
+            "kind": {
+              "Enum": [
+                "en",
+                "pt"
+              ]
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "language",
+            "kind": {
+              "Enum": [
+                "english",
+                "romaji",
+                "native"
+              ]
+            }
+          }
+        },
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "95dfc6eb76e221e45e124b3e9407ca4bca6c8be67cc229480ec8af6c3ef9e395"
+}

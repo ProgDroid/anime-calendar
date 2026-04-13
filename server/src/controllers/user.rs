@@ -12,32 +12,42 @@ use actix_web::{delete, get, post, put, web, HttpResponse, ResponseError};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UserRequest {
     pub username: String,
     pub password: String,
     pub email: String,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct UserResponse {
     pub username: String,
     pub email: String,
     pub is_oauth: bool,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdateUserRequest {
     pub username: String,
     pub email: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct UpdatePasswordRequest {
     pub current_password: String,
     pub new_password: String,
 }
 
+#[utoipa::path(
+    get,
+    path = "/user/details",
+    tag = "user",
+    responses(
+        (status = 200, body = UserResponse),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/user/details")]
 pub async fn get_user_details(user_mapper: web::Data<UserMapper>, claims: Claims) -> HttpResponse {
     match user_mapper.get_user_from_claims(&claims).await {
@@ -58,6 +68,18 @@ pub async fn get_user_details(user_mapper: web::Data<UserMapper>, claims: Claims
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/user",
+    tag = "user",
+    request_body = UpdateUserRequest,
+    responses(
+        (status = 200, body = UserResponse),
+        (status = 400, body = crate::controllers::auth::ErrorResponse),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[put("/user")]
 pub async fn update_user(
     user_mapper: web::Data<UserMapper>,
@@ -109,6 +131,18 @@ pub async fn update_user(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/user/password",
+    tag = "user",
+    request_body = UpdatePasswordRequest,
+    responses(
+        (status = 200, description = "Password updated"),
+        (status = 400, body = crate::controllers::auth::ErrorResponse),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[post("/user/password")]
 pub async fn update_password(
     user_mapper: web::Data<UserMapper>,
@@ -166,6 +200,18 @@ pub async fn update_password(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/user/{id}",
+    tag = "user",
+    params(("id" = i32, Path, description = "User ID to delete (must match authenticated user)")),
+    responses(
+        (status = 204, description = "User deleted"),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+        (status = 403, description = "Forbidden — cannot delete another user"),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[delete("/user/{id}")]
 pub async fn delete_user(
     user_mapper: web::Data<UserMapper>,
@@ -200,6 +246,16 @@ pub async fn delete_user(
 }
 
 // User settings endpoints
+#[utoipa::path(
+    get,
+    path = "/user/settings",
+    tag = "user",
+    responses(
+        (status = 200, body = crate::entity::user_settings::UserSettings),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/user/settings")]
 pub async fn get_user_settings(
     user_settings_mapper: web::Data<UserSettingsMapper>,
@@ -215,6 +271,17 @@ pub async fn get_user_settings(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/user/settings",
+    tag = "user",
+    request_body = crate::entity::user_settings::UserSettings,
+    responses(
+        (status = 200, description = "Settings updated"),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[put("/user/settings")]
 pub async fn update_user_settings(
     user_settings_mapper: web::Data<UserSettingsMapper>,

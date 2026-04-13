@@ -11,7 +11,9 @@ actix-web-lab = "0.24"
 anilist = { path = "../anilist" }
 argon2 = { version = "0.5", features = [ "std" ] }
 chrono = { version = "0.4", features = [ "serde" ] }
-common = { path = "../common" }
+common = { path = "../common", features = ["utoipa"] }
+utoipa = { version = "5", features = ["actix_extras", "chrono"] }
+utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
 config = "0.15"
 env_logger = "0.11"
 futures = "0.3"

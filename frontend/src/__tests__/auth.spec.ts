@@ -56,9 +56,10 @@ describe('Auth Store', () => {
 
   it('should handle login failure', async () => {
     vi.mocked(api.post).mockRejectedValue({
+      isAxiosError: true,
       response: {
         data: {
-          message: 'Invalid credentials'
+          error: 'Invalid credentials'
         }
       }
     })
@@ -141,7 +142,7 @@ describe('Auth Store', () => {
     try {
       await store.getCurrentUser()
       expect.fail('Should have thrown an error')
-    } catch (error: any) {
+    } catch {
       expect(store.token).toBe('')
       expect(store.user).toBe('')
     }

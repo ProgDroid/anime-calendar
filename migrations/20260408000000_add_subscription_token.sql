@@ -3,13 +3,16 @@
 -- Owners paste the resulting URL into Google Calendar / any iCal-compatible app.
 
 ALTER TABLE calendars
-    ADD COLUMN subscription_token TEXT NOT NULL DEFAULT '';
+    ADD COLUMN IF NOT EXISTS subscription_token TEXT NOT NULL DEFAULT '';
 
 -- Backfill existing rows. gen_random_bytes is available in PostgreSQL 13+.
 -- For older versions: CREATE EXTENSION IF NOT EXISTS pgcrypto;
 UPDATE calendars
 SET subscription_token = encode(gen_random_bytes(32), 'hex')
 WHERE subscription_token = '';
+
+ALTER TABLE calendars
+    DROP CONSTRAINT IF EXISTS calendars_subscription_token_unique;
 
 ALTER TABLE calendars
     ALTER COLUMN subscription_token SET DEFAULT encode(gen_random_bytes(32), 'hex'),

@@ -4,7 +4,7 @@ use crate::entity::calendar::Language;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, sqlx::FromRow)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 pub struct UserSettings {
     pub user_id: i32,
     pub theme_preference: Theme,
@@ -15,7 +15,7 @@ pub struct UserSettings {
     pub updated_at: NaiveDateTime,
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default, sqlx::Type, Copy)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, sqlx::Type, Copy, utoipa::ToSchema)]
 #[serde(rename_all = "lowercase")]
 #[sqlx(type_name = "theme", rename_all = "lowercase")]
 pub enum Theme {
@@ -35,7 +35,7 @@ impl FromStr for Theme {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Serialize, Default, sqlx::Type, Copy)]
+#[derive(Clone, Debug, Deserialize, Serialize, Default, sqlx::Type, Copy, utoipa::ToSchema)]
 #[serde(rename_all = "lowercase")]
 #[sqlx(type_name = "site_language", rename_all = "lowercase")]
 pub enum SiteLanguage {

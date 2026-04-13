@@ -1,8 +1,21 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { i18n } from '@/plugins/i18n'
+
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+
+interface GoogleResponse {
+  client_id: string,
+  credential: string,
+}
+
+declare global {
+  interface Window {
+    handleGoogleLogin?: (data: GoogleResponse) => void
+  }
+}
 
 const { t } = i18n.global
 
@@ -11,11 +24,6 @@ const authStore = useAuthStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
-
-interface GoogleResponse {
-  client_id: string,
-  credential: string,
-}
 
 // Define the callback function to be used by Google Sign-In
 const handleGoogleLogin = async (data: GoogleResponse) => {
@@ -39,7 +47,11 @@ const handleGoogleLogin = async (data: GoogleResponse) => {
 // Initialize Google Sign-In properly
 onMounted(() => {
   // Make the function globally available for Google's GSI library
-  (window as any).handleGoogleLogin = handleGoogleLogin;
+  window.handleGoogleLogin = handleGoogleLogin
+})
+
+onBeforeUnmount(() => {
+  delete window.handleGoogleLogin
 })
 </script>
 
@@ -48,7 +60,7 @@ onMounted(() => {
   
   <div class="flex flex-col items-center">
     <div id="g_id_onload"
-      data-client_id="269915074579-d4gsd3elouqus0e5vplqnc74gr3ujag1.apps.googleusercontent.com"
+      :data-client_id="googleClientId"
       data-context="signin"
       data-ux_mode="popup"
       data-callback="handleGoogleLogin"

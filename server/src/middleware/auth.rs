@@ -1,4 +1,4 @@
-use crate::config::server;
+use crate::config::server::JwtSecret;
 use crate::error::Error;
 use actix_web::{dev::Payload, FromRequest, HttpRequest};
 use jsonwebtoken::{decode, DecodingKey, Validation};
@@ -30,11 +30,11 @@ impl FromRequest for Claims {
                 .strip_prefix("Bearer ")
                 .ok_or(Error::Unauthorised)?;
 
-            let Some(config) = req.app_data::<actix_web::web::Data<server::Server>>() else {
+            let Some(jwt_secret) = req.app_data::<actix_web::web::Data<JwtSecret>>() else {
                 return Err(Error::Unauthorised);
             };
 
-            let secret = config.jwt_secret.as_bytes();
+            let secret = jwt_secret.expose_secret().as_bytes();
             let decoding_key = DecodingKey::from_secret(secret);
             let validation = Validation::default();
 

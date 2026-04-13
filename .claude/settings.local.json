@@ -1,4 +1,21 @@
 {
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "G:/rustDev/anime-calendar/.claude/hooks/i18n-guard.sh"
+          },
+          {
+            "type": "command",
+            "command": "G:/rustDev/anime-calendar/.claude/hooks/sqlx-remind.sh"
+          }
+        ]
+      }
+    ]
+  },
   "permissions": {
     "allow": [
       "Bash(~/.local/bin/starship-claude --no-progress)",
@@ -17,7 +34,16 @@
       "Bash(grep:*)",
       "Bash(npm list:*)",
       "Bash(xargs cat:*)",
-      "Bash(xargs wc:*)"
+      "Bash(xargs wc:*)",
+      "Bash(AWS_LC_SYS_PREBUILT_NASM=1 cargo check --package server)",
+      "Bash(cargo check:*)",
+      "Bash(AWS_LC_SYS_PREBUILT_NASM=1 cargo test --package server test_is_valid_email)",
+      "Bash(AWS_LC_SYS_PREBUILT_NASM=1 cargo test --package server)",
+      "Bash(cargo test:*)",
+      "Bash(AWS_LC_SYS_PREBUILT_NASM=1 cargo check --package anilist)",
+      "Bash(AWS_LC_SYS_PREBUILT_NASM=1 cargo build)",
+      "Bash(AWS_LC_SYS_PREBUILT_NASM=1 cargo test)",
+      "Bash(AWS_LC_SYS_PREBUILT_NASM=1 cargo clippy --package server --all-targets -- -W clippy::all -W clippy::pedantic -W clippy::nursery -A clippy::missing_docs_in_private_items -A clippy::separated_literal_suffix -A clippy::implicit_return -A clippy::print_stderr -A clippy::exhaustive_enums -A clippy::exhaustive_structs -A clippy::single_char_lifetime_names -A clippy::missing_inline_in_public_items -A clippy::self_named_module_files -A clippy::wildcard_enum_match_arm -A clippy::pattern_type_mismatch -A clippy::std-instead-of-core)"
     ]
   }
 }

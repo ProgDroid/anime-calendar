@@ -1,4 +1,5 @@
 use config::{Config, ConfigError, File};
+use secrecy::SecretString;
 use serde::Deserialize;
 
 const CONFIG_FILE: &str = "config.toml";
@@ -10,7 +11,7 @@ pub struct Server {
     pub log_level: String,
     pub google_client_id: String,
     pub redis: RedisConfig,
-    pub jwt_secret: String,
+    pub jwt_secret: SecretString,
     pub compress: bool,
     #[serde(default = "default_allowed_origins")]
     pub allowed_origins: Vec<String>,
@@ -37,7 +38,7 @@ impl Default for Server {
             log_level: "debug".to_string(),
             google_client_id: String::new(),
             redis: RedisConfig::default(),
-            jwt_secret: String::new(),
+            jwt_secret: SecretString::from(""),
             compress: true,
             allowed_origins: default_allowed_origins(),
         }
@@ -64,5 +65,23 @@ impl Server {
             .build()?;
 
         server_config.try_deserialize()
+    }
+}
+
+/// Newtype wrapping the JWT secret so only auth-related handlers receive it
+/// via dependency injection, rather than the full `ServerConfig`.
+#[derive(Clone)]
+pub struct JwtSecret(SecretString);
+
+impl JwtSecret {
+    #[must_use]
+    pub const fn new(secret: SecretString) -> Self {
+        Self(secret)
+    }
+
+    #[must_use]
+    pub fn expose_secret(&self) -> &str {
+        use secrecy::ExposeSecret as _;
+        self.0.expose_secret()
     }
 }

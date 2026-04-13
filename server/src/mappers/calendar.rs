@@ -41,7 +41,7 @@ impl CalendarMapper {
                 subscription_token,
                 user_id,
                 created_at,
-                updated_at FROM calendars WHERE id = $1 AND user_id = $2",
+                updated_at FROM calendars WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
             id,
             user_id
         )
@@ -78,7 +78,7 @@ impl CalendarMapper {
                 subscription_token,
                 user_id,
                 created_at,
-                updated_at FROM calendars WHERE subscription_token = $1",
+                updated_at FROM calendars WHERE subscription_token = $1 AND deleted_at IS NULL",
             token
         )
         .fetch_one(&self.db.pool)
@@ -116,14 +116,16 @@ impl CalendarMapper {
         page: usize,
         page_size: usize,
     ) -> ServerResult<(Vec<Calendar>, usize)> {
-        let total_count: i64 =
-            match sqlx::query_scalar!("SELECT COUNT(*) FROM calendars WHERE user_id = $1", user_id)
-                .fetch_one(&self.db.pool)
-                .await?
-            {
-                Some(count) => count,
-                None => return Err(Error::NotFound),
-            };
+        let total_count: i64 = match sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM calendars WHERE user_id = $1 AND deleted_at IS NULL",
+            user_id
+        )
+        .fetch_one(&self.db.pool)
+        .await?
+        {
+            Some(count) => count,
+            None => return Err(Error::NotFound),
+        };
 
         let calendars = sqlx::query_as!(
             Calendar,
@@ -141,7 +143,7 @@ impl CalendarMapper {
                 ) as "item_ids!: Vec<i32>"
             FROM calendars c
             LEFT JOIN calendar_items ci ON ci.calendar_id = c.id
-            WHERE c.user_id = $1
+            WHERE c.user_id = $1 AND c.deleted_at IS NULL
             GROUP BY c.id, c.language, c.name, c.subscription_token, c.user_id, c.created_at, c.updated_at
             ORDER BY c.created_at DESC
             LIMIT $2
@@ -198,7 +200,7 @@ impl CalendarMapper {
     /// Returns an error if the query fails.
     pub async fn update_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
         let updated_calendar = sqlx::query!(
-            "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
+            "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 AND deleted_at IS NULL RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
             calendar.name,
             calendar.language as Language,
             calendar.id,
@@ -266,35 +268,22 @@ impl CalendarMapper {
         Ok(())
     }
 
+    /// Soft-deletes the calendar. `calendar_items` rows are kept as an audit trail.
+    /// Returns the `subscription_token` so the caller can invalidate the feed cache.
+    ///
     /// # Errors
-    /// Returns an error if the query fails
-    pub async fn delete_calendar(&self, id: i32, user_id: i32) -> ServerResult<()> {
-        let mut tx = self.db.pool.begin().await?;
-
-        if let Err(e) = sqlx::query!(
-            "DELETE FROM calendar_items WHERE calendar_id = $1",
-            id
-        )
-        .execute(&mut *tx)
-        .await
-        {
-            tx.rollback().await?;
-            return Err(e.into());
-        }
-
-        if let Err(e) = sqlx::query!(
-            "DELETE FROM calendars WHERE id = $1 AND user_id = $2",
+    /// Returns `Error::NotFound` if the calendar does not exist, is already deleted,
+    /// or does not belong to `user_id`.
+    pub async fn delete_calendar(&self, id: i32, user_id: i32) -> ServerResult<String> {
+        let row = sqlx::query!(
+            "UPDATE calendars SET deleted_at = NOW() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING subscription_token",
             id,
             user_id
         )
-        .execute(&mut *tx)
+        .fetch_one(&self.db.pool)
         .await
-        {
-            tx.rollback().await?;
-            return Err(e.into());
-        }
+        .map_err(|_| Error::NotFound)?;
 
-        tx.commit().await?;
-        Ok(())
+        Ok(row.subscription_token)
     }
 }

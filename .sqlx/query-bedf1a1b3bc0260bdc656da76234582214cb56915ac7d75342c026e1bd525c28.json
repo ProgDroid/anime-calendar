@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM calendar_items WHERE calendar_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "bedf1a1b3bc0260bdc656da76234582214cb56915ac7d75342c026e1bd525c28"
+}

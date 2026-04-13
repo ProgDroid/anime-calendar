@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
 import api from '../config/api'
+import { invalidateSettingsCache } from '@/services/userSettingsService'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref('')
@@ -29,8 +31,11 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('authToken', authToken)
       
       return response.data
-    } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Login failed')
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        throw new Error(err.response?.data?.error || 'Login failed')
+      }
+      throw err
     }
   }
 
@@ -50,8 +55,11 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('authToken', authToken)
 
       return response.data
-    } catch (error: any) {
-      throw new Error(error.response?.data?.message || 'Registration failed')
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        throw new Error(err.response?.data?.error || 'Registration failed')
+      }
+      throw err
     }
   }
 
@@ -60,7 +68,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await api.post(`/auth/${provider}`, {
         token: token_string
-      }) // TODO add cookie for forgery prevention
+      })
       
       const { token: authToken, username: userData, avatar: avatarUrl} = response.data
       token.value = authToken
@@ -74,8 +82,11 @@ export const useAuthStore = defineStore('auth', () => {
       localStorage.setItem('avatar', avatarUrl)
       
       return response.data
-    } catch (error: any) {
-      throw new Error(error.response?.data?.message || `${provider} login failed`)
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        throw new Error(err.response?.data?.error || `${provider} login failed`)
+      }
+      throw err
     }
   }
 
@@ -85,6 +96,7 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('authToken')
     localStorage.removeItem('name')
     localStorage.removeItem('avatar')
+    invalidateSettingsCache()
     router.push('/login')
   }
 
@@ -97,7 +109,7 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.get('/user')
       user.value = response.data
       return response.data
-    } catch (error: any) {
+    } catch {
       logout()
       throw new Error('Failed to get user data')
     }
@@ -117,7 +129,7 @@ export const useAuthStore = defineStore('auth', () => {
           // Token is valid, get user data
           await getCurrentUser()
         }
-      } catch (error: any) {
+      } catch {
         // If we can't verify the token, clear it
         logout()
       }
@@ -130,14 +142,14 @@ export const useAuthStore = defineStore('auth', () => {
     
     if (storedToken) {
       try {
-        const response = await api.post('/auth/verify', {
+        await api.post('/auth/verify', {
           token: storedToken
         })
-        
+
         token.value = storedToken
         // Don't set user here, we'll get user data separately if needed
         return true
-      } catch (error) {
+      } catch {
         // Token is invalid, remove it
         localStorage.removeItem('authToken')
         return false

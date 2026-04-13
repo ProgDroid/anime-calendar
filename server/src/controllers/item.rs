@@ -4,6 +4,17 @@ use log::error;
 
 use crate::{cache::{Cache, CACHE_TTL_ITEM}, mappers::anilist::Anilist};
 
+#[utoipa::path(
+    get,
+    path = "/item/{id}",
+    tag = "items",
+    params(("id" = u64, Path, description = "Anilist media ID")),
+    responses(
+        (status = 200, body = common::item::Item),
+        (status = 400, description = "Invalid ID"),
+        (status = 404, description = "Item not found"),
+    )
+)]
 #[allow(clippy::cast_possible_wrap)]
 #[get("/item/{id}")]
 async fn get(

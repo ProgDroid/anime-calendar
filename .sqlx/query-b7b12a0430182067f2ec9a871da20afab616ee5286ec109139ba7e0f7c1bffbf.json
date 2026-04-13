@@ -1,0 +1,83 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO calendars (name, language, user_id, subscription_token) VALUES ($1, $2, $3, $4) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "language: Language",
+        "type_info": {
+          "Custom": {
+            "name": "language",
+            "kind": {
+              "Enum": [
+                "english",
+                "romaji",
+                "native"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "subscription_token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        {
+          "Custom": {
+            "name": "language",
+            "kind": {
+              "Enum": [
+                "english",
+                "romaji",
+                "native"
+              ]
+            }
+          }
+        },
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b7b12a0430182067f2ec9a871da20afab616ee5286ec109139ba7e0f7c1bffbf"
+}

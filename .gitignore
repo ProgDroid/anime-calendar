@@ -1,6 +1,13 @@
 /target
 config.toml
 database.toml
+config.docker.toml
+database.docker.toml
+
+# Vite env files (secrets — use .env.example as template)
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
 
 .DS_Store
 node_modules

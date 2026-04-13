@@ -132,7 +132,7 @@ POST   /auth/google
 
 GET    /calendars          (paginated)
 GET    /calendars/:id
-PUT    /calendars
+PUT    /calendar
 DELETE /calendars/:id
 GET    /calendars/:id/export
 GET    /calendars/subscription/:token   (public iCal feed)

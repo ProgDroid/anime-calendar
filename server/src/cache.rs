@@ -193,14 +193,16 @@ impl Cache {
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn invalidate_calendar(&self, calendar_id: i32) -> RedisResult<()> {
-        let calendar_key = generate_calendar_key(calendar_id);
-        self.delete(&calendar_key).await?;
-
-        // Also invalidate related keys
-        let items_key = generate_calendar_items_key(calendar_id);
-        self.delete(&items_key).await?;
-
+        self.delete(&generate_calendar_key(calendar_id)).await?;
+        self.delete(&generate_export_key(calendar_id)).await?;
+        self.delete(&generate_calendar_items_key(calendar_id)).await?;
         Ok(())
+    }
+
+    /// # Errors
+    /// Fails if Redis query fails.
+    pub async fn invalidate_subscription(&self, token: &str) -> RedisResult<()> {
+        self.delete(&format!("subscribe:{token}")).await
     }
 
     // Invalidate cache for a specific item
@@ -276,6 +278,11 @@ impl Cache {
 #[must_use]
 pub fn generate_calendar_key(id: i32) -> String {
     format!("calendar:{id}")
+}
+
+#[must_use]
+pub fn generate_export_key(id: i32) -> String {
+    format!("export:{id}")
 }
 
 #[must_use]

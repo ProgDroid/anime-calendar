@@ -9,16 +9,19 @@ use actix_web::{
 };
 use env_logger::Builder;
 use log::{error, LevelFilter};
+use utoipa::OpenApi as _;
+use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
     cache::Cache,
-    config::server::Server as ServerConfig,
+    config::server::{JwtSecret, Server as ServerConfig},
     controllers::{auth, cache_metrics, calendar, item, items, oauth, user},
     error::Error,
     mappers::{
         anilist::Anilist, calendar::CalendarMapper, google_oauth::GoogleOauth, user::UserMapper,
         user_settings::UserSettingsMapper,
     },
+    openapi::ApiDoc,
     ServerResult,
 };
 
@@ -48,6 +51,7 @@ pub fn start(
     let port = config.port;
     let compress = config.compress;
     let allowed_origins = config.allowed_origins.clone();
+    let jwt_secret = JwtSecret::new(config.jwt_secret);
 
     let governor_conf = GovernorConfigBuilder::default()
         .seconds_per_request(1)
@@ -56,8 +60,6 @@ pub fn start(
         .ok_or(Error::GovernorConfig)?;
 
     Ok(HttpServer::new(move || {
-        let config = config.clone();
-
         let cors = if allowed_origins.is_empty() {
             Cors::default()
                 .allow_any_origin()
@@ -72,6 +74,10 @@ pub fn start(
         };
 
         App::new()
+            .service(
+                SwaggerUi::new("/swagger-ui/{_:.*}")
+                    .url("/api-docs/openapi.json", ApiDoc::openapi()),
+            )
             .wrap(Condition::new(compress, Compress::default()))
             .wrap(Logger::default())
             .wrap(Governor::new(&governor_conf))
@@ -82,7 +88,7 @@ pub fn start(
             .app_data(web::Data::new(anilist.clone()))
             .app_data(web::Data::new(google_oauth.clone()))
             .app_data(web::Data::new(cache.clone()))
-            .app_data(web::Data::new(config))
+            .app_data(web::Data::new(jwt_secret.clone()))
             .service(item::get)
             .service(items::get)
             .service(items::search)

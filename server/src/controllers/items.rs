@@ -9,12 +9,24 @@ use serde::Deserialize;
 
 use crate::{cache::{Cache, CACHE_TTL_ITEM, CACHE_TTL_SEARCH}, mappers::anilist::Anilist};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 struct Params {
-    #[serde(rename = "id")]
+    /// One or more Anilist media IDs
+    #[param(rename = "id")]
     ids: Vec<u64>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/items",
+    tag = "items",
+    params(Params),
+    responses(
+        (status = 200, body = Vec<common::item::Item>),
+        (status = 400, description = "No IDs provided"),
+    )
+)]
 #[allow(clippy::cast_possible_wrap)]
 #[get("/items")]
 async fn get(
@@ -60,12 +72,25 @@ async fn get(
     HttpResponse::Ok().json(items)
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 struct SearchParams {
+    /// Title to search for
     name: String,
+    /// Filter by media type (ANIME or MANGA)
     media_type: Option<Type>,
 }
 
+#[utoipa::path(
+    get,
+    path = "/search",
+    tag = "items",
+    params(SearchParams),
+    responses(
+        (status = 200, body = Vec<common::item::Item>),
+        (status = 400, description = "Empty search query"),
+    )
+)]
 #[get("/search")]
 async fn search(
     anilist: web::Data<Anilist>,

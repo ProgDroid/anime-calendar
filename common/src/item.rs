@@ -8,6 +8,7 @@ use crate::{
 };
 
 #[derive(Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 #[serde(rename_all = "UPPERCASE")]
 pub enum Type {
     Anime,
@@ -40,7 +41,9 @@ impl std::fmt::Display for Type {
 }
 
 #[derive(Serialize, Deserialize, Clone)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct Item {
+    #[cfg_attr(feature = "utoipa", schema(value_type = i64))]
     pub id: Id,
     pub id_mal: Option<i64>,
     pub title: Title,

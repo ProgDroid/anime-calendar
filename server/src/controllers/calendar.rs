@@ -19,9 +19,10 @@ use common::{
 use log::error;
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, utoipa::ToSchema)]
 pub struct CalendarRequest {
     #[serde(default)]
+    #[schema(value_type = i64)]
     pub id: Id,
     pub items: Vec<Item>,
     pub language: Language,
@@ -50,7 +51,8 @@ impl CalendarRequest {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, utoipa::ToSchema, utoipa::IntoParams)]
+#[into_params(parameter_in = Query)]
 pub struct PaginationParams {
     #[serde(default = "default_page")]
     pub page: usize,
@@ -66,6 +68,18 @@ const fn default_page_size() -> usize {
     6
 }
 
+#[utoipa::path(
+    get,
+    path = "/calendars/{id}/export",
+    tag = "calendars",
+    params(("id" = u64, Path, description = "Calendar ID")),
+    responses(
+        (status = 200, description = "iCalendar file", content_type = "text/calendar"),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+        (status = 404, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/calendars/{id}/export")]
 async fn export(
     user_mapper: web::Data<UserMapper>,
@@ -123,8 +137,8 @@ async fn export(
 
                 let file = generate_calendar_export(&calendar);
 
-                // Cache the response for 2 hours (7200 seconds)
-                let cache_key = crate::cache::generate_calendar_key(id.to_int() as i32);
+                // Cache the export separately from the JSON response to avoid key collision
+                let cache_key = crate::cache::generate_export_key(id.to_int() as i32);
                 let cache_ttl = CACHE_TTL_CALENDAR;
 
                 // If cache is available, try to get from cache
@@ -170,6 +184,16 @@ async fn export(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/calendars/subscribe/{token}",
+    tag = "calendars",
+    params(("token" = String, Path, description = "Calendar subscription token")),
+    responses(
+        (status = 200, description = "iCalendar subscription feed", content_type = "text/calendar"),
+        (status = 404, body = crate::controllers::auth::ErrorResponse),
+    )
+)]
 #[get("/calendars/subscribe/{token}")]
 async fn subscribe_feed(
     calendar_mapper: web::Data<CalendarMapper>,
@@ -231,6 +255,19 @@ async fn subscribe_feed(
     }
 }
 
+#[utoipa::path(
+    put,
+    path = "/calendar",
+    tag = "calendars",
+    request_body = CalendarRequest,
+    responses(
+        (status = 200, body = common::calendar::Calendar),
+        (status = 400, body = crate::controllers::auth::ErrorResponse),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+        (status = 404, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[allow(clippy::cast_possible_truncation)]
 #[put("/calendar")]
 async fn put(
@@ -293,6 +330,9 @@ async fn put(
                 let _ = cache
                     .invalidate_pattern(format!("{}:calendars:page:*", user.id).as_str())
                     .await;
+                let _ = cache
+                    .invalidate_subscription(&calendar.subscription_token)
+                    .await;
 
                 HttpResponse::Ok().json(Calendar {
                     id,
@@ -310,8 +350,9 @@ async fn put(
     }
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct PageCalendar {
+#[derive(Serialize, Deserialize, Clone, utoipa::ToSchema)]
+pub struct PageCalendar {
+    #[schema(value_type = i64)]
     pub id: Id,
     pub item_count: usize,
     pub name: String,
@@ -320,20 +361,31 @@ struct PageCalendar {
     pub updated_at: NaiveDateTime,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct PaginatedResponse {
+#[derive(Serialize, Deserialize, Clone, utoipa::ToSchema)]
+pub struct PaginatedResponse {
     data: Vec<PageCalendar>,
     pagination: PaginationInfo,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
-struct PaginationInfo {
+#[derive(Serialize, Deserialize, Clone, utoipa::ToSchema)]
+pub struct PaginationInfo {
     page: usize,
     page_size: usize,
     total: usize,
     total_pages: usize,
 }
 
+#[utoipa::path(
+    get,
+    path = "/calendars",
+    tag = "calendars",
+    params(PaginationParams),
+    responses(
+        (status = 200, body = PaginatedResponse),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/calendars")]
 async fn get_calendars(
     user_mapper: web::Data<UserMapper>,
@@ -414,6 +466,18 @@ async fn get_calendars(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/calendars/{id}",
+    tag = "calendars",
+    params(("id" = i64, Path, description = "Calendar ID")),
+    responses(
+        (status = 200, body = common::calendar::Calendar),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+        (status = 404, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[get("/calendars/{id}")]
 async fn get_calendar(
     user_mapper: web::Data<UserMapper>,
@@ -488,6 +552,18 @@ async fn get_calendar(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/calendars/{id}",
+    tag = "calendars",
+    params(("id" = i64, Path, description = "Calendar ID")),
+    responses(
+        (status = 200, description = "Calendar deleted"),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+        (status = 404, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[delete("/calendars/{id}")]
 async fn delete_calendar(
     user_mapper: web::Data<UserMapper>,
@@ -504,10 +580,10 @@ async fn delete_calendar(
     };
 
     match calendar_mapper.delete_calendar(*id as i32, user.id).await {
-        Ok(()) => {
-            // Invalidate cache for this calendar (controller-level invalidation)
+        Ok(subscription_token) => {
             let _ = cache.invalidate_calendar(*id as i32).await;
             let _ = cache.invalidate_user_paged_calendars(user.id).await;
+            let _ = cache.invalidate_subscription(&subscription_token).await;
             HttpResponse::Ok().finish()
         }
         Err(e) => e.error_response(),

@@ -4,8 +4,10 @@ use serde::{Deserialize, Serialize};
 use crate::{id::Id, item::Item, language::Language};
 
 #[derive(Deserialize, Serialize, Clone)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
 pub struct Calendar {
     #[serde(default)]
+    #[cfg_attr(feature = "utoipa", schema(value_type = i64))]
     pub id: Id,
     pub items: Vec<Item>,
     pub language: Language,

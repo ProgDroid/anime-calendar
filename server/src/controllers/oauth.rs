@@ -1,16 +1,18 @@
+use crate::config::server::JwtSecret;
+use crate::mappers::google_oauth::GoogleOauth;
 use crate::mappers::user::UserMapper;
 use crate::services::auth::generate_token;
-use crate::{config::server::Server as ServerConfig, mappers::google_oauth::GoogleOauth};
 use actix_web::{post, web, HttpResponse, ResponseError};
 use log::error;
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, utoipa::ToSchema)]
 pub struct GoogleOAuthRequest {
+    /// Google ID token from the GSI client library
     pub token: String,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, utoipa::ToSchema)]
 pub struct GoogleOAuthResponse {
     pub token: String,
     pub username: String,
@@ -19,12 +21,22 @@ pub struct GoogleOAuthResponse {
 }
 
 /// Google OAuth callback endpoint
+#[utoipa::path(
+    post,
+    path = "/auth/google",
+    tag = "auth",
+    request_body = GoogleOAuthRequest,
+    responses(
+        (status = 200, description = "OAuth login successful", body = GoogleOAuthResponse),
+        (status = 401, description = "Invalid Google ID token", body = crate::controllers::auth::ErrorResponse),
+    )
+)]
 #[post("/auth/google")]
 pub async fn google_oauth(
     user_mapper: web::Data<UserMapper>,
     google_oauth: web::Data<GoogleOauth>,
     google_request: web::Json<GoogleOAuthRequest>,
-    config: web::Data<ServerConfig>,
+    jwt_secret: web::Data<JwtSecret>,
 ) -> HttpResponse {
     match google_oauth.validate_id_token(&google_request.token).await {
         Ok(google_user) => {
@@ -42,7 +54,7 @@ pub async fn google_oauth(
                 }
             };
 
-            let token = match generate_token(&user.id, config.jwt_secret.clone()) {
+            let token = match generate_token(&user.id, jwt_secret.expose_secret()) {
                 Ok(token) => token,
                 Err(e) => return e.error_response(),
             };

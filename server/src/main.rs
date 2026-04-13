@@ -5,6 +5,7 @@ pub mod entity;
 pub mod error;
 pub mod mappers;
 pub mod middleware;
+pub mod openapi;
 pub mod server;
 pub mod services;
 pub mod utils;
