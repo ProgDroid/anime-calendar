@@ -17,6 +17,22 @@ pub struct Cache {
 }
 
 impl Cache {
+    /// Connect to a test Redis instance.  Host/port are read from the
+    /// `REDIS_HOST` / `REDIS_PORT` environment variables, falling back to the
+    /// development defaults.  Panics if the connection fails.
+    #[cfg(test)]
+    pub async fn for_tests() -> Self {
+        let host =
+            std::env::var("REDIS_HOST").unwrap_or_else(|_| "aegyptvault.local".to_owned());
+        let port = std::env::var("REDIS_PORT")
+            .ok()
+            .and_then(|p| p.parse().ok())
+            .unwrap_or(2435_u16);
+        Self::new(&host, port, "", 0)
+            .await
+            .expect("test Redis must be reachable")
+    }
+
     /// # Errors
     /// Fails if Redis connection fails.
     pub async fn new(host: &str, port: u16, password: &str, _db: u8) -> RedisResult<Self> {

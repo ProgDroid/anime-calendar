@@ -5,6 +5,7 @@ use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[serde(default)]
 pub struct UserSettings {
     pub user_id: i32,
     pub theme_preference: Theme,
