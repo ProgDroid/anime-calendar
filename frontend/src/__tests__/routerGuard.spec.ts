@@ -39,6 +39,10 @@ function makeRouter() {
     const authStore = useAuthStore()
     const userSettingsStore = useUserSettingsStore()
 
+    // Rehydrate auth state from the server cookie on first navigation.
+    // initAuth() is idempotent — subsequent navigations return immediately.
+    await authStore.initAuth()
+
     if (!to.meta.public) {
       const settings = await userSettingsStore.fetchSettings()
       if (settings) {
@@ -59,12 +63,16 @@ function makeRouter() {
 }
 
 function mockAuth(authenticated: boolean) {
-  vi.mocked(useAuthStore).mockReturnValue({ isAuthenticated: () => authenticated } as any)
+  vi.mocked(useAuthStore).mockReturnValue({
+    isAuthenticated: () => authenticated,
+    initAuth: vi.fn().mockResolvedValue(undefined),
+  } as any)
 }
 
 function mockSettings(result: object | null) {
   vi.mocked(useUserSettingsStore).mockReturnValue({
     fetchSettings: vi.fn().mockResolvedValue(result),
+    initAuth: vi.fn().mockResolvedValue(undefined),
   } as any)
 }
 
@@ -115,7 +123,10 @@ describe('Router navigation guard', () => {
   it('fetchSettings is NOT called when navigating to a public route', async () => {
     mockAuth(false)
     const fetchSettings = vi.fn().mockResolvedValue(null)
-    vi.mocked(useUserSettingsStore).mockReturnValue({ fetchSettings } as any)
+    vi.mocked(useUserSettingsStore).mockReturnValue({
+      fetchSettings,
+      initAuth: vi.fn().mockResolvedValue(undefined),
+    } as any)
     const router = makeRouter()
     await router.push('/login')
     expect(fetchSettings).not.toHaveBeenCalled()
@@ -124,7 +135,10 @@ describe('Router navigation guard', () => {
   it('fetchSettings IS called when navigating to a protected route', async () => {
     mockAuth(true)
     const fetchSettings = vi.fn().mockResolvedValue(null)
-    vi.mocked(useUserSettingsStore).mockReturnValue({ fetchSettings } as any)
+    vi.mocked(useUserSettingsStore).mockReturnValue({
+      fetchSettings,
+      initAuth: vi.fn().mockResolvedValue(undefined),
+    } as any)
     const router = makeRouter()
     await router.push('/my-calendars')
     expect(fetchSettings).toHaveBeenCalledOnce()
@@ -152,7 +166,10 @@ describe('Router navigation guard', () => {
   it('fetchSettings is called on each protected navigation', async () => {
     mockAuth(true)
     const fetchSettings = vi.fn().mockResolvedValue(null)
-    vi.mocked(useUserSettingsStore).mockReturnValue({ fetchSettings } as any)
+    vi.mocked(useUserSettingsStore).mockReturnValue({
+      fetchSettings,
+      initAuth: vi.fn().mockResolvedValue(undefined),
+    } as any)
     const router = makeRouter()
     await router.push('/my-calendars')
     await router.push('/user/details')

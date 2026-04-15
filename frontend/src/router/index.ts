@@ -60,6 +60,10 @@ router.beforeEach(async (to, from, next) => {
   const authStore = useAuthStore()
   const userSettingsStore = useUserSettingsStore()
 
+  // Rehydrate auth state from the server cookie on first navigation.
+  // initAuth() is idempotent — subsequent navigations return immediately.
+  await authStore.initAuth()
+
   // Fetch settings on authenticated routes only
   if (!to.meta.public) {
     const settings = await userSettingsStore.fetchSettings()
@@ -67,7 +71,7 @@ router.beforeEach(async (to, from, next) => {
       applySettings(settings)
     }
   }
-  
+
   if (to.path === '/login' && authStore.isAuthenticated()) {
     // If user is already logged in and tries to access /login, redirect to /my-calendars
     next('/my-calendars')
