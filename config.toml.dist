@@ -5,6 +5,7 @@ google_client_id = ""
 google_client_secret = ""
 jwt_secret = ""
 compress = true
+cookie_secure = false
 
 [redis]
 host = "127.0.0.1"

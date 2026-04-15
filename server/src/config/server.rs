@@ -15,6 +15,8 @@ pub struct Server {
     pub compress: bool,
     #[serde(default = "default_allowed_origins")]
     pub allowed_origins: Vec<String>,
+    #[serde(default)]
+    pub cookie_secure: bool,
 }
 
 #[must_use]
@@ -41,6 +43,7 @@ impl Default for Server {
             jwt_secret: SecretString::from(""),
             compress: true,
             allowed_origins: default_allowed_origins(),
+            cookie_secure: false,
         }
     }
 }
@@ -84,4 +87,11 @@ impl JwtSecret {
         use secrecy::ExposeSecret as _;
         self.0.expose_secret()
     }
+}
+
+/// Controls whether the `auth_token` cookie is sent with `Secure` attribute.
+/// Set `false` in local development (HTTP); `true` in production (HTTPS).
+#[derive(Clone)]
+pub struct CookieSettings {
+    pub secure: bool,
 }

@@ -5,6 +5,7 @@ google_client_id = ""
 google_client_secret = ""
 jwt_secret = ""
 compress = true
+cookie_secure = true
 allowed_origins = ["http://localhost"]
 
 [redis]
