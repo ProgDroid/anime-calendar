@@ -220,6 +220,31 @@ pub async fn verify_token_endpoint(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/auth/logout",
+    tag = "auth",
+    responses(
+        (status = 200, description = "Logged out successfully"),
+        (status = 401, description = "Unauthorized", body = ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
+#[post("/auth/logout")]
+pub async fn logout(
+    _claims: Claims,
+    cookie_settings: web::Data<CookieSettings>,
+) -> HttpResponse {
+    let removal_cookie = Cookie::build("auth_token", "")
+        .http_only(true)
+        .same_site(SameSite::Strict)
+        .path("/api/")
+        .max_age(Duration::ZERO)
+        .secure(cookie_settings.secure)
+        .finish();
+    HttpResponse::Ok().cookie(removal_cookie).json(serde_json::json!({}))
+}
+
 /// Unit tests for pure functions (no DB / no HTTP stack).
 #[cfg(test)]
 mod unit_tests {
@@ -527,6 +552,53 @@ mod integration_tests {
         )
         .await;
         let req = test::TestRequest::get().uri("/user").to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+    }
+
+    // ─── POST /auth/logout ────────────────────────────────────────────────────
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn logout_clears_auth_cookie(pool: PgPool) {
+        let user_id = seed_user(&pool, "hank", "hank@test.com").await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .app_data(cookie_data())
+                .service(get_current_user)
+                .service(logout),
+        )
+        .await;
+
+        let token = generate_token(&user_id, SECRET).unwrap();
+        let req = test::TestRequest::post()
+            .uri("/auth/logout")
+            .insert_header(("Cookie", format!("auth_token={token}")))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // The Set-Cookie header should clear auth_token (Max-Age=0)
+        let set_cookie = resp
+            .headers()
+            .get("set-cookie")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        assert!(set_cookie.contains("auth_token="), "cookie name missing");
+        assert!(set_cookie.contains("Max-Age=0"), "Max-Age=0 missing — cookie not cleared");
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn logout_without_cookie_returns_401(pool: PgPool) {
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .app_data(cookie_data())
+                .service(logout),
+        )
+        .await;
+        let req = test::TestRequest::post().uri("/auth/logout").to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
     }
 }

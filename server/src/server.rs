@@ -108,6 +108,7 @@ pub fn start(
             .service(auth::register)
             .service(auth::get_current_user)
             .service(auth::verify_token_endpoint)
+            .service(auth::logout)
             .service(user::get_user_details)
             .service(user::update_user)
             .service(user::delete_user)
