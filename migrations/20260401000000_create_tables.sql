@@ -21,11 +21,20 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto;
 -- Custom types
 -- ---------------------------------------------------------------------------
 
-CREATE TYPE language AS ENUM ('english', 'native', 'romaji');
+DO $$ BEGIN
+    CREATE TYPE language AS ENUM ('english', 'native', 'romaji');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
-CREATE TYPE theme AS ENUM ('light', 'dark');
+DO $$ BEGIN
+    CREATE TYPE theme AS ENUM ('light', 'dark');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
-CREATE TYPE site_language AS ENUM ('en', 'pt');
+DO $$ BEGIN
+    CREATE TYPE site_language AS ENUM ('en', 'pt');
+EXCEPTION WHEN duplicate_object THEN null;
+END $$;
 
 -- ---------------------------------------------------------------------------
 -- users
@@ -33,7 +42,7 @@ CREATE TYPE site_language AS ENUM ('en', 'pt');
 -- a partial unique index (WHERE deleted_at IS NULL).
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
     id             SERIAL      PRIMARY KEY,
     username       TEXT        NOT NULL UNIQUE,
     email          TEXT        NOT NULL UNIQUE,
@@ -47,7 +56,7 @@ CREATE TABLE users (
 -- subscription_token is added by migration 20260408.
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE calendars (
+CREATE TABLE IF NOT EXISTS calendars (
     id         SERIAL    PRIMARY KEY,
     name       TEXT      NOT NULL,
     language   language  NOT NULL DEFAULT 'english',
@@ -60,7 +69,7 @@ CREATE TABLE calendars (
 -- calendar_items
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE calendar_items (
+CREATE TABLE IF NOT EXISTS calendar_items (
     calendar_id  INTEGER  NOT NULL REFERENCES calendars (id),
     item_id      INTEGER  NOT NULL,
     PRIMARY KEY (calendar_id, item_id)
@@ -70,7 +79,7 @@ CREATE TABLE calendar_items (
 -- user_settings
 -- ---------------------------------------------------------------------------
 
-CREATE TABLE user_settings (
+CREATE TABLE IF NOT EXISTS user_settings (
     user_id                    INTEGER        PRIMARY KEY REFERENCES users (id),
     theme_preference           theme          NOT NULL DEFAULT 'dark',
     language_preference        site_language  NOT NULL DEFAULT 'en',
