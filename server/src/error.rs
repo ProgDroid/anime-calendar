@@ -26,6 +26,8 @@ pub enum Error {
     CannotGenerateAuthToken(#[from] jsonwebtoken::errors::Error),
     #[error("Governor config invalid")]
     GovernorConfig,
+    #[error("Invalid or expired reset token")]
+    InvalidResetToken,
 }
 
 impl ResponseError for Error {
@@ -42,6 +44,7 @@ impl ResponseError for Error {
             Self::InvalidRequest
             | Self::UserAlreadyExists
             | Self::InvalidPassword
+            | Self::InvalidResetToken
             | Self::CannotHashPassword(_)
             | Self::CannotGenerateAuthToken(_) => StatusCode::BAD_REQUEST,
             Self::Database(_) | Self::Config(_) | Self::Server(_) | Self::GovernorConfig => {

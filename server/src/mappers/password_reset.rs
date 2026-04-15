@@ -5,6 +5,7 @@ pub struct PasswordResetMapper {
     db: Database,
 }
 
+#[must_use]
 pub struct PasswordResetToken {
     pub id: i32,
     pub user_id: i32,
@@ -54,6 +55,43 @@ impl PasswordResetMapper {
         Ok(())
     }
 
+    /// Atomically invalidate all existing tokens for `user_id` and insert a new one.
+    /// Prefer this over calling `invalidate_previous_tokens` + `create_token` separately
+    /// to avoid a race window where two concurrent requests could leave two valid tokens.
+    ///
+    /// # Errors
+    /// Rolls back and propagates the error if either query fails.
+    pub async fn replace_token(&self, user_id: i32, token_hash: &str) -> ServerResult<()> {
+        let mut tx = self.db.pool.begin().await?;
+
+        if let Err(e) = sqlx::query!(
+            "DELETE FROM password_reset_tokens WHERE user_id = $1",
+            user_id,
+        )
+        .execute(&mut *tx)
+        .await
+        {
+            tx.rollback().await?;
+            return Err(e.into());
+        }
+
+        if let Err(e) = sqlx::query!(
+            "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) \
+             VALUES ($1, $2, NOW() + INTERVAL '1 hour')",
+            user_id,
+            token_hash,
+        )
+        .execute(&mut *tx)
+        .await
+        {
+            tx.rollback().await?;
+            return Err(e.into());
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
     /// Return the token row if it exists, is not yet used, and has not expired.
     ///
     /// # Errors
@@ -65,7 +103,11 @@ impl PasswordResetMapper {
             token_hash,
         )
         .fetch_one(&self.db.pool)
-        .await?;
+        .await
+        .map_err(|e| match e {
+            sqlx::Error::RowNotFound => crate::error::Error::InvalidResetToken,
+            other => crate::error::Error::Database(other),
+        })?;
 
         Ok(PasswordResetToken { id: row.id, user_id: row.user_id })
     }
@@ -168,5 +210,22 @@ mod tests {
 
         assert!(mapper.find_valid_token("hash_1").await.is_err());
         assert!(mapper.find_valid_token("hash_2").await.is_err());
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn replace_token_is_atomic(pool: PgPool) {
+        let user_id = seed_user(&pool, "d@test.com").await;
+        let mapper = PasswordResetMapper::from_pool(pool);
+        // Seed an old token
+        mapper.create_token(user_id, "old_hash").await.unwrap();
+
+        // replace_token atomically deletes old + inserts new
+        mapper.replace_token(user_id, "new_hash").await.unwrap();
+
+        // Old token is gone
+        assert!(mapper.find_valid_token("old_hash").await.is_err());
+        // New token is valid
+        let token = mapper.find_valid_token("new_hash").await.unwrap();
+        assert_eq!(token.user_id, user_id);
     }
 }
