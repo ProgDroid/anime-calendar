@@ -5,7 +5,7 @@ use utoipa::{
 
 use crate::{
     controllers::{
-        auth::{ErrorResponse, LoginRequest, LoginResponse, RegisterRequest},
+        auth::{AuthResponse, ErrorResponse, LoginRequest, RegisterRequest},
         calendar::{
             CalendarRequest, PageCalendar, PaginatedResponse, PaginationInfo, PaginationParams,
         },
@@ -73,7 +73,7 @@ impl Modify for BearerAuth {
     components(schemas(
         // auth types
         LoginRequest,
-        LoginResponse,
+        AuthResponse,
         RegisterRequest,
         ErrorResponse,
         // oauth types

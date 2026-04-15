@@ -1,10 +1,11 @@
-use crate::config::server::JwtSecret;
+use crate::config::server::{CookieSettings, JwtSecret};
 use crate::error::Error;
 use crate::mappers::user::UserMapper;
 use crate::middleware::auth::Claims;
 use crate::services::auth::{
     generate_token, hash_password, validate_password, validate_password_strength, verify_token,
 };
+use actix_web::cookie::{time::Duration, Cookie, SameSite};
 use actix_web::{get, post, web, HttpResponse, ResponseError};
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
@@ -37,9 +38,22 @@ pub struct LoginRequest {
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
-pub struct LoginResponse {
-    pub token: String,
+pub struct AuthResponse {
     pub username: String,
+}
+
+/// Build an httpOnly auth cookie from a JWT token and cookie settings.
+///
+/// # Errors
+/// This function is infallible; it returns a `Cookie` directly.
+pub fn build_auth_cookie(token: String, cookie_settings: &CookieSettings) -> Cookie<'static> {
+    Cookie::build("auth_token", token)
+        .http_only(true)
+        .same_site(SameSite::Strict)
+        .path("/api/")
+        .max_age(Duration::hours(24))
+        .secure(cookie_settings.secure)
+        .finish()
 }
 
 #[utoipa::path(
@@ -48,7 +62,7 @@ pub struct LoginResponse {
     tag = "auth",
     request_body = LoginRequest,
     responses(
-        (status = 200, description = "Login successful", body = LoginResponse),
+        (status = 200, description = "Login successful", body = AuthResponse),
         (status = 401, description = "Invalid credentials", body = ErrorResponse),
     )
 )]
@@ -57,6 +71,7 @@ pub async fn login(
     db: web::Data<UserMapper>,
     credentials: web::Json<LoginRequest>,
     jwt_secret: web::Data<JwtSecret>,
+    cookie_settings: web::Data<CookieSettings>,
 ) -> HttpResponse {
     let Ok(user) = db.get_user_by_email(&credentials.email).await else {
         return Error::Unauthorised.error_response();
@@ -70,11 +85,10 @@ pub async fn login(
                     Err(e) => return e.error_response(),
                 };
 
-                let response = LoginResponse {
-                    token,
-                    username: user.username,
-                };
-                HttpResponse::Ok().json(response)
+                let cookie = build_auth_cookie(token, &cookie_settings);
+                HttpResponse::Ok()
+                    .cookie(cookie)
+                    .json(AuthResponse { username: user.username })
             } else {
                 Error::Unauthorised.error_response()
             }
@@ -97,7 +111,7 @@ pub struct RegisterRequest {
     tag = "auth",
     request_body = RegisterRequest,
     responses(
-        (status = 200, description = "Registration successful", body = LoginResponse),
+        (status = 200, description = "Registration successful", body = AuthResponse),
         (status = 400, description = "Invalid request or weak password", body = ErrorResponse),
     )
 )]
@@ -106,6 +120,7 @@ pub async fn register(
     db: web::Data<UserMapper>,
     user_data: web::Json<RegisterRequest>,
     jwt_secret: web::Data<JwtSecret>,
+    cookie_settings: web::Data<CookieSettings>,
 ) -> HttpResponse {
     // Check if user already exists
     if (db.get_user_by_email(&user_data.email).await).is_ok() {
@@ -154,12 +169,10 @@ pub async fn register(
         Err(e) => return e.error_response(),
     };
 
-    let response = LoginResponse {
-        token,
-        username: user.username,
-    };
-
-    HttpResponse::Ok().json(response)
+    let cookie = build_auth_cookie(token, &cookie_settings);
+    HttpResponse::Ok()
+        .cookie(cookie)
+        .json(AuthResponse { username: user.username })
 }
 
 #[utoipa::path(
@@ -167,7 +180,7 @@ pub async fn register(
     path = "/user",
     tag = "auth",
     responses(
-        (status = 200, description = "Current authenticated user", body = LoginResponse),
+        (status = 200, description = "Current authenticated user", body = AuthResponse),
         (status = 401, description = "Unauthorized", body = ErrorResponse),
     ),
     security(("bearer_auth" = []))
@@ -179,12 +192,7 @@ pub async fn get_current_user(db: web::Data<UserMapper>, claims: Claims) -> Http
         Err(e) => return e.error_response(),
     };
 
-    let response = LoginResponse {
-        token: String::new(), // Not returning token for this endpoint
-        username: user.username,
-    };
-
-    HttpResponse::Ok().json(response)
+    HttpResponse::Ok().json(AuthResponse { username: user.username })
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -251,6 +259,10 @@ mod integration_tests {
         web::Data::new(JwtSecret::new(SecretString::from(SECRET)))
     }
 
+    fn cookie_data() -> web::Data<CookieSettings> {
+        web::Data::new(CookieSettings { secure: false })
+    }
+
     /// Seed a password-based user and return its id.
     async fn seed_user(pool: &PgPool, username: &str, email: &str) -> i32 {
         let hash = hash_password(STRONG_PW).unwrap();
@@ -264,12 +276,13 @@ mod integration_tests {
     // ─── POST /login ──────────────────────────────────────────────────────────
 
     #[sqlx::test(migrations = "../migrations")]
-    async fn login_valid_credentials_returns_token_and_username(pool: PgPool) {
+    async fn login_valid_credentials_sets_cookie_and_returns_username(pool: PgPool) {
         seed_user(&pool, "alice", "alice@test.com").await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
                 .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(login)
                 .service(register)
                 .service(get_current_user),
@@ -282,9 +295,20 @@ mod integration_tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
+
+        // Assert Set-Cookie header contains auth_token and HttpOnly
+        let set_cookie = resp
+            .headers()
+            .get("Set-Cookie")
+            .expect("Set-Cookie header missing")
+            .to_str()
+            .unwrap();
+        assert!(set_cookie.contains("auth_token="), "cookie name missing");
+        assert!(set_cookie.contains("HttpOnly"), "HttpOnly flag missing");
+
         let body: Value = test::read_body_json(resp).await;
-        assert!(body["token"].as_str().is_some_and(|t| !t.is_empty()));
         assert_eq!(body["username"], "alice");
+        assert!(body.get("token").is_none(), "token should not be in body");
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -294,6 +318,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
                 .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(login),
         )
         .await;
@@ -311,6 +336,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
                 .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(login),
         )
         .await;
@@ -332,6 +358,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
                 .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(login),
         )
         .await;
@@ -345,11 +372,12 @@ mod integration_tests {
     // ─── POST /register ───────────────────────────────────────────────────────
 
     #[sqlx::test(migrations = "../migrations")]
-    async fn register_new_user_returns_token_and_username(pool: PgPool) {
+    async fn register_new_user_sets_cookie_and_returns_username(pool: PgPool) {
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
                 .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(register),
         )
         .await;
@@ -363,9 +391,20 @@ mod integration_tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
+
+        // Assert Set-Cookie header contains auth_token and HttpOnly
+        let set_cookie = resp
+            .headers()
+            .get("Set-Cookie")
+            .expect("Set-Cookie header missing")
+            .to_str()
+            .unwrap();
+        assert!(set_cookie.contains("auth_token="), "cookie name missing");
+        assert!(set_cookie.contains("HttpOnly"), "HttpOnly flag missing");
+
         let body: Value = test::read_body_json(resp).await;
-        assert!(body["token"].as_str().is_some_and(|t| !t.is_empty()));
         assert_eq!(body["username"], "carol");
+        assert!(body.get("token").is_none(), "token should not be in body");
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -375,6 +414,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
                 .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(register),
         )
         .await;
@@ -395,6 +435,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
                 .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(register),
         )
         .await;
@@ -415,6 +456,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
                 .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(register),
         )
         .await;
@@ -435,6 +477,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
                 .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(register),
         )
         .await;
@@ -465,16 +508,17 @@ mod integration_tests {
         let token = generate_token(&user_id, SECRET).unwrap();
         let req = test::TestRequest::get()
             .uri("/user")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
         let body: Value = test::read_body_json(resp).await;
         assert_eq!(body["username"], "grace");
+        assert!(body.get("token").is_none(), "token should not be in body");
     }
 
     #[sqlx::test(migrations = "../migrations")]
-    async fn get_current_user_without_token_returns_401(pool: PgPool) {
+    async fn get_current_user_without_cookie_returns_401(pool: PgPool) {
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
