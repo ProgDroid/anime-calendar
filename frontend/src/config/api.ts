@@ -1,19 +1,17 @@
 import axios from 'axios'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080',
+  baseURL: '/api',
+  withCredentials: true,
 })
 
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('authToken')
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`
-  }
-  return config
-})
-
+/**
+ * Returns an absolute URL for a backend path.
+ * Used for subscription/export links that are pasted into external calendar clients.
+ * Must be absolute so Google Calendar / Apple Calendar can fetch them.
+ */
 export const getApiUrl = (path: string): string => {
-  return `${api.defaults.baseURL}${path}`
+  return `${window.location.origin}/api${path}`
 }
 
 export default api

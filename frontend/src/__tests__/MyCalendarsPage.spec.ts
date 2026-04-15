@@ -8,7 +8,7 @@ import en from '@/locales/en.json'
 
 vi.mock('@/config/api', () => ({
   default: { get: vi.fn(), delete: vi.fn(), post: vi.fn(), put: vi.fn() },
-  getApiUrl: (path: string) => `http://localhost:8080${path}`
+  getApiUrl: (path: string) => `http://localhost/api${path}`
 }))
 
 import api from '@/config/api'
