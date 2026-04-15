@@ -14,7 +14,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
     cache::Cache,
-    config::server::{JwtSecret, Server as ServerConfig},
+    config::server::{CookieSettings, JwtSecret, Server as ServerConfig},
     controllers::{auth, cache_metrics, calendar, item, items, oauth, user},
     error::Error,
     mappers::{
@@ -52,6 +52,9 @@ pub fn start(
     let compress = config.compress;
     let allowed_origins = config.allowed_origins.clone();
     let jwt_secret = JwtSecret::new(config.jwt_secret);
+    let cookie_settings = CookieSettings {
+        secure: config.cookie_secure,
+    };
 
     let governor_conf = GovernorConfigBuilder::default()
         .seconds_per_request(1)
@@ -70,7 +73,9 @@ pub fn start(
             for origin in &allowed_origins {
                 cors = cors.allowed_origin(origin);
             }
-            cors.allow_any_method().allow_any_header()
+            cors.allow_any_method()
+                .allow_any_header()
+                .supports_credentials()
         };
 
         App::new()
@@ -89,6 +94,7 @@ pub fn start(
             .app_data(web::Data::new(google_oauth.clone()))
             .app_data(web::Data::new(cache.clone()))
             .app_data(web::Data::new(jwt_secret.clone()))
+            .app_data(web::Data::new(cookie_settings.clone()))
             .service(item::get)
             .service(items::get)
             .service(items::search)
