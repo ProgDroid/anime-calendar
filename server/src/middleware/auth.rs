@@ -19,16 +19,11 @@ impl FromRequest for Claims {
     fn from_request(req: &HttpRequest, _payload: &mut Payload) -> Self::Future {
         let req = req.clone();
         let fut = async move {
-            let auth_header = req
-                .headers()
-                .get("authorization")
+            let token = req
+                .cookie("auth_token")
                 .ok_or(Error::Unauthorised)?
-                .to_str()
-                .map_err(|_| Error::Unauthorised)?;
-
-            let token = auth_header
-                .strip_prefix("Bearer ")
-                .ok_or(Error::Unauthorised)?;
+                .value()
+                .to_owned();
 
             let Some(jwt_secret) = req.app_data::<actix_web::web::Data<JwtSecret>>() else {
                 return Err(Error::Unauthorised);
@@ -38,7 +33,7 @@ impl FromRequest for Claims {
             let decoding_key = DecodingKey::from_secret(secret);
             let validation = Validation::default();
 
-            let token_data = decode::<Self>(token, &decoding_key, &validation)
+            let token_data = decode::<Self>(&token, &decoding_key, &validation)
                 .map_err(|_| Error::Unauthorised)?;
 
             Ok(token_data.claims)
@@ -50,23 +45,24 @@ impl FromRequest for Claims {
 
 #[cfg(test)]
 mod tests {
+    use actix_web::{get, http::StatusCode, test, web, App, HttpResponse};
+    use jsonwebtoken::{encode, EncodingKey, Header};
+
     use super::*;
     use crate::config::server::JwtSecret;
     use crate::services::auth::generate_token;
-    use actix_web::{get, http::StatusCode, test, web, App, HttpResponse};
-    use jsonwebtoken::{encode, EncodingKey, Header};
-    use secrecy::SecretString;
 
-    const SECRET: &str = "test-jwt-secret-at-least-32-bytes";
-
-    /// Minimal protected endpoint: extracts Claims, proves the middleware passed.
-    #[get("/protected")]
-    async fn guarded(claims: Claims) -> HttpResponse {
-        HttpResponse::Ok().json(serde_json::json!({ "sub": claims.sub }))
-    }
+    const SECRET: &str = "test-secret-key-for-testing-only";
 
     fn secret_data() -> web::Data<JwtSecret> {
-        web::Data::new(JwtSecret::new(SecretString::from(SECRET)))
+        web::Data::new(JwtSecret::new(secrecy::SecretString::from(
+            SECRET.to_owned(),
+        )))
+    }
+
+    #[get("/protected")]
+    async fn guarded(_claims: Claims) -> HttpResponse {
+        HttpResponse::Ok().finish()
     }
 
     #[actix_web::test]
@@ -78,7 +74,7 @@ mod tests {
         let token = generate_token(&99, SECRET).unwrap();
         let req = test::TestRequest::get()
             .uri("/protected")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
     }
@@ -89,7 +85,6 @@ mod tests {
             App::new().app_data(secret_data()).service(guarded),
         )
         .await;
-        // exp = 0 → 1970-01-01, always expired.
         let claims = Claims { sub: "1".to_owned(), exp: 0 };
         let token = encode(
             &Header::default(),
@@ -99,13 +94,13 @@ mod tests {
         .unwrap();
         let req = test::TestRequest::get()
             .uri("/protected")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
     }
 
     #[actix_web::test]
-    async fn missing_authorization_header_returns_401() {
+    async fn no_cookie_returns_401() {
         let app = test::init_service(
             App::new().app_data(secret_data()).service(guarded),
         )
@@ -115,16 +110,16 @@ mod tests {
     }
 
     #[actix_web::test]
-    async fn non_bearer_scheme_returns_401() {
+    async fn wrong_cookie_name_returns_401() {
         let app = test::init_service(
             App::new().app_data(secret_data()).service(guarded),
         )
         .await;
         let token = generate_token(&1, SECRET).unwrap();
-        // "Token " prefix instead of "Bearer "
+        // "session" instead of "auth_token"
         let req = test::TestRequest::get()
             .uri("/protected")
-            .insert_header(("Authorization", format!("Token {token}")))
+            .insert_header(("Cookie", format!("session={token}")))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
     }
@@ -138,7 +133,7 @@ mod tests {
         let token = generate_token(&1, "a-completely-different-secret!!").unwrap();
         let req = test::TestRequest::get()
             .uri("/protected")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
     }
