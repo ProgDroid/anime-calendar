@@ -7,29 +7,44 @@ import { invalidateSettingsCache } from '@/services/userSettingsService'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref('')
-  const token = ref('')
   const name = ref('')
   const user_avatar = ref('')
   const router = useRouter()
 
-  const isAuthenticated = () => {
-    return !!token.value
+  let initPromise: Promise<void> | null = null
+  let initialized = false
+
+  const isAuthenticated = () => user.value !== ''
+
+  /**
+   * Rehydrate auth state from the server on page load.
+   * Calls GET /user; on success populates user.value, on failure clears it.
+   * Idempotent — subsequent calls return immediately.
+   * Concurrent calls return the same in-flight Promise.
+   */
+  const initAuth = async (): Promise<void> => {
+    if (initialized) return
+    if (initPromise) return initPromise
+
+    initPromise = (async () => {
+      try {
+        const response = await api.get('/user')
+        user.value = response.data.username ?? ''
+      } catch {
+        user.value = ''
+      } finally {
+        initialized = true
+        initPromise = null
+      }
+    })()
+
+    return initPromise
   }
 
   const login = async (email: string, password: string) => {
     try {
-      const response = await api.post('/login', {
-        email,
-        password
-      })
-      
-      const { token: authToken, username: userData } = response.data
-      token.value = authToken
-      user.value = userData
-      
-      // Store token in localStorage
-      localStorage.setItem('authToken', authToken)
-      
+      const response = await api.post('/login', { email, password })
+      user.value = response.data.username
       return response.data
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -41,19 +56,8 @@ export const useAuthStore = defineStore('auth', () => {
 
   const register = async (username: string, email: string, password: string) => {
     try {
-      const response = await api.post('/register', {
-        username,
-        email,
-        password
-      })
-
-      const { token: authToken, username: userData } = response.data
-      token.value = authToken
-      user.value = userData
-
-      // Store token in localStorage
-      localStorage.setItem('authToken', authToken)
-
+      const response = await api.post('/register', { username, email, password })
+      user.value = response.data.username
       return response.data
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -63,24 +67,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  // Add OAuth login function
   const oauthLogin = async (provider: 'google', token_string: string) => {
     try {
-      const response = await api.post(`/auth/${provider}`, {
-        token: token_string
-      })
-      
-      const { token: authToken, username: userData, avatar: avatarUrl} = response.data
-      token.value = authToken
+      const response = await api.post(`/auth/${provider}`, { token: token_string })
+      const { username: userData, avatar: avatarUrl } = response.data
       user.value = userData
       name.value = userData
       user_avatar.value = avatarUrl
-      
-      // Store token in localStorage
-      localStorage.setItem('authToken', authToken)
+      // Non-sensitive display data only — no auth token in localStorage
       localStorage.setItem('name', userData)
       localStorage.setItem('avatar', avatarUrl)
-      
       return response.data
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -90,78 +86,24 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const logout = () => {
-    token.value = ''
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout')
+    } catch {
+      // Clear local state regardless of server response
+    }
     user.value = ''
-    localStorage.removeItem('authToken')
+    name.value = ''
+    user_avatar.value = ''
+    initialized = false
     localStorage.removeItem('name')
     localStorage.removeItem('avatar')
     invalidateSettingsCache()
     router.push('/login')
   }
 
-  const getCurrentUser = async () => {
-    if (!token.value) {
-      throw new Error('No authentication token')
-    }
-    
-    try {
-      const response = await api.get('/user')
-      user.value = response.data
-      return response.data
-    } catch {
-      logout()
-      throw new Error('Failed to get user data')
-    }
-  }
-
-  const initAuth = async () => {
-    const storedToken = localStorage.getItem('authToken')
-    if (storedToken) {
-      token.value = storedToken
-      try {
-        // First verify the token is valid
-        const isValid = await checkAuth()
-        if (!isValid) {
-          // Token is invalid, clear it
-          logout()
-        } else {
-          // Token is valid, get user data
-          await getCurrentUser()
-        }
-      } catch {
-        // If we can't verify the token, clear it
-        logout()
-      }
-    }
-  }
-
-  // Check if user is authenticated using the verify endpoint
-  const checkAuth = async () => {
-    const storedToken = localStorage.getItem('authToken')
-    
-    if (storedToken) {
-      try {
-        await api.post('/auth/verify', {
-          token: storedToken
-        })
-
-        token.value = storedToken
-        // Don't set user here, we'll get user data separately if needed
-        return true
-      } catch {
-        // Token is invalid, remove it
-        localStorage.removeItem('authToken')
-        return false
-      }
-    }
-    
-    return false
-  }
-
   return {
     user,
-    token,
     user_avatar,
     name,
     isAuthenticated,
@@ -169,8 +111,6 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     oauthLogin,
     logout,
-    getCurrentUser,
     initAuth,
-    checkAuth
   }
 })

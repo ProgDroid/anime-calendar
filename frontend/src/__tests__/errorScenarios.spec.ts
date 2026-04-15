@@ -58,7 +58,7 @@ describe('UserDetailsPage — password update error paths', () => {
       data: { username: 'u', email: 'u@u.com', is_oauth: false }
     })
 
-    pinia.state.value['auth'] = { token: 'tok', user: '', name: '', user_avatar: '' }
+    pinia.state.value['auth'] = { user: 'mock-user', name: '', user_avatar: '' }
 
     return { UserDetailsPage }
   })
@@ -124,7 +124,7 @@ describe('CalendarPage — error paths', () => {
     pinia = createPinia()
     setActivePinia(pinia)
     vi.clearAllMocks()
-    pinia.state.value['auth'] = { token: 'tok', user: 'u', name: '', user_avatar: '' }
+    pinia.state.value['auth'] = { user: 'u', name: '', user_avatar: '' }
   })
 
   it('shows loadFailed when GET /calendars/:id returns an error', async () => {
@@ -211,7 +211,7 @@ describe('MyCalendarsPage — delete failure', () => {
     pinia = createPinia()
     setActivePinia(pinia)
     vi.clearAllMocks()
-    pinia.state.value['auth'] = { token: 'tok', user: '', name: '', user_avatar: '' }
+    pinia.state.value['auth'] = { user: 'mock-user', name: '', user_avatar: '' }
   })
 
   it('shows deleteFailed error when DELETE /calendars/:id fails', async () => {

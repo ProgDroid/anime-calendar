@@ -26,16 +26,15 @@ describe('Auth Store', () => {
     })
   })
 
-  it('should initialize with empty user and token', () => {
+  it('should initialize with empty user', () => {
     const store = useAuthStore()
     expect(store.user).toBe('')
-    expect(store.token).toBe('')
+    expect(store.isAuthenticated()).toBe(false)
   })
 
   it('should login successfully', async () => {
     const mockResponse = {
       data: {
-        token: 'mock-jwt-token',
         username: 'testuser'
       }
     }
@@ -46,8 +45,8 @@ describe('Auth Store', () => {
     const result = await store.login('test@example.com', 'password123')
 
     expect(result).toEqual(mockResponse.data)
-    expect(store.token).toBe('mock-jwt-token')
     expect(store.user).toBe('testuser')
+    expect(store.isAuthenticated()).toBe(true)
     expect(api.post).toHaveBeenCalledWith('/login', {
       email: 'test@example.com',
       password: 'password123'
@@ -63,9 +62,9 @@ describe('Auth Store', () => {
         }
       }
     })
-    
+
     const store = useAuthStore()
-    
+
     try {
       await store.login('test@example.com', 'wrongpassword')
       expect.fail('Should have thrown an error')
@@ -77,18 +76,16 @@ describe('Auth Store', () => {
   it('should register successfully', async () => {
     const mockResponse = {
       data: {
-        token: 'mock-jwt-token',
         username: 'testuser'
       }
     }
-    
+
     vi.mocked(api.post).mockResolvedValue(mockResponse)
-    
+
     const store = useAuthStore()
     const result = await store.register('testuser', 'test@example.com', 'password123')
-    
+
     expect(result).toEqual(mockResponse.data)
-    expect(store.token).toBe('mock-jwt-token')
     expect(store.user).toEqual(mockResponse.data.username)
     expect(api.post).toHaveBeenCalledWith('/register', {
       username: 'testuser',
@@ -97,54 +94,34 @@ describe('Auth Store', () => {
     })
   })
 
-  it('should logout correctly', () => {
+  it('should logout correctly', async () => {
+    vi.mocked(api.post).mockResolvedValue({})
     const store = useAuthStore()
-    store.register('testuser', 'test@example.com', 'password123')
-    store.token = 'mock-token'
     store.user = 'username'
-    
-    store.logout()
 
-    expect(store.token).toBe('')
+    await store.logout()
+
     expect(store.user).toBe('')
+    expect(store.isAuthenticated()).toBe(false)
   })
 
-  it('should get current user', async () => {
-    const mockResponse = {
-      data: {
-        id: 1,
-        username: 'testuser',
-        email: 'test@example.com'
-      }
-    }
-    
-    vi.mocked(api.get).mockResolvedValue(mockResponse)
-    
+  it('should initAuth — populates user on success', async () => {
+    vi.mocked(api.get).mockResolvedValue({ data: { username: 'testuser' } })
+
     const store = useAuthStore()
-    store.token = 'mock-token'
-    
-    const result = await store.getCurrentUser()
-    
-    expect(result).toEqual(mockResponse.data)
+    await store.initAuth()
+
+    expect(store.user).toBe('testuser')
     expect(api.get).toHaveBeenCalledWith('/user')
   })
 
-  it('should handle get current user failure', async () => {
-    vi.mocked(api.get).mockRejectedValue({
-      response: {
-        status: 401
-      }
-    })
-    
+  it('should initAuth — clears user on failure', async () => {
+    vi.mocked(api.get).mockRejectedValue({ response: { status: 401 } })
+
     const store = useAuthStore()
-    store.token = 'mock-token'
-    
-    try {
-      await store.getCurrentUser()
-      expect.fail('Should have thrown an error')
-    } catch {
-      expect(store.token).toBe('')
-      expect(store.user).toBe('')
-    }
+    store.user = 'stale'
+    await store.initAuth()
+
+    expect(store.user).toBe('')
   })
 })

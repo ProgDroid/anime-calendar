@@ -33,7 +33,7 @@ let settingsStore: ReturnType<typeof useUserSettingsStore>
 
 function mountPage() {
   // Seed auth state so onMounted's isAuthenticated() check returns true
-  pinia.state.value['auth'] = { token: 'mock-token', user: '', name: '', user_avatar: '' }
+  pinia.state.value['auth'] = { user: 'mock-user', name: '', user_avatar: '' }
   return mount(UserSettingsPage, {
     global: { plugins: [i18n, router, pinia] }
   })
@@ -43,7 +43,7 @@ describe('UserSettingsPage', () => {
   beforeEach(() => {
     pinia = createPinia()
     setActivePinia(pinia)
-    pinia.state.value['auth'] = { token: 'mock-token', user: '', name: '', user_avatar: '' }
+    pinia.state.value['auth'] = { user: 'mock-user', name: '', user_avatar: '' }
     vi.clearAllMocks()
     vi.stubGlobal('localStorage', {
       getItem: vi.fn().mockReturnValue(null),

@@ -28,12 +28,6 @@ describe('LoginPage', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
-    vi.stubGlobal('localStorage', {
-      getItem: vi.fn().mockReturnValue(null),
-      setItem: vi.fn(),
-      removeItem: vi.fn(),
-      clear: vi.fn(),
-    })
   })
 
   it('renders in login mode by default', () => {
@@ -65,7 +59,7 @@ describe('LoginPage', () => {
   })
 
   it('calls api.post /login with correct credentials on submit', async () => {
-    vi.mocked(api.post).mockResolvedValue({ data: { token: 'tok', username: 'user' } })
+    vi.mocked(api.post).mockResolvedValue({ data: { username: 'user' } })
     const wrapper = mountPage()
     await wrapper.find('#email').setValue('test@example.com')
     await wrapper.find('#password').setValue('secret')
@@ -75,7 +69,7 @@ describe('LoginPage', () => {
   })
 
   it('calls api.post /register with credentials in register mode', async () => {
-    vi.mocked(api.post).mockResolvedValue({ data: { token: 'tok', username: 'user' } })
+    vi.mocked(api.post).mockResolvedValue({ data: { username: 'user' } })
     const wrapper = mountPage()
     await wrapper.find('.link.link-primary').trigger('click')
     await wrapper.find('#username').setValue('newuser')
@@ -109,6 +103,6 @@ describe('LoginPage', () => {
     wrapper.find('form').trigger('submit')
     await wrapper.vm.$nextTick()
     expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined()
-    resolve!({ data: { token: 't', username: 'u' } })
+    resolve!({ data: { username: 'u' } })
   })
 })
