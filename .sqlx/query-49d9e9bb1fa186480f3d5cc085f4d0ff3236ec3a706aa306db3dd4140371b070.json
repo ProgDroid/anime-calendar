@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO calendars (name, language, user_id, subscription_token) VALUES ($1, 'english'::language, $2, encode(gen_random_bytes(32), 'hex')) RETURNING id, subscription_token",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "subscription_token",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "49d9e9bb1fa186480f3d5cc085f4d0ff3236ec3a706aa306db3dd4140371b070"
+}

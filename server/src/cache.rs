@@ -265,9 +265,8 @@ impl Cache {
     /// # Errors
     /// Fails if Redis query fails
     pub async fn invalidate_user_paged_calendars(&self, user_id: i32) -> RedisResult<()> {
-        let key = generate_user_paged_calendars_key(user_id);
-        self.delete(&key).await?;
-        Ok(())
+        let pattern = generate_user_paged_calendars_key(user_id);
+        self.invalidate_pattern(&pattern).await
     }
 
     // Monitor cache performance
@@ -447,4 +446,336 @@ pub struct CachePerformanceMetrics {
     pub cache_size: usize,
     pub hits: u64,
     pub misses: u64,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Returns a key unique to this test to avoid collisions when tests run in parallel.
+    /// Each test passes its own descriptive tag as `test_id`.
+    fn k(test_id: &str, suffix: &str) -> String {
+        format!("test:{test_id}:{suffix}")
+    }
+
+    // ── Basic CRUD ──────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn set_and_get_round_trips_value() {
+        let cache = Cache::for_tests().await;
+        let key = k("set_get", "v");
+        cache.set(&key, &42_u32, 300).await.unwrap();
+        let result: Option<u32> = cache.get(&key).await.unwrap();
+        cache.delete(&key).await.unwrap();
+        assert_eq!(result, Some(42));
+    }
+
+    #[tokio::test]
+    async fn get_missing_key_returns_none() {
+        let cache = Cache::for_tests().await;
+        let key = k("missing", "v");
+        cache.delete(&key).await.unwrap(); // ensure absent
+        let result: Option<u32> = cache.get(&key).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn delete_removes_key() {
+        let cache = Cache::for_tests().await;
+        let key = k("delete", "v");
+        cache.set(&key, &"hello", 300).await.unwrap();
+        cache.delete(&key).await.unwrap();
+        let result: Option<String> = cache.get(&key).await.unwrap();
+        assert!(result.is_none());
+    }
+
+    #[tokio::test]
+    async fn exists_returns_true_when_key_present() {
+        let cache = Cache::for_tests().await;
+        let key = k("exists_true", "v");
+        cache.set(&key, &1_u8, 300).await.unwrap();
+        let present = cache.exists(&key).await.unwrap();
+        cache.delete(&key).await.unwrap();
+        assert!(present);
+    }
+
+    #[tokio::test]
+    async fn exists_returns_false_when_key_absent() {
+        let cache = Cache::for_tests().await;
+        let key = k("exists_false", "v");
+        cache.delete(&key).await.unwrap(); // ensure absent
+        let present = cache.exists(&key).await.unwrap();
+        assert!(!present);
+    }
+
+    #[tokio::test]
+    async fn set_overwrites_existing_value() {
+        let cache = Cache::for_tests().await;
+        let key = k("overwrite", "v");
+        cache.set(&key, &"first", 300).await.unwrap();
+        cache.set(&key, &"second", 300).await.unwrap();
+        let result: Option<String> = cache.get(&key).await.unwrap();
+        cache.delete(&key).await.unwrap();
+        assert_eq!(result.as_deref(), Some("second"));
+    }
+
+    // ── TTL ────────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn key_expires_after_ttl() {
+        let cache = Cache::for_tests().await;
+        let key = k("ttl", "v");
+        cache.set(&key, &"ephemeral", 1).await.unwrap();
+        tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
+        let result: Option<String> = cache.get(&key).await.unwrap();
+        assert!(result.is_none(), "key should have expired after 1 s TTL");
+    }
+
+    // ── Metrics ────────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn get_on_missing_key_increments_miss_counter() {
+        let cache = Cache::for_tests().await;
+        let key = k("metrics_miss", "v");
+        cache.delete(&key).await.unwrap();
+        // fresh instance starts with zeroed metrics
+        let _: Option<u8> = cache.get(&key).await.unwrap();
+        let m = cache.get_metrics().await;
+        assert_eq!(m.misses, 1);
+        assert_eq!(m.hits, 0);
+        assert_eq!(m.total_requests, 1);
+    }
+
+    #[tokio::test]
+    async fn get_on_existing_key_increments_hit_counter() {
+        let cache = Cache::for_tests().await;
+        let key = k("metrics_hit", "v");
+        cache.set(&key, &1_u8, 300).await.unwrap();
+        let _: Option<u8> = cache.get(&key).await.unwrap();
+        let m = cache.get_metrics().await;
+        cache.delete(&key).await.unwrap();
+        assert_eq!(m.hits, 1);
+        assert_eq!(m.misses, 0);
+        assert_eq!(m.total_requests, 1);
+    }
+
+    #[tokio::test]
+    async fn hit_rate_is_calculated_correctly() {
+        let cache = Cache::for_tests().await;
+        let key = k("metrics_rate", "v");
+        cache.set(&key, &1_u8, 300).await.unwrap();
+        let _: Option<u8> = cache.get(&key).await.unwrap(); // hit
+        cache.delete(&key).await.unwrap();
+        let _: Option<u8> = cache.get(&key).await.unwrap(); // miss
+        let m = cache.get_metrics().await;
+        assert_eq!(m.hits, 1);
+        assert_eq!(m.misses, 1);
+        assert!((m.cache_hit_rate - 50.0_f64).abs() < 0.001);
+    }
+
+    #[tokio::test]
+    async fn reset_metrics_clears_all_counters() {
+        let cache = Cache::for_tests().await;
+        let key = k("metrics_reset", "v");
+        cache.set(&key, &1_u8, 300).await.unwrap();
+        let _: Option<u8> = cache.get(&key).await.unwrap(); // hit
+        cache.delete(&key).await.unwrap();
+        let _: Option<u8> = cache.get(&key).await.unwrap(); // miss
+        cache.reset_metrics().await;
+        let m = cache.get_metrics().await;
+        assert_eq!(m.hits, 0);
+        assert_eq!(m.misses, 0);
+        assert_eq!(m.total_requests, 0);
+        assert_eq!(m.cache_hit_rate, 0.0);
+    }
+
+    // ── Invalidation ────────────────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn invalidate_calendar_removes_all_three_keys() {
+        let cache = Cache::for_tests().await;
+        // Use an ID unlikely to clash with real data in other tests
+        let id = 99_991_i32;
+        let cal_key = generate_calendar_key(id);
+        let exp_key = generate_export_key(id);
+        let items_key = generate_calendar_items_key(id);
+
+        cache.set(&cal_key, &"cal", 300).await.unwrap();
+        cache.set(&exp_key, &"exp", 300).await.unwrap();
+        cache.set(&items_key, &"items", 300).await.unwrap();
+
+        cache.invalidate_calendar(id).await.unwrap();
+
+        assert!(!cache.exists(&cal_key).await.unwrap(), "calendar key should be gone");
+        assert!(!cache.exists(&exp_key).await.unwrap(), "export key should be gone");
+        assert!(!cache.exists(&items_key).await.unwrap(), "items key should be gone");
+    }
+
+    #[tokio::test]
+    async fn invalidate_subscription_removes_key() {
+        let cache = Cache::for_tests().await;
+        let token = "test-token-invalidate-sub";
+        let key = format!("subscribe:{token}");
+        cache.set(&key, &"cal", 300).await.unwrap();
+        cache.invalidate_subscription(token).await.unwrap();
+        assert!(!cache.exists(&key).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn invalidate_item_removes_key() {
+        let cache = Cache::for_tests().await;
+        let id = 9_999_991_i64;
+        let key = generate_item_key(id);
+        cache.set(&key, &"item", 300).await.unwrap();
+        cache.invalidate_item(id).await.unwrap();
+        assert!(!cache.exists(&key).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn invalidate_search_without_type_removes_key() {
+        let cache = Cache::for_tests().await;
+        let query = "naruto-test-notype";
+        let key = generate_search_key(query, None);
+        cache.set(&key, &"results", 300).await.unwrap();
+        cache.invalidate_search(query, None).await.unwrap();
+        assert!(!cache.exists(&key).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn invalidate_search_with_type_removes_key() {
+        let cache = Cache::for_tests().await;
+        let query = "naruto-test-typed";
+        let key = generate_search_key(query, Some("ANIME"));
+        cache.set(&key, &"results", 300).await.unwrap();
+        cache.invalidate_search(query, Some("ANIME")).await.unwrap();
+        assert!(!cache.exists(&key).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn invalidate_user_settings_removes_key() {
+        let cache = Cache::for_tests().await;
+        let user_id = 99_992_i32;
+        let key = generate_user_settings_key(user_id);
+        cache.set(&key, &"settings", 300).await.unwrap();
+        cache.invalidate_user_settings(user_id).await.unwrap();
+        assert!(!cache.exists(&key).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn invalidate_user_details_removes_key() {
+        let cache = Cache::for_tests().await;
+        let user_id = 99_993_i32;
+        let key = generate_user_details_key(user_id);
+        cache.set(&key, &"details", 300).await.unwrap();
+        cache.invalidate_user_details(user_id).await.unwrap();
+        assert!(!cache.exists(&key).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn invalidate_user_paged_calendars_removes_all_paginated_keys() {
+        let cache = Cache::for_tests().await;
+        let user_id = 99_994_i32;
+        // Paginated keys follow the pattern "{user_id}:calendars:page:{n}:size:{m}"
+        let k1 = generate_paginated_key(user_id, "calendars", 1, 10);
+        let k2 = generate_paginated_key(user_id, "calendars", 2, 10);
+        cache.set(&k1, &"p1", 300).await.unwrap();
+        cache.set(&k2, &"p2", 300).await.unwrap();
+
+        cache.invalidate_user_paged_calendars(user_id).await.unwrap();
+
+        assert!(!cache.exists(&k1).await.unwrap(), "page 1 key should be gone");
+        assert!(!cache.exists(&k2).await.unwrap(), "page 2 key should be gone");
+    }
+
+    // ── SCAN loop correctness ───────────────────────────────────────────────
+
+    #[tokio::test]
+    async fn get_keys_returns_all_matching_keys() {
+        let cache = Cache::for_tests().await;
+        let prefix = "test:scan_all";
+        let keys: Vec<String> = (1..=3).map(|i| format!("{prefix}:{i}")).collect();
+        for k in &keys {
+            cache.set(k, &1_u8, 300).await.unwrap();
+        }
+
+        let mut found = cache.get_keys(&format!("{prefix}:*")).await.unwrap();
+        found.sort();
+
+        for k in &keys {
+            cache.delete(k).await.unwrap();
+        }
+
+        let mut expected = keys;
+        expected.sort();
+        assert_eq!(found, expected);
+    }
+
+    #[tokio::test]
+    async fn get_keys_excludes_non_matching_keys() {
+        let cache = Cache::for_tests().await;
+        let prefix = "test:scan_filter";
+        let yes1 = format!("{prefix}:yes1");
+        let yes2 = format!("{prefix}:yes2");
+        let no = "test:scan_other:no";
+
+        cache.set(&yes1, &1_u8, 300).await.unwrap();
+        cache.set(&yes2, &1_u8, 300).await.unwrap();
+        cache.set(no, &1_u8, 300).await.unwrap();
+
+        let found = cache.get_keys(&format!("{prefix}:*")).await.unwrap();
+
+        cache.delete(&yes1).await.unwrap();
+        cache.delete(&yes2).await.unwrap();
+        cache.delete(no).await.unwrap();
+
+        assert!(found.contains(&yes1), "yes1 should be in results");
+        assert!(found.contains(&yes2), "yes2 should be in results");
+        assert!(!found.contains(&no.to_owned()), "non-matching key should be absent");
+    }
+
+    #[tokio::test]
+    async fn get_keys_returns_empty_when_no_match() {
+        let cache = Cache::for_tests().await;
+        let found = cache
+            .get_keys("test:no_such_prefix_xyzzy:*")
+            .await
+            .unwrap();
+        assert!(found.is_empty());
+    }
+
+    // ── cached_response middleware ───────────────────────────────────────────
+
+    #[tokio::test]
+    async fn cached_response_on_miss_invokes_fetch_and_stores_result() {
+        let cache = Cache::for_tests().await;
+        let key = k("cr_miss", "v");
+        cache.delete(&key).await.unwrap();
+
+        let result = cache
+            .cached_response::<u32, _, _>(&key, 300, || async { Ok(42_u32) })
+            .await
+            .unwrap();
+        assert_eq!(result, 42);
+
+        // Value should now be cached
+        let cached: Option<u32> = cache.get(&key).await.unwrap();
+        cache.delete(&key).await.unwrap();
+        assert_eq!(cached, Some(42), "result should have been stored in cache");
+    }
+
+    #[tokio::test]
+    async fn cached_response_on_hit_returns_cached_value_not_fetch_fn_result() {
+        let cache = Cache::for_tests().await;
+        let key = k("cr_hit", "v");
+        cache.set(&key, &99_u32, 300).await.unwrap();
+
+        // fetch_fn returns 0, but cached value is 99 — cached value wins
+        let result: u32 = cache
+            .cached_response(&key, 300, || async { Ok(0_u32) })
+            .await
+            .unwrap();
+
+        cache.delete(&key).await.unwrap();
+        assert_eq!(result, 99, "should return cached value, not fetch_fn result");
+    }
 }
