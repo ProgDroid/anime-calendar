@@ -1,4 +1,5 @@
-use crate::config::server::JwtSecret;
+use crate::config::server::{CookieSettings, JwtSecret};
+use crate::controllers::auth::build_auth_cookie;
 use crate::mappers::google_oauth::GoogleOauth;
 use crate::mappers::user::UserMapper;
 use crate::services::auth::generate_token;
@@ -8,19 +9,16 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct GoogleOAuthRequest {
-    /// Google ID token from the GSI client library
     pub token: String,
 }
 
-#[derive(Deserialize, Serialize, utoipa::ToSchema)]
+#[derive(Serialize, utoipa::ToSchema)]
 pub struct GoogleOAuthResponse {
-    pub token: String,
     pub username: String,
     pub email: String,
     pub avatar: String,
 }
 
-/// Google OAuth callback endpoint
 #[utoipa::path(
     post,
     path = "/auth/google",
@@ -37,13 +35,13 @@ pub async fn google_oauth(
     google_oauth: web::Data<GoogleOauth>,
     google_request: web::Json<GoogleOAuthRequest>,
     jwt_secret: web::Data<JwtSecret>,
+    cookie_settings: web::Data<CookieSettings>,
 ) -> HttpResponse {
     match google_oauth.validate_id_token(&google_request.token).await {
         Ok(google_user) => {
             let user = match user_mapper.get_user_by_email(&google_user.email).await {
                 Ok(user) => user,
                 Err(_) => {
-                    // Create new user if doesn't exist
                     match user_mapper
                         .create_user(&google_user.id, &google_user.email, None)
                         .await
@@ -59,14 +57,14 @@ pub async fn google_oauth(
                 Err(e) => return e.error_response(),
             };
 
+            let cookie = build_auth_cookie(token, &cookie_settings);
             let response = GoogleOAuthResponse {
-                token,
                 username: google_user.full_name,
                 email: user.email,
                 avatar: google_user.avatar_url,
             };
 
-            HttpResponse::Ok().json(response)
+            HttpResponse::Ok().cookie(cookie).json(response)
         }
         Err(e) => {
             error!("{e}");
