@@ -1,6 +1,7 @@
 pub mod anilist;
 pub mod calendar;
 pub mod database;
+pub mod email_verification;
 pub mod google_oauth;
 pub mod password_reset;
 pub mod user;
