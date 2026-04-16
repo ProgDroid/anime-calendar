@@ -23,7 +23,10 @@ const handleSubmit = async (e: Event) => {
 
   try {
     await authStore.register(username.value, email.value, password.value)
-    router.push('/my-calendars')
+    router.push({
+      name: 'VerifyEmailPending',
+      state: { email: email.value },
+    })
   } catch (err) {
     error.value = t('errors.generic')
   } finally {

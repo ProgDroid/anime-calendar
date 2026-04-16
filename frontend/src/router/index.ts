@@ -60,6 +60,24 @@ const router = createRouter({
       meta: { public: true }
     },
     {
+      path: '/register',
+      name: 'Register',
+      component: () => import('@/components/Register.vue'),
+      meta: { public: true }
+    },
+    {
+      path: '/verify-email/pending',
+      name: 'VerifyEmailPending',
+      component: () => import('@/components/VerifyEmailPendingPage.vue'),
+      meta: { public: true }
+    },
+    {
+      path: '/verify-email',
+      name: 'VerifyEmailConfirm',
+      component: () => import('@/components/VerifyEmailConfirmPage.vue'),
+      meta: { public: true }
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
       component: () => import('@/components/NotFoundPage.vue')

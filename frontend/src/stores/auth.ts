@@ -57,11 +57,25 @@ export const useAuthStore = defineStore('auth', () => {
   const register = async (username: string, email: string, password: string) => {
     try {
       const response = await api.post('/register', { username, email, password })
-      user.value = response.data.username
+      // No cookie is issued — user must verify email before logging in.
       return response.data
     } catch (err) {
       if (axios.isAxiosError(err)) {
         throw new Error(err.response?.data?.error || 'Registration failed')
+      }
+      throw err
+    }
+  }
+
+  const verifyEmail = async (token: string): Promise<string> => {
+    try {
+      const response = await api.post('/auth/verify-email', { token })
+      // Backend issues the auth cookie; set local state
+      user.value = response.data.username
+      return response.data.username as string
+    } catch (err) {
+      if (axios.isAxiosError(err)) {
+        throw new Error(err.response?.data?.error || 'Verification failed')
       }
       throw err
     }
@@ -109,6 +123,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     login,
     register,
+    verifyEmail,
     oauthLogin,
     logout,
     initAuth,

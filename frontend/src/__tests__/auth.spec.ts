@@ -86,7 +86,8 @@ describe('Auth Store', () => {
     const result = await store.register('testuser', 'test@example.com', 'password123')
 
     expect(result).toEqual(mockResponse.data)
-    expect(store.user).toEqual(mockResponse.data.username)
+    // No cookie is issued on register — user must verify email first, so store.user stays empty
+    expect(store.user).toEqual('')
     expect(api.post).toHaveBeenCalledWith('/register', {
       username: 'testuser',
       email: 'test@example.com',
