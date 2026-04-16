@@ -176,6 +176,11 @@ pub async fn register(
 
     if let Err(e) = verification_mapper.replace_token(user.id, &token_hash).await {
         error!("{e}");
+        // Compensate: delete the newly-created user so the email address is
+        // not permanently stuck in an unverifiable state. Best-effort only.
+        if let Err(del_err) = db.delete_user(user.id).await {
+            error!("Failed to rollback user {} after token error: {del_err}", user.id);
+        }
         return e.error_response();
     }
 
