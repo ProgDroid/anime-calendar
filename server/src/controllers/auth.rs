@@ -90,6 +90,11 @@ pub async fn login(
     match user.password_hash {
         Some(hash) => {
             if validate_password(credentials.password.expose_secret(), &hash) {
+                // Block login if email has not been verified yet.
+                if user.email_verified_at.is_none() {
+                    return Error::EmailNotVerified.error_response();
+                }
+
                 let token = match generate_token(&user.id, jwt_secret.expose_secret()) {
                     Ok(token) => token,
                     Err(e) => return e.error_response(),
@@ -428,6 +433,37 @@ mod integration_tests {
         assert_eq!(
             test::call_service(&app, req).await.status(),
             StatusCode::UNAUTHORIZED
+        );
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn login_unverified_user_returns_403(pool: PgPool) {
+        // Create user WITHOUT calling mark_email_verified
+        let hash = hash_password(STRONG_PW).unwrap();
+        UserMapper::from_pool(pool.clone())
+            .create_user("unverified", "unverified@test.com", Some(&hash))
+            .await
+            .unwrap();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .app_data(cookie_data())
+                .service(login),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/login")
+            .set_json(serde_json::json!({
+                "email": "unverified@test.com",
+                "password": STRONG_PW
+            }))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::FORBIDDEN
         );
     }
 
