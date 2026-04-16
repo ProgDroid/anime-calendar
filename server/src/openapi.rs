@@ -54,6 +54,9 @@ impl Modify for BearerAuth {
         // password reset
         crate::controllers::password_reset::forgot_password,
         crate::controllers::password_reset::reset_password,
+        // email verification
+        crate::controllers::email_verification::verify_email,
+        crate::controllers::email_verification::resend_verification,
         // oauth
         crate::controllers::oauth::google_oauth,
         // user
@@ -85,6 +88,9 @@ impl Modify for BearerAuth {
         crate::controllers::password_reset::ForgotPasswordRequest,
         crate::controllers::password_reset::ResetPasswordRequest,
         crate::controllers::auth::MessageResponse,
+        // email verification types
+        crate::controllers::email_verification::VerifyEmailRequest,
+        crate::controllers::email_verification::ResendVerificationRequest,
         // oauth types
         GoogleOAuthRequest,
         GoogleOAuthResponse,
