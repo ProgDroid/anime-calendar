@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, username, email, password_hash, created_at, updated_at FROM users WHERE email = $1 AND deleted_at IS NULL",
+  "query": "SELECT id, username, email, password_hash, email_verified_at, created_at, updated_at FROM users WHERE id = $1 AND deleted_at IS NULL",
   "describe": {
     "columns": [
       {
@@ -30,23 +30,23 @@
       },
       {
         "ordinal": 4,
-        "name": "created_at",
+        "name": "email_verified_at",
         "type_info": "Timestamp"
       },
       {
         "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
         "name": "updated_at",
         "type_info": "Timestamp"
       }
     ],
     "parameters": {
       "Left": [
-        {
-          "Custom": {
-            "name": "citext",
-            "kind": "Simple"
-          }
-        }
+        "Int4"
       ]
     },
     "nullable": [
@@ -54,9 +54,10 @@
       false,
       false,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "e8488adcbfb2a5fe7b668d67f1fb1ea2c34d36a6d0fc7e8dff5db86682794533"
+  "hash": "022c9fbec54d392a2c8e9dd44b5c8917afef2f6373cb082f49ce1b0eacb5051e"
 }

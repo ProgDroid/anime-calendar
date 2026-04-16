@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, password_hash, created_at, updated_at",
+  "query": "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id, username, email, password_hash, email_verified_at, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -30,11 +30,16 @@
       },
       {
         "ordinal": 4,
-        "name": "created_at",
+        "name": "email_verified_at",
         "type_info": "Timestamp"
       },
       {
         "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
         "name": "updated_at",
         "type_info": "Timestamp"
       }
@@ -56,9 +61,10 @@
       false,
       false,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "95b3d0bcf34849aec8e9192a7d0bfb598ac0389ccbd84956465f6f6a32d72d66"
+  "hash": "f38273c09e63f66b20ffb55eaea136ba60f0b5180e0d4170d2daddd18b1ecb11"
 }

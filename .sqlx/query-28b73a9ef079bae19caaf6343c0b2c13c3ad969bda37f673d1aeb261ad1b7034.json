@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, username, email, password_hash, created_at, updated_at FROM users WHERE id = $1 AND deleted_at IS NULL",
+  "query": "UPDATE users SET username = $1, email = $2, updated_at = NOW() WHERE id = $3 AND deleted_at IS NULL RETURNING id, username, email, password_hash, email_verified_at, created_at, updated_at",
   "describe": {
     "columns": [
       {
@@ -30,17 +30,29 @@
       },
       {
         "ordinal": 4,
-        "name": "created_at",
+        "name": "email_verified_at",
         "type_info": "Timestamp"
       },
       {
         "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 6,
         "name": "updated_at",
         "type_info": "Timestamp"
       }
     ],
     "parameters": {
       "Left": [
+        "Varchar",
+        {
+          "Custom": {
+            "name": "citext",
+            "kind": "Simple"
+          }
+        },
         "Int4"
       ]
     },
@@ -49,9 +61,10 @@
       false,
       false,
       true,
+      true,
       false,
       false
     ]
   },
-  "hash": "2a0444a8653676f037f7f1653a815ad60ac921a11f2315cd0945cfb3595edca1"
+  "hash": "28b73a9ef079bae19caaf6343c0b2c13c3ad969bda37f673d1aeb261ad1b7034"
 }
