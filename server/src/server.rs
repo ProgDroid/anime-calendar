@@ -14,14 +14,15 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
     cache::Cache,
-    config::server::{CookieSettings, JwtSecret, Server as ServerConfig},
-    controllers::{auth, cache_metrics, calendar, item, items, oauth, user},
+    config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig},
+    controllers::{auth, cache_metrics, calendar, item, items, oauth, password_reset, user},
     error::Error,
     mappers::{
-        anilist::Anilist, calendar::CalendarMapper, google_oauth::GoogleOauth, user::UserMapper,
-        user_settings::UserSettingsMapper,
+        anilist::Anilist, calendar::CalendarMapper, google_oauth::GoogleOauth,
+        password_reset::PasswordResetMapper, user::UserMapper, user_settings::UserSettingsMapper,
     },
     openapi::ApiDoc,
+    services::email::EmailService,
     ServerResult,
 };
 
@@ -36,6 +37,8 @@ pub fn start(
     user_mapper: UserMapper,
     calendar_mapper: CalendarMapper,
     user_settings_mapper: UserSettingsMapper,
+    token_mapper: PasswordResetMapper,
+    email_service: EmailService,
 ) -> ServerResult<Server> {
     let level_filter = match LevelFilter::from_str(&config.log_level) {
         Ok(filter) => filter,
@@ -55,6 +58,7 @@ pub fn start(
     let cookie_settings = CookieSettings {
         secure: config.cookie_secure,
     };
+    let app_base_url = AppBaseUrl::new(config.app_base_url.clone());
 
     let governor_conf = GovernorConfigBuilder::default()
         .seconds_per_request(1)
@@ -95,6 +99,9 @@ pub fn start(
             .app_data(web::Data::new(cache.clone()))
             .app_data(web::Data::new(jwt_secret.clone()))
             .app_data(web::Data::new(cookie_settings.clone()))
+            .app_data(web::Data::new(token_mapper.clone()))
+            .app_data(web::Data::new(email_service.clone()))
+            .app_data(web::Data::new(app_base_url.clone()))
             .service(item::get)
             .service(items::get)
             .service(items::search)
@@ -109,6 +116,8 @@ pub fn start(
             .service(auth::get_current_user)
             .service(auth::verify_token_endpoint)
             .service(auth::logout)
+            .service(password_reset::forgot_password)
+            .service(password_reset::reset_password)
             .service(user::get_user_details)
             .service(user::update_user)
             .service(user::delete_user)
