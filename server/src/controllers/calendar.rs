@@ -601,7 +601,7 @@ mod integration_tests {
     use actix_web::{http::StatusCode, test, web, App};
     use secrecy::SecretString;
     use serde_json::Value;
-    use sqlx::PgPool;
+    use sqlx::{PgPool, Row};
 
     const SECRET: &str = "test-jwt-secret-at-least-32-bytes";
 
@@ -622,17 +622,19 @@ mod integration_tests {
 
     /// Insert a bare calendar row directly (no items), returning its id and token.
     async fn seed_calendar(pool: &PgPool, user_id: i32, name: &str) -> (i32, String) {
-        let row = sqlx::query!(
+        let row = sqlx::query(
             "INSERT INTO calendars (name, language, user_id, subscription_token) \
              VALUES ($1, 'english'::language, $2, encode(gen_random_bytes(32), 'hex')) \
              RETURNING id, subscription_token",
-            name,
-            user_id
         )
+        .bind(name)
+        .bind(user_id)
         .fetch_one(pool)
         .await
         .unwrap();
-        (row.id, row.subscription_token)
+        let id: i32 = row.try_get("id").unwrap();
+        let token: String = row.try_get("subscription_token").unwrap();
+        (id, token)
     }
 
     // ─── PUT /calendar (validation / auth) ───────────────────────────────────
