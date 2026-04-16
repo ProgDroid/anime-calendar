@@ -36,6 +36,28 @@
       "alreadyHaveAccount": "Já tem uma conta?",
       "usernamePlaceholder": "Digite seu nome de usuário",
       "registering": "Registando..."
+    },
+    "forgotPassword": {
+      "title": "Esqueci a senha",
+      "subtitle": "Insira seu endereço de e-mail e enviaremos um link de redefinição.",
+      "emailLabel": "E-mail",
+      "emailPlaceholder": "seu@email.com",
+      "submit": "Enviar link de redefinição",
+      "sending": "Enviando...",
+      "successMessage": "Se existir uma conta com esse e-mail, você receberá um link de redefinição em breve.",
+      "link": "Esqueceu a senha?"
+    },
+    "resetPassword": {
+      "title": "Redefinir senha",
+      "newPasswordLabel": "Nova senha",
+      "newPasswordPlaceholder": "Mínimo 12 caracteres",
+      "confirmPasswordLabel": "Confirmar senha",
+      "confirmPasswordPlaceholder": "Repita sua nova senha",
+      "submit": "Redefinir senha",
+      "resetting": "Redefinindo...",
+      "successMessage": "Sua senha foi redefinida. Redirecionando para o login...",
+      "passwordMismatch": "As senhas não coincidem.",
+      "invalidToken": "Este link de redefinição é inválido ou expirou. Por favor, solicite um novo."
     }
   },
   "userSettings": {

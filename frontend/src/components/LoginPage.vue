@@ -92,6 +92,12 @@ const toggleMode = () => {
             />
           </div>
 
+          <div v-if="!isRegistering" class="text-right -mt-2">
+            <router-link to="/forgot-password" class="link link-primary text-sm">
+              {{ $t('auth.forgotPassword.link') }}
+            </router-link>
+          </div>
+
           <button
             type="submit"
             :disabled="loading"

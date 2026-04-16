@@ -36,6 +36,28 @@
       "alreadyHaveAccount": "Already have an account?",
       "usernamePlaceholder": "Enter your username",
       "registering": "Registering..."
+    },
+    "forgotPassword": {
+      "title": "Forgot password",
+      "subtitle": "Enter your email address and we'll send you a reset link.",
+      "emailLabel": "Email",
+      "emailPlaceholder": "your@email.com",
+      "submit": "Send reset link",
+      "sending": "Sending...",
+      "successMessage": "If an account exists with that email, you'll receive a reset link shortly.",
+      "link": "Forgot password?"
+    },
+    "resetPassword": {
+      "title": "Reset password",
+      "newPasswordLabel": "New password",
+      "newPasswordPlaceholder": "At least 12 characters",
+      "confirmPasswordLabel": "Confirm password",
+      "confirmPasswordPlaceholder": "Repeat your new password",
+      "submit": "Reset password",
+      "resetting": "Resetting...",
+      "successMessage": "Your password has been reset. Redirecting to login...",
+      "passwordMismatch": "Passwords do not match.",
+      "invalidToken": "This reset link is invalid or has expired. Please request a new one."
     }
   },
   "userSettings": {
