@@ -1,9 +1,6 @@
 use actix_web::{post, web, HttpResponse, ResponseError};
 use log::error;
-use rand::RngCore as _;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest as _, Sha256};
-use std::fmt::Write as _;
 use utoipa::ToSchema;
 
 use crate::{
@@ -12,7 +9,7 @@ use crate::{
     error::Error,
     mappers::{password_reset::PasswordResetMapper, user::UserMapper},
     services::{
-        auth::{hash_password, validate_password_strength},
+        auth::{generate_random_token, hash_password, hash_token, validate_password_strength},
         email::EmailService,
     },
 };
@@ -33,23 +30,10 @@ pub struct MessageResponse {
     pub message: String,
 }
 
-#[must_use]
-fn generate_raw_token() -> String {
-    let mut bytes = [0u8; 32];
-    rand::rng().fill_bytes(&mut bytes);
-    bytes.iter().fold(String::new(), |mut s, b| {
-        let _ = write!(s, "{b:02x}");
-        s
-    })
-}
-
+/// SHA-256 hash a reset token. Delegates to [`crate::services::auth::hash_token`].
 #[must_use]
 pub fn hash_reset_token(raw_token: &str) -> String {
-    let hash = Sha256::digest(raw_token.as_bytes());
-    hash.iter().fold(String::new(), |mut s, b| {
-        let _ = write!(s, "{b:02x}");
-        s
-    })
+    hash_token(raw_token)
 }
 
 const RESET_RESPONSE: &str =
@@ -87,7 +71,7 @@ pub async fn forgot_password(
         return ok;
     }
 
-    let raw_token = generate_raw_token();
+    let raw_token = generate_random_token();
     let token_hash = hash_reset_token(&raw_token);
     let reset_url = format!("{}/reset-password?token={raw_token}", app_base_url.as_str());
 

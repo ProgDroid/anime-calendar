@@ -10,6 +10,8 @@ use argon2::{
 };
 use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use log::error;
+use rand::RngCore as _;
+use sha2::{Digest as _, Sha256};
 
 use crate::{middleware::auth::Claims, ServerResult};
 
@@ -82,6 +84,21 @@ pub fn generate_token<T: AsRef<[u8]>>(id: &i32, jwt_secret: T) -> ServerResult<S
 
     let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
     Ok(encode(&Header::default(), &claims, &encoding_key)?)
+}
+
+/// Generate a cryptographically random 32-byte token as a 64-char hex string.
+#[must_use]
+pub fn generate_random_token() -> String {
+    let mut bytes = [0u8; 32];
+    rand::rng().fill_bytes(&mut bytes);
+    bytes.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// SHA-256 hash a raw token, returning a 64-char hex string.
+#[must_use]
+pub fn hash_token(raw_token: &str) -> String {
+    let hash = Sha256::digest(raw_token.as_bytes());
+    hash.iter().map(|b| format!("{b:02x}")).collect()
 }
 
 // Add a function to verify token
@@ -187,5 +204,28 @@ mod tests {
         let claims = verify_token(&token, "s").unwrap();
         let now = chrono::Utc::now().timestamp() as usize;
         assert!(claims.exp > now);
+    }
+
+    // --- token generation / hashing ---
+
+    #[test]
+    fn hash_token_is_deterministic_and_64_hex_chars() {
+        let h1 = hash_token("abc");
+        let h2 = hash_token("abc");
+        assert_eq!(h1, h2, "same input must produce same hash");
+        assert_eq!(h1.len(), 64, "SHA-256 hex is 64 chars");
+        assert_ne!(
+            hash_token("abc"),
+            hash_token("xyz"),
+            "different inputs differ"
+        );
+    }
+
+    #[test]
+    fn generate_random_token_is_64_hex_and_unique() {
+        let t1 = generate_random_token();
+        let t2 = generate_random_token();
+        assert_eq!(t1.len(), 64);
+        assert_ne!(t1, t2, "two calls should produce different tokens");
     }
 }
