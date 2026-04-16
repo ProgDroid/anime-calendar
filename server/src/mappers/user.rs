@@ -297,6 +297,19 @@ mod tests {
     }
 
     #[sqlx::test(migrations = "../migrations")]
+    async fn mark_email_verified_sets_timestamp(pool: PgPool) {
+        let m = mapper(pool);
+        let user = m
+            .create_user("vera", "vera@example.com", Some("hash"))
+            .await
+            .unwrap();
+        assert!(user.email_verified_at.is_none(), "new user should be unverified");
+        m.mark_email_verified(user.id).await.unwrap();
+        let fetched = m.get_user_by_id(user.id).await.unwrap();
+        assert!(fetched.email_verified_at.is_some(), "should be verified after mark");
+    }
+
+    #[sqlx::test(migrations = "../migrations")]
     async fn delete_user_cascades_soft_delete_to_calendars(pool: PgPool) {
         let m = mapper(pool.clone());
         let user = m
