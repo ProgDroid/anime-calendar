@@ -58,6 +58,22 @@
       "successMessage": "Sua senha foi redefinida. Redirecionando para o login...",
       "passwordMismatch": "As senhas não coincidem.",
       "invalidToken": "Este link de redefinição é inválido ou expirou. Por favor, solicite um novo."
+    },
+    "verifyEmail": {
+      "pending": {
+        "title": "Verifique o seu email",
+        "subtitle": "Enviámos um link de verificação para o seu endereço de email. Clique no link para ativar a sua conta.",
+        "resendButton": "Reenviar email",
+        "resending": "A reenviar...",
+        "resendSuccess": "Email de verificação reenviado. Por favor verifique a sua caixa de entrada.",
+        "resendError": "Falha ao reenviar. Por favor tente novamente."
+      },
+      "confirm": {
+        "verifying": "A verificar o seu email...",
+        "success": "Email verificado! Já está autenticado.",
+        "error": "Este link de verificação é inválido ou expirou.",
+        "loginLink": "Ir para o login"
+      }
     }
   },
   "userSettings": {

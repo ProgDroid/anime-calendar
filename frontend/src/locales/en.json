@@ -58,6 +58,22 @@
       "successMessage": "Your password has been reset. Redirecting to login...",
       "passwordMismatch": "Passwords do not match.",
       "invalidToken": "This reset link is invalid or has expired. Please request a new one."
+    },
+    "verifyEmail": {
+      "pending": {
+        "title": "Check your email",
+        "subtitle": "We've sent a verification link to your email address. Click the link to activate your account.",
+        "resendButton": "Resend email",
+        "resending": "Resending...",
+        "resendSuccess": "Verification email resent. Please check your inbox.",
+        "resendError": "Failed to resend. Please try again."
+      },
+      "confirm": {
+        "verifying": "Verifying your email...",
+        "success": "Email verified! You are now logged in.",
+        "error": "This verification link is invalid or has expired.",
+        "loginLink": "Go to login"
+      }
     }
   },
   "userSettings": {
