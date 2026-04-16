@@ -79,6 +79,7 @@ async function handleSubmit(e: Event) {
                 required
                 class="input input-bordered w-full"
                 :placeholder="t('auth.resetPassword.newPasswordPlaceholder')"
+                minlength="12"
                 maxlength="128"
               />
             </div>
@@ -92,6 +93,7 @@ async function handleSubmit(e: Event) {
                 required
                 class="input input-bordered w-full"
                 :placeholder="t('auth.resetPassword.confirmPasswordPlaceholder')"
+                minlength="12"
                 maxlength="128"
               />
             </div>
