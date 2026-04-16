@@ -293,11 +293,13 @@ mod integration_tests {
     /// Seed a password-based user and return its id.
     async fn seed_user(pool: &PgPool, username: &str, email: &str) -> i32 {
         let hash = hash_password(STRONG_PW).unwrap();
-        UserMapper::from_pool(pool.clone())
+        let mapper = UserMapper::from_pool(pool.clone());
+        let user = mapper
             .create_user(username, email, Some(&hash))
             .await
-            .unwrap()
-            .id
+            .unwrap();
+        mapper.mark_email_verified(user.id).await.unwrap();
+        user.id
     }
 
     // ─── POST /login ──────────────────────────────────────────────────────────

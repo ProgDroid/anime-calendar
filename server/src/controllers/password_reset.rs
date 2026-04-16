@@ -160,11 +160,13 @@ mod integration_tests {
     }
 
     async fn seed_user(pool: &PgPool, email: &str) -> i32 {
-        UserMapper::from_pool(pool.clone())
+        let mapper = UserMapper::from_pool(pool.clone());
+        let user = mapper
             .create_user("tester", email, Some(&hash_password(STRONG_PW).unwrap()))
             .await
-            .unwrap()
-            .id
+            .unwrap();
+        mapper.mark_email_verified(user.id).await.unwrap();
+        user.id
     }
 
     // ─── POST /auth/forgot-password ──────────────────────────────────────────
