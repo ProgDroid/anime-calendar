@@ -40,7 +40,7 @@ describe('LoginPage', () => {
 
   it('toggles to register mode when link clicked', async () => {
     const wrapper = mountPage()
-    await wrapper.find('.link.link-primary').trigger('click')
+    await wrapper.find('[data-testid="toggle-mode"]').trigger('click')
     expect(wrapper.text()).toContain(en.auth.register.title)
     expect(wrapper.find('#username').exists()).toBe(true)
   })
@@ -54,7 +54,7 @@ describe('LoginPage', () => {
     await flushPromises()
     expect(wrapper.find('.alert-error').exists()).toBe(true)
 
-    await wrapper.find('.link.link-primary').trigger('click')
+    await wrapper.find('[data-testid="toggle-mode"]').trigger('click')
     expect(wrapper.find('.alert-error').exists()).toBe(false)
   })
 
@@ -71,7 +71,7 @@ describe('LoginPage', () => {
   it('calls api.post /register with credentials in register mode', async () => {
     vi.mocked(api.post).mockResolvedValue({ data: { username: 'user' } })
     const wrapper = mountPage()
-    await wrapper.find('.link.link-primary').trigger('click')
+    await wrapper.find('[data-testid="toggle-mode"]').trigger('click')
     await wrapper.find('#username').setValue('newuser')
     await wrapper.find('#email').setValue('test@example.com')
     await wrapper.find('#password').setValue('secret')

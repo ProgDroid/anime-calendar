@@ -119,7 +119,7 @@ const toggleMode = () => {
         <div class="card-actions justify-center mt-4">
           <p class="text-center">
             {{ isRegistering ? $t('auth.register.alreadyHaveAccount') : $t('auth.register.noAccount') }}
-            <button @click="toggleMode" class="link link-primary">
+            <button @click="toggleMode" class="link link-primary" data-testid="toggle-mode">
               {{ isRegistering ? $t('auth.login.submit') : $t('auth.register.submit') }}
             </button>
           </p>
