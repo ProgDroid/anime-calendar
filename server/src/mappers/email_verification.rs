@@ -11,6 +11,7 @@ pub struct EmailVerificationMapper {
 }
 
 /// Identifies a valid, unexpired token row.
+#[must_use]
 pub struct EmailVerificationToken {
     pub id: i32,
     pub user_id: i32,
