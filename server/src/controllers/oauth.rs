@@ -46,7 +46,14 @@ pub async fn google_oauth(
                         .create_user(&google_user.id, &google_user.email, None)
                         .await
                     {
-                        Ok(user) => user,
+                        Ok(user) => {
+                            // Mark the email as verified — Google has already confirmed ownership.
+                            if let Err(e) = user_mapper.mark_email_verified(user.id).await {
+                                error!("Failed to mark OAuth user {} as verified: {e}", user.id);
+                                return e.error_response();
+                            }
+                            user
+                        }
                         Err(e) => return e.error_response(),
                     }
                 }
@@ -70,5 +77,21 @@ pub async fn google_oauth(
             error!("{e}");
             e.error_response()
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::mappers::user::UserMapper;
+    use sqlx::PgPool;
+
+    #[sqlx::test(migrations = "../migrations")]
+    async fn oauth_create_user_is_unverified_until_mark_called(pool: PgPool) {
+        let mapper = UserMapper::from_pool(pool.clone());
+        let user = mapper.create_user("oauthtest", "oauth@test.com", None).await.unwrap();
+        assert!(user.email_verified_at.is_none(), "freshly created user is unverified");
+        mapper.mark_email_verified(user.id).await.unwrap();
+        let fetched = mapper.get_user_by_id(user.id).await.unwrap();
+        assert!(fetched.email_verified_at.is_some());
     }
 }
