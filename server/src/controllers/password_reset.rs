@@ -30,12 +30,6 @@ pub struct MessageResponse {
     pub message: String,
 }
 
-/// SHA-256 hash a reset token. Delegates to [`crate::services::auth::hash_token`].
-#[must_use]
-pub fn hash_reset_token(raw_token: &str) -> String {
-    hash_token(raw_token)
-}
-
 const RESET_RESPONSE: &str =
     "If an account exists with that email, you'll receive a reset link shortly.";
 
@@ -72,7 +66,7 @@ pub async fn forgot_password(
     }
 
     let raw_token = generate_random_token();
-    let token_hash = hash_reset_token(&raw_token);
+    let token_hash = hash_token(&raw_token);
     let reset_url = format!("{}/reset-password?token={raw_token}", app_base_url.as_str());
 
     // Best-effort cleanup — don't abort the flow if old tokens can't be deleted.
@@ -121,7 +115,7 @@ pub async fn reset_password(
         return Error::InvalidPassword.error_response();
     }
 
-    let token_hash = hash_reset_token(&body.token);
+    let token_hash = hash_token(&body.token);
 
     let Ok(token) = token_mapper.find_valid_token(&token_hash).await else {
         return Error::InvalidResetToken.error_response();
@@ -257,7 +251,7 @@ mod integration_tests {
         let token_mapper = PasswordResetMapper::from_pool(pool.clone());
 
         let raw = "a".repeat(64);
-        let hash = hash_reset_token(&raw);
+        let hash = hash_token(&raw);
         token_mapper.create_token(user_id, &hash).await.unwrap();
 
         let app = test::init_service(
@@ -305,7 +299,7 @@ mod integration_tests {
         let token_mapper = PasswordResetMapper::from_pool(pool.clone());
 
         let raw = "b".repeat(64);
-        let hash = hash_reset_token(&raw);
+        let hash = hash_token(&raw);
         token_mapper.create_token(user_id, &hash).await.unwrap();
         let token = token_mapper.find_valid_token(&hash).await.unwrap();
         token_mapper

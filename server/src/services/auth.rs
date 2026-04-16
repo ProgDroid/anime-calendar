@@ -227,5 +227,9 @@ mod tests {
         let t2 = generate_random_token();
         assert_eq!(t1.len(), 64);
         assert_ne!(t1, t2, "two calls should produce different tokens");
+        assert!(
+            t1.chars().all(|c| c.is_ascii_hexdigit()),
+            "output must be lowercase hex"
+        );
     }
 }
