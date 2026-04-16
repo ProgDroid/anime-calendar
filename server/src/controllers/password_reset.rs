@@ -1,11 +1,11 @@
 use actix_web::{post, web, HttpResponse, ResponseError};
 use log::error;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
     config::server::AppBaseUrl,
-    controllers::auth::ErrorResponse,
+    controllers::auth::{ErrorResponse, MessageResponse},
     error::Error,
     mappers::{password_reset::PasswordResetMapper, user::UserMapper},
     services::{
@@ -23,11 +23,6 @@ pub struct ForgotPasswordRequest {
 pub struct ResetPasswordRequest {
     pub token: String,
     pub new_password: String,
-}
-
-#[derive(Serialize, ToSchema)]
-pub struct MessageResponse {
-    pub message: String,
 }
 
 const RESET_RESPONSE: &str =

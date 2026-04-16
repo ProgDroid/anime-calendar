@@ -1,12 +1,16 @@
-use crate::config::server::{CookieSettings, JwtSecret};
+use crate::config::server::{AppBaseUrl, CookieSettings, JwtSecret};
 use crate::error::Error;
+use crate::mappers::email_verification::EmailVerificationMapper;
 use crate::mappers::user::UserMapper;
 use crate::middleware::auth::Claims;
 use crate::services::auth::{
-    generate_token, hash_password, validate_password, validate_password_strength, verify_token,
+    generate_random_token, generate_token, hash_password, hash_token, validate_password,
+    validate_password_strength, verify_token,
 };
+use crate::services::email::EmailService;
 use actix_web::cookie::{time::Duration, Cookie, SameSite};
 use actix_web::{get, post, web, HttpResponse, ResponseError};
+use log::error;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
@@ -40,6 +44,11 @@ pub struct LoginRequest {
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct AuthResponse {
     pub username: String,
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct MessageResponse {
+    pub message: String,
 }
 
 /// Build an httpOnly auth cookie from a JWT token and cookie settings.
@@ -112,67 +121,74 @@ pub struct RegisterRequest {
     tag = "auth",
     request_body = RegisterRequest,
     responses(
-        (status = 200, description = "Registration successful", body = AuthResponse),
-        (status = 400, description = "Invalid request or weak password", body = ErrorResponse),
+        (status = 200, description = "Registration accepted — verification email sent", body = MessageResponse),
+        (status = 400, description = "Invalid request, weak password, or duplicate email", body = ErrorResponse),
     )
 )]
 #[post("/register")]
 pub async fn register(
     db: web::Data<UserMapper>,
+    verification_mapper: web::Data<EmailVerificationMapper>,
+    email_service: web::Data<EmailService>,
+    app_base_url: web::Data<AppBaseUrl>,
     user_data: web::Json<RegisterRequest>,
-    jwt_secret: web::Data<JwtSecret>,
-    cookie_settings: web::Data<CookieSettings>,
 ) -> HttpResponse {
     // Check if user already exists
     if (db.get_user_by_email(&user_data.email).await).is_ok() {
         return Error::UserAlreadyExists.error_response();
     }
 
-    // Validate username length
     if user_data.username.len() > 50 {
         return Error::InvalidRequest.error_response();
     }
 
-    // Validate email format
     if !is_valid_email(&user_data.email) {
         return Error::InvalidRequest.error_response();
     }
 
-    // Validate password length
     if user_data.password.expose_secret().len() > 128 {
         return Error::InvalidRequest.error_response();
     }
 
-    // Validate password strength
     if !validate_password_strength(user_data.password.expose_secret()) {
         return Error::InvalidPassword.error_response();
     }
 
     let hashed_password = match hash_password(user_data.password.expose_secret()) {
-        Ok(hashed_password) => hashed_password,
+        Ok(h) => h,
         Err(e) => return e.error_response(),
     };
 
     let user = match db
-        .create_user(
-            &user_data.username,
-            &user_data.email,
-            Some(&hashed_password),
-        )
+        .create_user(&user_data.username, &user_data.email, Some(&hashed_password))
         .await
     {
-        Ok(user) => user,
+        Ok(u) => u,
         Err(e) => return e.error_response(),
     };
 
-    let token = match generate_token(&user.id, jwt_secret.expose_secret()) {
-        Ok(token) => token,
-        Err(e) => return e.error_response(),
-    };
+    let raw_token = generate_random_token();
+    let token_hash = hash_token(&raw_token);
+    let verify_url = format!(
+        "{}/verify-email?token={raw_token}",
+        app_base_url.as_str()
+    );
 
-    let cookie = build_auth_cookie(token, &cookie_settings);
-    HttpResponse::Ok().cookie(cookie).json(AuthResponse {
-        username: user.username,
+    if let Err(e) = verification_mapper.replace_token(user.id, &token_hash).await {
+        error!("{e}");
+        return e.error_response();
+    }
+
+    if let Err(e) = email_service
+        .send_verification_email(&user.email, &verify_url)
+        .await
+    {
+        error!("{e}");
+        return e.error_response();
+    }
+
+    HttpResponse::Ok().json(MessageResponse {
+        message: "Verification email sent. Please check your inbox.".into(),
     })
 }
 
@@ -272,8 +288,11 @@ mod unit_tests {
 #[cfg(test)]
 mod integration_tests {
     use super::*;
-    use crate::mappers::user::UserMapper;
-    use crate::services::auth::{generate_token, hash_password};
+    use crate::{
+        config::server::AppBaseUrl,
+        mappers::{email_verification::EmailVerificationMapper, user::UserMapper},
+        services::{auth::{generate_token, hash_password}, email::EmailService},
+    };
     use actix_web::{http::StatusCode, test, web, App};
     use secrecy::SecretString;
     use serde_json::Value;
@@ -410,15 +429,23 @@ mod integration_tests {
     // ─── POST /register ───────────────────────────────────────────────────────
 
     #[sqlx::test(migrations = "../migrations")]
-    async fn register_new_user_sets_cookie_and_returns_username(pool: PgPool) {
+    async fn register_new_user_returns_200_with_message_and_no_cookie(pool: PgPool) {
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
-                .app_data(jwt_data())
-                .app_data(cookie_data())
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(
+                    EmailVerificationMapper::from_pool(pool),
+                ))
+                .app_data(web::Data::new(EmailService::new(
+                    crate::config::server::SmtpConfig::default(),
+                )))
+                .app_data(web::Data::new(AppBaseUrl::new(
+                    "http://localhost:5173".to_string(),
+                )))
                 .service(register),
         )
         .await;
+
         let req = test::TestRequest::post()
             .uri("/register")
             .set_json(serde_json::json!({
@@ -430,19 +457,17 @@ mod integration_tests {
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
 
-        // Assert Set-Cookie header contains auth_token and HttpOnly
-        let set_cookie = resp
+        // No auth cookie — user must verify email before logging in
+        let has_auth_cookie = resp
             .headers()
             .get("Set-Cookie")
-            .expect("Set-Cookie header missing")
-            .to_str()
-            .unwrap();
-        assert!(set_cookie.contains("auth_token="), "cookie name missing");
-        assert!(set_cookie.contains("HttpOnly"), "HttpOnly flag missing");
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.contains("auth_token="))
+            .unwrap_or(false);
+        assert!(!has_auth_cookie, "register must not issue auth cookie before verification");
 
-        let body: Value = test::read_body_json(resp).await;
-        assert_eq!(body["username"], "carol");
-        assert!(body.get("token").is_none(), "token should not be in body");
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert!(body.get("message").is_some(), "response must contain a 'message' field");
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -450,9 +475,10 @@ mod integration_tests {
         seed_user(&pool, "dave", "dave@test.com").await;
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
-                .app_data(jwt_data())
-                .app_data(cookie_data())
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(EmailVerificationMapper::from_pool(pool)))
+                .app_data(web::Data::new(EmailService::new(crate::config::server::SmtpConfig::default())))
+                .app_data(web::Data::new(AppBaseUrl::new("http://localhost:5173".to_string())))
                 .service(register),
         )
         .await;
@@ -474,9 +500,10 @@ mod integration_tests {
     async fn register_weak_password_returns_400(pool: PgPool) {
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
-                .app_data(jwt_data())
-                .app_data(cookie_data())
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(EmailVerificationMapper::from_pool(pool)))
+                .app_data(web::Data::new(EmailService::new(crate::config::server::SmtpConfig::default())))
+                .app_data(web::Data::new(AppBaseUrl::new("http://localhost:5173".to_string())))
                 .service(register),
         )
         .await;
@@ -498,9 +525,10 @@ mod integration_tests {
     async fn register_invalid_email_returns_400(pool: PgPool) {
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
-                .app_data(jwt_data())
-                .app_data(cookie_data())
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(EmailVerificationMapper::from_pool(pool)))
+                .app_data(web::Data::new(EmailService::new(crate::config::server::SmtpConfig::default())))
+                .app_data(web::Data::new(AppBaseUrl::new("http://localhost:5173".to_string())))
                 .service(register),
         )
         .await;
@@ -522,9 +550,10 @@ mod integration_tests {
     async fn register_username_too_long_returns_400(pool: PgPool) {
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
-                .app_data(jwt_data())
-                .app_data(cookie_data())
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(EmailVerificationMapper::from_pool(pool)))
+                .app_data(web::Data::new(EmailService::new(crate::config::server::SmtpConfig::default())))
+                .app_data(web::Data::new(AppBaseUrl::new("http://localhost:5173".to_string())))
                 .service(register),
         )
         .await;

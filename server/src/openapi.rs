@@ -84,7 +84,7 @@ impl Modify for BearerAuth {
         // password reset types
         crate::controllers::password_reset::ForgotPasswordRequest,
         crate::controllers::password_reset::ResetPasswordRequest,
-        crate::controllers::password_reset::MessageResponse,
+        crate::controllers::auth::MessageResponse,
         // oauth types
         GoogleOAuthRequest,
         GoogleOAuthResponse,
