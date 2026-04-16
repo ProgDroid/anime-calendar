@@ -4,4 +4,5 @@ pub mod calendar;
 pub mod item;
 pub mod items;
 pub mod oauth;
+pub mod password_reset;
 pub mod user;
