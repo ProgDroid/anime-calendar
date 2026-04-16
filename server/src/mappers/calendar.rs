@@ -293,8 +293,11 @@ impl CalendarMapper {
 
     /// Construct a mapper from a bare pool — for integration tests only.
     #[cfg(test)]
-    pub fn from_pool(pool: sqlx::PgPool) -> Self {
-        Self { db: Database { pool } }
+    #[must_use]
+    pub const fn from_pool(pool: sqlx::PgPool) -> Self {
+        Self {
+            db: Database { pool },
+        }
     }
 }
 
@@ -304,7 +307,9 @@ mod tests {
     use sqlx::PgPool;
 
     fn mapper(pool: PgPool) -> CalendarMapper {
-        CalendarMapper { db: Database { pool } }
+        CalendarMapper {
+            db: Database { pool },
+        }
     }
 
     /// Insert a throwaway user; each test gets its own DB so no uniqueness concerns.
@@ -364,7 +369,10 @@ mod tests {
         let user_id = create_test_user(&pool).await;
         let m = mapper(pool);
         let inserted = m.insert_calendar(new_calendar(user_id)).await.unwrap();
-        let fetched = m.get_calendar_by_token(&inserted.subscription_token).await.unwrap();
+        let fetched = m
+            .get_calendar_by_token(&inserted.subscription_token)
+            .await
+            .unwrap();
         assert_eq!(fetched.id, inserted.id);
     }
 
@@ -389,10 +397,13 @@ mod tests {
     async fn save_calendar_with_item_ids_round_trips(pool: PgPool) {
         let user_id = create_test_user(&pool).await;
         let m = mapper(pool);
-        let cal = Calendar { item_ids: vec![101, 202, 303], ..new_calendar(user_id) };
+        let cal = Calendar {
+            item_ids: vec![101, 202, 303],
+            ..new_calendar(user_id)
+        };
         let saved = m.save_calendar(cal).await.unwrap();
         let fetched = m.get_calendar_by_id(saved.id, user_id).await.unwrap();
-        let mut ids = fetched.item_ids.clone();
+        let mut ids = fetched.item_ids;
         ids.sort_unstable();
         assert_eq!(ids, vec![101, 202, 303]);
     }
@@ -404,7 +415,10 @@ mod tests {
         let inserted = m.insert_calendar(new_calendar(user_id)).await.unwrap();
         m.delete_calendar(inserted.id, user_id).await.unwrap();
         assert!(m.get_calendar_by_id(inserted.id, user_id).await.is_err());
-        assert!(m.get_calendar_by_token(&inserted.subscription_token).await.is_err());
+        assert!(m
+            .get_calendar_by_token(&inserted.subscription_token)
+            .await
+            .is_err());
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -420,17 +434,22 @@ mod tests {
     async fn delete_calendar_preserves_calendar_items_as_audit_trail(pool: PgPool) {
         let user_id = create_test_user(&pool).await;
         let m = mapper(pool.clone());
-        let cal = Calendar { item_ids: vec![42, 43], ..new_calendar(user_id) };
+        let cal = Calendar {
+            item_ids: vec![42, 43],
+            ..new_calendar(user_id)
+        };
         let inserted = m.save_calendar(cal).await.unwrap();
         m.delete_calendar(inserted.id, user_id).await.unwrap();
-        let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM calendar_items WHERE calendar_id = $1"
-        )
-        .bind(inserted.id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
-        assert_eq!(count, 2, "calendar_items should be preserved after soft delete");
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM calendar_items WHERE calendar_id = $1")
+                .bind(inserted.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(
+            count, 2,
+            "calendar_items should be preserved after soft delete"
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -446,10 +465,16 @@ mod tests {
         let user_id = create_test_user(&pool).await;
         let m = mapper(pool);
         m.insert_calendar(new_calendar(user_id)).await.unwrap();
-        m.insert_calendar(Calendar { name: "Second".to_string(), ..new_calendar(user_id) })
+        m.insert_calendar(Calendar {
+            name: "Second".to_string(),
+            ..new_calendar(user_id)
+        })
+        .await
+        .unwrap();
+        let (cals, total) = m
+            .get_calendars_by_user_paginated(user_id, 1, 10)
             .await
             .unwrap();
-        let (cals, total) = m.get_calendars_by_user_paginated(user_id, 1, 10).await.unwrap();
         assert_eq!(total, 2);
         assert_eq!(cals.len(), 2);
     }
@@ -460,7 +485,10 @@ mod tests {
         let m = mapper(pool);
         let inserted = m.insert_calendar(new_calendar(user_id)).await.unwrap();
         m.delete_calendar(inserted.id, user_id).await.unwrap();
-        let (cals, total) = m.get_calendars_by_user_paginated(user_id, 1, 10).await.unwrap();
+        let (cals, total) = m
+            .get_calendars_by_user_paginated(user_id, 1, 10)
+            .await
+            .unwrap();
         assert_eq!(total, 0);
         assert!(cals.is_empty());
     }

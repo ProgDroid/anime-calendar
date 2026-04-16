@@ -1,4 +1,6 @@
-use crate::{config::database::Database as DatabaseConfig, mappers::database::Database, ServerResult};
+use crate::{
+    config::database::Database as DatabaseConfig, mappers::database::Database, ServerResult,
+};
 
 #[derive(Clone)]
 pub struct PasswordResetMapper {
@@ -15,13 +17,18 @@ impl PasswordResetMapper {
     /// # Errors
     /// Fails if the database connection cannot be established.
     pub async fn new(config: DatabaseConfig) -> ServerResult<Self> {
-        Ok(Self { db: Database::new(config).await? })
+        Ok(Self {
+            db: Database::new(config).await?,
+        })
     }
 
     /// Construct from a bare pool — for integration tests only.
     #[cfg(test)]
-    pub fn from_pool(pool: sqlx::PgPool) -> Self {
-        Self { db: Database { pool } }
+    #[must_use]
+    pub const fn from_pool(pool: sqlx::PgPool) -> Self {
+        Self {
+            db: Database { pool },
+        }
     }
 
     /// Delete all tokens for the given user (expired, used, or pending).
@@ -109,7 +116,10 @@ impl PasswordResetMapper {
             other => crate::error::Error::Database(other),
         })?;
 
-        Ok(PasswordResetToken { id: row.id, user_id: row.user_id })
+        Ok(PasswordResetToken {
+            id: row.id,
+            user_id: row.user_id,
+        })
     }
 
     /// Mark the token as used AND update the user's password in one transaction.
@@ -193,7 +203,10 @@ mod tests {
         let token = mapper.find_valid_token("hash_used").await.unwrap();
 
         let new_hash = hash_password("NewPass12!@").unwrap();
-        mapper.complete_reset(token.id, user_id, &new_hash).await.unwrap();
+        mapper
+            .complete_reset(token.id, user_id, &new_hash)
+            .await
+            .unwrap();
 
         // Token is now used — find_valid_token must fail
         assert!(mapper.find_valid_token("hash_used").await.is_err());

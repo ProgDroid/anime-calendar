@@ -1,4 +1,5 @@
 #![allow(clippy::cast_possible_truncation)]
+
 use crate::{
     cache::{Cache, CACHE_TTL_CALENDAR, CACHE_TTL_ITEM, CACHE_TTL_SEARCH},
     entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
@@ -268,7 +269,6 @@ async fn subscribe_feed(
     ),
     security(("bearer_auth" = []))
 )]
-#[allow(clippy::cast_possible_truncation)]
 #[put("/calendar")]
 async fn put(
     user_mapper: web::Data<UserMapper>,
@@ -653,7 +653,10 @@ mod integration_tests {
             .uri("/calendar")
             .set_json(serde_json::json!({ "id": 0, "name": "My Cal", "language": "english", "items": [] }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -672,9 +675,14 @@ mod integration_tests {
         let req = test::TestRequest::put()
             .uri("/calendar")
             .insert_header(("Authorization", format!("Bearer {token}")))
-            .set_json(serde_json::json!({ "id": 0, "name": "", "language": "english", "items": [] }))
+            .set_json(
+                serde_json::json!({ "id": 0, "name": "", "language": "english", "items": [] }),
+            )
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -696,7 +704,10 @@ mod integration_tests {
             .insert_header(("Authorization", format!("Bearer {token}")))
             .set_json(serde_json::json!({ "id": 0, "name": long_name, "language": "english", "items": [] }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     // ─── GET /calendars ───────────────────────────────────────────────────────
@@ -739,7 +750,10 @@ mod integration_tests {
         )
         .await;
         let req = test::TestRequest::get().uri("/calendars").to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -791,7 +805,10 @@ mod integration_tests {
         )
         .await;
         let req = test::TestRequest::get().uri("/calendars/1").to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -811,7 +828,10 @@ mod integration_tests {
             .uri("/calendars/999999")
             .insert_header(("Authorization", format!("Bearer {token}")))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::NOT_FOUND
+        );
     }
 
     // ─── DELETE /calendars/{id} ───────────────────────────────────────────────
@@ -853,7 +873,10 @@ mod integration_tests {
             .uri("/calendars/999999")
             .insert_header(("Authorization", format!("Bearer {token}")))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::NOT_FOUND);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::NOT_FOUND
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -868,6 +891,9 @@ mod integration_tests {
         )
         .await;
         let req = test::TestRequest::delete().uri("/calendars/1").to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 }

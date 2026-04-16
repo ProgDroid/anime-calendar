@@ -3,6 +3,7 @@ use log::error;
 use rand::RngCore as _;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest as _, Sha256};
+use std::fmt::Write as _;
 use utoipa::ToSchema;
 
 use crate::{
@@ -36,13 +37,19 @@ pub struct MessageResponse {
 fn generate_raw_token() -> String {
     let mut bytes = [0u8; 32];
     rand::rng().fill_bytes(&mut bytes);
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    bytes.iter().fold(String::new(), |mut s, b| {
+        let _ = write!(s, "{b:02x}");
+        s
+    })
 }
 
 #[must_use]
 pub fn hash_reset_token(raw_token: &str) -> String {
     let hash = Sha256::digest(raw_token.as_bytes());
-    hash.iter().map(|b| format!("{b:02x}")).collect()
+    hash.iter().fold(String::new(), |mut s, b| {
+        let _ = write!(s, "{b:02x}");
+        s
+    })
 }
 
 const RESET_RESPONSE: &str =
@@ -66,7 +73,9 @@ pub async fn forgot_password(
     app_base_url: web::Data<AppBaseUrl>,
     body: web::Json<ForgotPasswordRequest>,
 ) -> HttpResponse {
-    let ok = HttpResponse::Ok().json(MessageResponse { message: RESET_RESPONSE.into() });
+    let ok = HttpResponse::Ok().json(MessageResponse {
+        message: RESET_RESPONSE.into(),
+    });
 
     // Always return 200 — do not reveal whether the account exists.
     let Ok(user) = user_mapper.get_user_by_email(&body.email).await else {
@@ -80,14 +89,14 @@ pub async fn forgot_password(
 
     let raw_token = generate_raw_token();
     let token_hash = hash_reset_token(&raw_token);
-    let reset_url = format!(
-        "{}/reset-password?token={raw_token}",
-        app_base_url.as_str()
-    );
+    let reset_url = format!("{}/reset-password?token={raw_token}", app_base_url.as_str());
 
     // Best-effort cleanup — don't abort the flow if old tokens can't be deleted.
     if let Err(e) = token_mapper.invalidate_previous_tokens(user.id).await {
-        error!("Failed to invalidate previous reset tokens for user {}: {e}", user.id);
+        error!(
+            "Failed to invalidate previous reset tokens for user {}: {e}",
+            user.id
+        );
     }
 
     if let Err(e) = token_mapper.create_token(user.id, &token_hash).await {
@@ -103,7 +112,9 @@ pub async fn forgot_password(
         return e.error_response();
     }
 
-    HttpResponse::Ok().json(MessageResponse { message: RESET_RESPONSE.into() })
+    HttpResponse::Ok().json(MessageResponse {
+        message: RESET_RESPONSE.into(),
+    })
 }
 
 #[utoipa::path(
@@ -128,9 +139,8 @@ pub async fn reset_password(
 
     let token_hash = hash_reset_token(&body.token);
 
-    let token = match token_mapper.find_valid_token(&token_hash).await {
-        Ok(t) => t,
-        Err(_) => return Error::InvalidResetToken.error_response(),
+    let Ok(token) = token_mapper.find_valid_token(&token_hash).await else {
+        return Error::InvalidResetToken.error_response();
     };
 
     let new_hash = match hash_password(&body.new_password) {
@@ -201,13 +211,12 @@ mod integration_tests {
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
 
         // Verify a token row was actually inserted for this user (not just 200 returned).
-        let count: i64 = sqlx::query_scalar(
-            "SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = $1",
-        )
-        .bind(user_id)
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(count, 1, "expected one token row for the seeded user");
     }
 

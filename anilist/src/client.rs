@@ -19,6 +19,8 @@ pub struct Client {
 }
 
 impl Client {
+    /// # Panics
+    /// It can panic if the duration here is changed to an invalid one
     #[must_use]
     pub fn new() -> Self {
         Self {

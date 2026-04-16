@@ -58,7 +58,7 @@ pub fn start(
     let cookie_settings = CookieSettings {
         secure: config.cookie_secure,
     };
-    let app_base_url = AppBaseUrl::new(config.app_base_url.clone());
+    let app_base_url = AppBaseUrl::new(config.app_base_url);
 
     let governor_conf = GovernorConfigBuilder::default()
         .seconds_per_request(1)

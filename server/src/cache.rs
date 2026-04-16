@@ -21,9 +21,10 @@ impl Cache {
     /// `REDIS_HOST` / `REDIS_PORT` environment variables, falling back to the
     /// development defaults.  Panics if the connection fails.
     #[cfg(test)]
+    /// # Panics
+    /// If misconfigured
     pub async fn for_tests() -> Self {
-        let host =
-            std::env::var("REDIS_HOST").unwrap_or_else(|_| "aegyptvault.local".to_owned());
+        let host = std::env::var("REDIS_HOST").unwrap_or_else(|_| "aegyptvault.local".to_owned());
         let port = std::env::var("REDIS_PORT")
             .ok()
             .and_then(|p| p.parse().ok())
@@ -211,7 +212,8 @@ impl Cache {
     pub async fn invalidate_calendar(&self, calendar_id: i32) -> RedisResult<()> {
         self.delete(&generate_calendar_key(calendar_id)).await?;
         self.delete(&generate_export_key(calendar_id)).await?;
-        self.delete(&generate_calendar_items_key(calendar_id)).await?;
+        self.delete(&generate_calendar_items_key(calendar_id))
+            .await?;
         Ok(())
     }
 
@@ -574,6 +576,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::float_cmp)]
     async fn reset_metrics_clears_all_counters() {
         let cache = Cache::for_tests().await;
         let key = k("metrics_reset", "v");
@@ -606,9 +609,18 @@ mod tests {
 
         cache.invalidate_calendar(id).await.unwrap();
 
-        assert!(!cache.exists(&cal_key).await.unwrap(), "calendar key should be gone");
-        assert!(!cache.exists(&exp_key).await.unwrap(), "export key should be gone");
-        assert!(!cache.exists(&items_key).await.unwrap(), "items key should be gone");
+        assert!(
+            !cache.exists(&cal_key).await.unwrap(),
+            "calendar key should be gone"
+        );
+        assert!(
+            !cache.exists(&exp_key).await.unwrap(),
+            "export key should be gone"
+        );
+        assert!(
+            !cache.exists(&items_key).await.unwrap(),
+            "items key should be gone"
+        );
     }
 
     #[tokio::test]
@@ -681,10 +693,19 @@ mod tests {
         cache.set(&k1, &"p1", 300).await.unwrap();
         cache.set(&k2, &"p2", 300).await.unwrap();
 
-        cache.invalidate_user_paged_calendars(user_id).await.unwrap();
+        cache
+            .invalidate_user_paged_calendars(user_id)
+            .await
+            .unwrap();
 
-        assert!(!cache.exists(&k1).await.unwrap(), "page 1 key should be gone");
-        assert!(!cache.exists(&k2).await.unwrap(), "page 2 key should be gone");
+        assert!(
+            !cache.exists(&k1).await.unwrap(),
+            "page 1 key should be gone"
+        );
+        assert!(
+            !cache.exists(&k2).await.unwrap(),
+            "page 2 key should be gone"
+        );
     }
 
     // ── SCAN loop correctness ───────────────────────────────────────────────
@@ -730,16 +751,16 @@ mod tests {
 
         assert!(found.contains(&yes1), "yes1 should be in results");
         assert!(found.contains(&yes2), "yes2 should be in results");
-        assert!(!found.contains(&no.to_owned()), "non-matching key should be absent");
+        assert!(
+            !found.contains(&no.to_owned()),
+            "non-matching key should be absent"
+        );
     }
 
     #[tokio::test]
     async fn get_keys_returns_empty_when_no_match() {
         let cache = Cache::for_tests().await;
-        let found = cache
-            .get_keys("test:no_such_prefix_xyzzy:*")
-            .await
-            .unwrap();
+        let found = cache.get_keys("test:no_such_prefix_xyzzy:*").await.unwrap();
         assert!(found.is_empty());
     }
 
@@ -776,6 +797,9 @@ mod tests {
             .unwrap();
 
         cache.delete(&key).await.unwrap();
-        assert_eq!(result, 99, "should return cached value, not fetch_fn result");
+        assert_eq!(
+            result, 99,
+            "should return cached value, not fetch_fn result"
+        );
     }
 }

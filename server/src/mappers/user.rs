@@ -163,8 +163,11 @@ impl UserMapper {
 
     /// Construct a mapper from a bare pool — for integration tests only.
     #[cfg(test)]
-    pub fn from_pool(pool: sqlx::PgPool) -> Self {
-        Self { db: Database { pool } }
+    #[must_use]
+    pub const fn from_pool(pool: sqlx::PgPool) -> Self {
+        Self {
+            db: Database { pool },
+        }
     }
 }
 
@@ -174,13 +177,18 @@ mod tests {
     use sqlx::PgPool;
 
     fn mapper(pool: PgPool) -> UserMapper {
-        UserMapper { db: Database { pool } }
+        UserMapper {
+            db: Database { pool },
+        }
     }
 
     #[sqlx::test(migrations = "../migrations")]
     async fn create_user_returns_correct_fields(pool: PgPool) {
         let m = mapper(pool);
-        let user = m.create_user("alice", "alice@example.com", Some("hash123")).await.unwrap();
+        let user = m
+            .create_user("alice", "alice@example.com", Some("hash123"))
+            .await
+            .unwrap();
         assert_eq!(user.username, "alice");
         assert_eq!(user.email, "alice@example.com");
         assert_eq!(user.password_hash.as_deref(), Some("hash123"));
@@ -190,7 +198,10 @@ mod tests {
     #[sqlx::test(migrations = "../migrations")]
     async fn create_user_oauth_has_no_password(pool: PgPool) {
         let m = mapper(pool);
-        let user = m.create_user("oauthuser", "oauth@example.com", None).await.unwrap();
+        let user = m
+            .create_user("oauthuser", "oauth@example.com", None)
+            .await
+            .unwrap();
         assert!(user.password_hash.is_none());
     }
 
@@ -212,7 +223,10 @@ mod tests {
     #[sqlx::test(migrations = "../migrations")]
     async fn get_user_by_id_finds_existing(pool: PgPool) {
         let m = mapper(pool);
-        let created = m.create_user("carol", "carol@example.com", None).await.unwrap();
+        let created = m
+            .create_user("carol", "carol@example.com", None)
+            .await
+            .unwrap();
         let fetched = m.get_user_by_id(created.id).await.unwrap();
         assert_eq!(fetched.id, created.id);
         assert_eq!(fetched.email, "carol@example.com");
@@ -227,8 +241,14 @@ mod tests {
     #[sqlx::test(migrations = "../migrations")]
     async fn update_user_changes_username_and_email(pool: PgPool) {
         let m = mapper(pool);
-        let created = m.create_user("dave", "dave@example.com", None).await.unwrap();
-        let updated = m.update_user(created.id, "david", "david@example.com").await.unwrap();
+        let created = m
+            .create_user("dave", "dave@example.com", None)
+            .await
+            .unwrap();
+        let updated = m
+            .update_user(created.id, "david", "david@example.com")
+            .await
+            .unwrap();
         assert_eq!(updated.username, "david");
         assert_eq!(updated.email, "david@example.com");
     }
@@ -236,7 +256,10 @@ mod tests {
     #[sqlx::test(migrations = "../migrations")]
     async fn update_user_password_persists(pool: PgPool) {
         let m = mapper(pool);
-        let created = m.create_user("eve", "eve@example.com", Some("oldhash")).await.unwrap();
+        let created = m
+            .create_user("eve", "eve@example.com", Some("oldhash"))
+            .await
+            .unwrap();
         m.update_user_password(created.id, "newhash").await.unwrap();
         let fetched = m.get_user_by_id(created.id).await.unwrap();
         assert_eq!(fetched.password_hash.as_deref(), Some("newhash"));
@@ -245,7 +268,10 @@ mod tests {
     #[sqlx::test(migrations = "../migrations")]
     async fn delete_user_soft_deletes_so_lookup_fails(pool: PgPool) {
         let m = mapper(pool);
-        let created = m.create_user("frank", "frank@example.com", None).await.unwrap();
+        let created = m
+            .create_user("frank", "frank@example.com", None)
+            .await
+            .unwrap();
         m.delete_user(created.id).await.unwrap();
         assert!(m.get_user_by_id(created.id).await.is_err());
         assert!(m.get_user_by_email("frank@example.com").await.is_err());
@@ -254,11 +280,14 @@ mod tests {
     #[sqlx::test(migrations = "../migrations")]
     async fn delete_user_cascades_soft_delete_to_calendars(pool: PgPool) {
         let m = mapper(pool.clone());
-        let user = m.create_user("grace", "grace@example.com", None).await.unwrap();
+        let user = m
+            .create_user("grace", "grace@example.com", None)
+            .await
+            .unwrap();
 
         sqlx::query(
             "INSERT INTO calendars (name, language, user_id, subscription_token) \
-             VALUES ('Test Cal', 'english'::language, $1, 'tok-cascade')"
+             VALUES ('Test Cal', 'english'::language, $1, 'tok-cascade')",
         )
         .bind(user.id)
         .execute(&pool)
@@ -273,6 +302,9 @@ mod tests {
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert!(deleted_at.is_some(), "calendar should be soft-deleted when user is deleted");
+        assert!(
+            deleted_at.is_some(),
+            "calendar should be soft-deleted when user is deleted"
+        );
     }
 }

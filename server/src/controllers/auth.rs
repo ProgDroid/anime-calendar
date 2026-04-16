@@ -46,6 +46,7 @@ pub struct AuthResponse {
 ///
 /// # Errors
 /// This function is infallible; it returns a `Cookie` directly.
+#[must_use]
 pub fn build_auth_cookie(token: String, cookie_settings: &CookieSettings) -> Cookie<'static> {
     Cookie::build("auth_token", token)
         .http_only(true)
@@ -86,9 +87,9 @@ pub async fn login(
                 };
 
                 let cookie = build_auth_cookie(token, &cookie_settings);
-                HttpResponse::Ok()
-                    .cookie(cookie)
-                    .json(AuthResponse { username: user.username })
+                HttpResponse::Ok().cookie(cookie).json(AuthResponse {
+                    username: user.username,
+                })
             } else {
                 Error::Unauthorised.error_response()
             }
@@ -170,9 +171,9 @@ pub async fn register(
     };
 
     let cookie = build_auth_cookie(token, &cookie_settings);
-    HttpResponse::Ok()
-        .cookie(cookie)
-        .json(AuthResponse { username: user.username })
+    HttpResponse::Ok().cookie(cookie).json(AuthResponse {
+        username: user.username,
+    })
 }
 
 #[utoipa::path(
@@ -192,7 +193,9 @@ pub async fn get_current_user(db: web::Data<UserMapper>, claims: Claims) -> Http
         Err(e) => return e.error_response(),
     };
 
-    HttpResponse::Ok().json(AuthResponse { username: user.username })
+    HttpResponse::Ok().json(AuthResponse {
+        username: user.username,
+    })
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]
@@ -231,10 +234,7 @@ pub async fn verify_token_endpoint(
     security(("bearer_auth" = []))
 )]
 #[post("/auth/logout")]
-pub async fn logout(
-    _claims: Claims,
-    cookie_settings: web::Data<CookieSettings>,
-) -> HttpResponse {
+pub async fn logout(_claims: Claims, cookie_settings: web::Data<CookieSettings>) -> HttpResponse {
     let removal_cookie = Cookie::build("auth_token", "")
         .http_only(true)
         .same_site(SameSite::Strict)
@@ -242,7 +242,9 @@ pub async fn logout(
         .max_age(Duration::ZERO)
         .secure(cookie_settings.secure)
         .finish();
-    HttpResponse::Ok().cookie(removal_cookie).json(serde_json::json!({}))
+    HttpResponse::Ok()
+        .cookie(removal_cookie)
+        .json(serde_json::json!({}))
 }
 
 /// Unit tests for pure functions (no DB / no HTTP stack).
@@ -351,7 +353,10 @@ mod integration_tests {
             .uri("/login")
             .set_json(serde_json::json!({ "email": "bob@test.com", "password": "WrongPass99!" }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -369,7 +374,10 @@ mod integration_tests {
             .uri("/login")
             .set_json(serde_json::json!({ "email": "nobody@test.com", "password": STRONG_PW }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -391,7 +399,10 @@ mod integration_tests {
             .uri("/login")
             .set_json(serde_json::json!({ "email": "oauth@test.com", "password": STRONG_PW }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     // ─── POST /register ───────────────────────────────────────────────────────
@@ -451,7 +462,10 @@ mod integration_tests {
                 "password": STRONG_PW
             }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -472,7 +486,10 @@ mod integration_tests {
                 "password": "weakpassword"
             }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -493,7 +510,10 @@ mod integration_tests {
                 "password": STRONG_PW
             }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -515,7 +535,10 @@ mod integration_tests {
                 "password": STRONG_PW
             }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     // ─── GET /user ────────────────────────────────────────────────────────────
@@ -552,7 +575,10 @@ mod integration_tests {
         )
         .await;
         let req = test::TestRequest::get().uri("/user").to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     // ─── POST /auth/logout ────────────────────────────────────────────────────
@@ -585,7 +611,10 @@ mod integration_tests {
             .and_then(|v| v.to_str().ok())
             .unwrap_or("");
         assert!(set_cookie.contains("auth_token="), "cookie name missing");
-        assert!(set_cookie.contains("Max-Age=0"), "Max-Age=0 missing — cookie not cleared");
+        assert!(
+            set_cookie.contains("Max-Age=0"),
+            "Max-Age=0 missing — cookie not cleared"
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -599,6 +628,9 @@ mod integration_tests {
         )
         .await;
         let req = test::TestRequest::post().uri("/auth/logout").to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 }

@@ -70,8 +70,11 @@ impl UserSettingsMapper {
 
     /// Construct a mapper from a bare pool — for integration tests only.
     #[cfg(test)]
-    pub fn from_pool(pool: sqlx::PgPool) -> Self {
-        Self { db: Database { pool } }
+    #[must_use]
+    pub const fn from_pool(pool: sqlx::PgPool) -> Self {
+        Self {
+            db: Database { pool },
+        }
     }
 }
 
@@ -81,7 +84,9 @@ mod tests {
     use sqlx::PgPool;
 
     fn mapper(pool: PgPool) -> UserSettingsMapper {
-        UserSettingsMapper { db: Database { pool } }
+        UserSettingsMapper {
+            db: Database { pool },
+        }
     }
 
     async fn create_test_user(pool: &PgPool) -> i32 {
@@ -118,7 +123,9 @@ mod tests {
     async fn update_settings_inserts_and_fetch_round_trips(pool: PgPool) {
         let user_id = create_test_user(&pool).await;
         let m = mapper(pool);
-        m.update_user_settings(user_id, &custom_settings(user_id)).await.unwrap();
+        m.update_user_settings(user_id, &custom_settings(user_id))
+            .await
+            .unwrap();
         let fetched = m.get_user_settings(user_id).await.unwrap();
         assert!(matches!(fetched.theme_preference, Theme::Light));
         assert!(matches!(fetched.language_preference, SiteLanguage::Pt));
@@ -129,7 +136,9 @@ mod tests {
     async fn update_settings_upserts_on_conflict(pool: PgPool) {
         let user_id = create_test_user(&pool).await;
         let m = mapper(pool);
-        m.update_user_settings(user_id, &custom_settings(user_id)).await.unwrap();
+        m.update_user_settings(user_id, &custom_settings(user_id))
+            .await
+            .unwrap();
         let updated = UserSettings {
             theme_preference: Theme::Dark,
             language_preference: SiteLanguage::En,
@@ -146,7 +155,9 @@ mod tests {
     async fn delete_settings_removes_row_so_default_is_returned(pool: PgPool) {
         let user_id = create_test_user(&pool).await;
         let m = mapper(pool);
-        m.update_user_settings(user_id, &custom_settings(user_id)).await.unwrap();
+        m.update_user_settings(user_id, &custom_settings(user_id))
+            .await
+            .unwrap();
         m.delete_user_settings(user_id).await.unwrap();
         let settings = m.get_user_settings(user_id).await.unwrap();
         assert!(matches!(settings.theme_preference, Theme::Dark));

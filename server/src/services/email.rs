@@ -1,7 +1,6 @@
 use lettre::{
-    message::header::ContentType,
-    transport::smtp::authentication::Credentials,
-    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor,
+    message::header::ContentType, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
+    AsyncTransport, Message, Tokio1Executor,
 };
 use log::warn;
 use secrecy::ExposeSecret as _;
@@ -15,7 +14,7 @@ pub struct EmailService {
 
 impl EmailService {
     #[must_use]
-    pub fn new(config: SmtpConfig) -> Self {
+    pub const fn new(config: SmtpConfig) -> Self {
         Self { config }
     }
 

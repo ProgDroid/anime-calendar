@@ -83,7 +83,7 @@ pub struct SmtpConfig {
     pub from_address: String,
 }
 
-fn default_smtp_port() -> u16 {
+const fn default_smtp_port() -> u16 {
     587
 }
 
@@ -93,7 +93,7 @@ pub struct AppBaseUrl(String);
 
 impl AppBaseUrl {
     #[must_use]
-    pub fn new(url: String) -> Self {
+    pub const fn new(url: String) -> Self {
         Self(url)
     }
 
