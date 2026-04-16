@@ -28,6 +28,10 @@ pub enum Error {
     GovernorConfig,
     #[error("Invalid or expired reset token")]
     InvalidResetToken,
+    #[error("Email not verified — please check your inbox")]
+    EmailNotVerified,
+    #[error("Invalid or expired verification token")]
+    InvalidVerificationToken,
     #[error("Failed to send email: {0}")]
     EmailError(String),
 }
@@ -43,10 +47,12 @@ impl ResponseError for Error {
         match self {
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Unauthorised | Self::InvalidToken(_) => StatusCode::UNAUTHORIZED,
+            Self::EmailNotVerified => StatusCode::FORBIDDEN,
             Self::InvalidRequest
             | Self::UserAlreadyExists
             | Self::InvalidPassword
             | Self::InvalidResetToken
+            | Self::InvalidVerificationToken
             | Self::CannotHashPassword(_)
             | Self::CannotGenerateAuthToken(_) => StatusCode::BAD_REQUEST,
             Self::Database(_)
