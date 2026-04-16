@@ -17,11 +17,19 @@ pub struct Server {
     pub allowed_origins: Vec<String>,
     #[serde(default)]
     pub cookie_secure: bool,
+    #[serde(default = "default_app_base_url")]
+    pub app_base_url: String,
+    #[serde(default)]
+    pub smtp: SmtpConfig,
 }
 
 #[must_use]
 fn default_allowed_origins() -> Vec<String> {
     vec!["http://localhost:5173".to_string()]
+}
+
+fn default_app_base_url() -> String {
+    "http://localhost:5173".to_string()
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -44,6 +52,8 @@ impl Default for Server {
             compress: true,
             allowed_origins: default_allowed_origins(),
             cookie_secure: false,
+            app_base_url: default_app_base_url(),
+            smtp: SmtpConfig::default(),
         }
     }
 }
@@ -56,6 +66,40 @@ impl Default for RedisConfig {
             password: String::new(),
             db: 0,
         }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct SmtpConfig {
+    #[serde(default)]
+    pub host: String,
+    #[serde(default = "default_smtp_port")]
+    pub port: u16,
+    #[serde(default)]
+    pub username: String,
+    #[serde(default)]
+    pub password: SecretString,
+    #[serde(default)]
+    pub from_address: String,
+}
+
+fn default_smtp_port() -> u16 {
+    587
+}
+
+/// Newtype wrapper for the frontend base URL — injected as `web::Data<AppBaseUrl>`.
+#[derive(Clone)]
+pub struct AppBaseUrl(String);
+
+impl AppBaseUrl {
+    #[must_use]
+    pub fn new(url: String) -> Self {
+        Self(url)
+    }
+
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
     }
 }
 

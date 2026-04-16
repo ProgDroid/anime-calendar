@@ -28,6 +28,8 @@ pub enum Error {
     GovernorConfig,
     #[error("Invalid or expired reset token")]
     InvalidResetToken,
+    #[error("Failed to send email: {0}")]
+    EmailError(String),
 }
 
 impl ResponseError for Error {
@@ -47,9 +49,11 @@ impl ResponseError for Error {
             | Self::InvalidResetToken
             | Self::CannotHashPassword(_)
             | Self::CannotGenerateAuthToken(_) => StatusCode::BAD_REQUEST,
-            Self::Database(_) | Self::Config(_) | Self::Server(_) | Self::GovernorConfig => {
-                StatusCode::INTERNAL_SERVER_ERROR
-            }
+            Self::Database(_)
+            | Self::Config(_)
+            | Self::Server(_)
+            | Self::GovernorConfig
+            | Self::EmailError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
