@@ -32,6 +32,7 @@ pub struct MessageResponse {
     pub message: String,
 }
 
+#[must_use]
 fn generate_raw_token() -> String {
     let mut bytes = [0u8; 32];
     rand::rng().fill_bytes(&mut bytes);
@@ -182,11 +183,11 @@ mod integration_tests {
 
     #[sqlx::test(migrations = "../migrations")]
     async fn forgot_password_known_email_returns_200(pool: PgPool) {
-        seed_user(&pool, "alice@test.com").await;
+        let user_id = seed_user(&pool, "alice@test.com").await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(PasswordResetMapper::from_pool(pool)))
+                .app_data(web::Data::new(PasswordResetMapper::from_pool(pool.clone())))
                 .app_data(dev_email())
                 .app_data(base_url())
                 .service(forgot_password),
@@ -198,6 +199,16 @@ mod integration_tests {
             .set_json(serde_json::json!({ "email": "alice@test.com" }))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
+
+        // Verify a token row was actually inserted for this user (not just 200 returned).
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = $1",
+        )
+        .bind(user_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(count, 1, "expected one token row for the seeded user");
     }
 
     #[sqlx::test(migrations = "../migrations")]
