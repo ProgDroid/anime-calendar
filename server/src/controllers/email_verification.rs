@@ -83,7 +83,6 @@ pub async fn verify_email(
     request_body = ResendVerificationRequest,
     responses(
         (status = 200, description = "Always returned — prevents user enumeration", body = MessageResponse),
-        (status = 500, description = "DB or email error", body = ErrorResponse),
     )
 )]
 #[post("/auth/resend-verification")]
@@ -94,17 +93,21 @@ pub async fn resend_verification(
     app_base_url: web::Data<AppBaseUrl>,
     body: web::Json<ResendVerificationRequest>,
 ) -> HttpResponse {
-    let ok = HttpResponse::Ok().json(MessageResponse {
-        message: RESEND_RESPONSE.into(),
-    });
+    // Use a closure so the response can be constructed at each return site
+    // without bumping into `HttpResponse`'s non-Clone / non-Copy restriction.
+    let ok = || {
+        HttpResponse::Ok().json(MessageResponse {
+            message: RESEND_RESPONSE.into(),
+        })
+    };
 
     let Ok(user) = user_mapper.get_user_by_email(&body.email).await else {
-        return ok;
+        return ok();
     };
 
     // Already verified — silently do nothing
     if user.email_verified_at.is_some() {
-        return ok;
+        return ok();
     }
 
     let raw_token = generate_random_token();
@@ -114,9 +117,11 @@ pub async fn resend_verification(
         app_base_url.as_str()
     );
 
+    // Best-effort operations — errors are logged but always return 200 to
+    // preserve the anti-enumeration guarantee.
     if let Err(e) = verification_mapper.replace_token(user.id, &token_hash).await {
         error!("{e}");
-        return e.error_response();
+        return ok();
     }
 
     if let Err(e) = email_service
@@ -124,10 +129,10 @@ pub async fn resend_verification(
         .await
     {
         error!("{e}");
-        return e.error_response();
+        return ok();
     }
 
-    ok
+    ok()
 }
 
 #[cfg(test)]
