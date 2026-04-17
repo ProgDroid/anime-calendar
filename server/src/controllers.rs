@@ -5,4 +5,5 @@ pub mod item;
 pub mod items;
 pub mod oauth;
 pub mod password_reset;
+pub mod refresh;
 pub mod user;

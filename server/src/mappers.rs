@@ -3,5 +3,6 @@ pub mod calendar;
 pub mod database;
 pub mod google_oauth;
 pub mod password_reset;
+pub mod refresh_token;
 pub mod user;
 pub mod user_settings;

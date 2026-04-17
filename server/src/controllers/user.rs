@@ -368,7 +368,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/user/details")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
@@ -390,7 +390,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/user/details")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
@@ -428,7 +428,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::put()
             .uri("/user")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .set_json(serde_json::json!({ "username": "carol2", "email": "carol2@test.com" }))
             .to_request();
         let resp = test::call_service(&app, req).await;
@@ -454,7 +454,7 @@ mod integration_tests {
         let long_name = "x".repeat(51);
         let req = test::TestRequest::put()
             .uri("/user")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .set_json(serde_json::json!({ "username": long_name, "email": "dave@test.com" }))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
@@ -476,7 +476,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/user/password")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .set_json(serde_json::json!({
                 "current_password": STRONG_PW,
                 "new_password": NEW_PW
@@ -499,7 +499,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/user/password")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .set_json(serde_json::json!({
                 "current_password": "WrongPass99!",
                 "new_password": NEW_PW
@@ -522,7 +522,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/user/password")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .set_json(serde_json::json!({
                 "current_password": STRONG_PW,
                 "new_password": STRONG_PW
@@ -545,7 +545,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/user/password")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .set_json(serde_json::json!({
                 "current_password": "anything",
                 "new_password": NEW_PW
@@ -570,7 +570,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::delete()
             .uri(&format!("/user/{user_id}"))
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
     }
@@ -591,7 +591,7 @@ mod integration_tests {
         // jack (token_a) tries to delete kate (id_b)
         let req = test::TestRequest::delete()
             .uri(&format!("/user/{id_b}"))
-            .insert_header(("Authorization", format!("Bearer {token_a}")))
+            .insert_header(("Cookie", format!("auth_token={token_a}")))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::FORBIDDEN);
     }
@@ -611,7 +611,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/user/settings")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
@@ -643,7 +643,7 @@ mod integration_tests {
         // title_language_preference uses PascalCase (entity::calendar::Language has no serde rename)
         let put_req = test::TestRequest::put()
             .uri("/user/settings")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .set_json(serde_json::json!({
                 "theme_preference": "light",
                 "language_preference": "pt",
@@ -656,7 +656,7 @@ mod integration_tests {
         // Read back and verify
         let get_req = test::TestRequest::get()
             .uri("/user/settings")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         let resp = test::call_service(&app, get_req).await;
         assert_eq!(resp.status(), StatusCode::OK);

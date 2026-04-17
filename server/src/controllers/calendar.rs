@@ -674,7 +674,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::put()
             .uri("/calendar")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .set_json(
                 serde_json::json!({ "id": 0, "name": "", "language": "english", "items": [] }),
             )
@@ -701,7 +701,7 @@ mod integration_tests {
         let long_name = "a".repeat(101);
         let req = test::TestRequest::put()
             .uri("/calendar")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .set_json(serde_json::json!({ "id": 0, "name": long_name, "language": "english", "items": [] }))
             .to_request();
         assert_eq!(
@@ -729,7 +729,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/calendars?page=1&page_size=10")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
@@ -774,7 +774,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/calendars")
-            .insert_header(("Authorization", format!("Bearer {token_a}")))
+            .insert_header(("Cookie", format!("auth_token={token_a}")))
             .to_request();
         let resp = test::call_service(&app, req).await;
         let body: Value = test::read_body_json(resp).await;
@@ -826,7 +826,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/calendars/999999")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         assert_eq!(
             test::call_service(&app, req).await.status(),
@@ -852,7 +852,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::delete()
             .uri(&format!("/calendars/{cal_id}"))
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
     }
@@ -871,7 +871,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::delete()
             .uri("/calendars/999999")
-            .insert_header(("Authorization", format!("Bearer {token}")))
+            .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
         assert_eq!(
             test::call_service(&app, req).await.status(),

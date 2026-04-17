@@ -15,11 +15,14 @@ use utoipa_swagger_ui::SwaggerUi;
 use crate::{
     cache::Cache,
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig},
-    controllers::{auth, cache_metrics, calendar, item, items, oauth, password_reset, user},
+    controllers::{
+        auth, cache_metrics, calendar, item, items, oauth, password_reset, refresh, user,
+    },
     error::Error,
     mappers::{
         anilist::Anilist, calendar::CalendarMapper, google_oauth::GoogleOauth,
-        password_reset::PasswordResetMapper, user::UserMapper, user_settings::UserSettingsMapper,
+        password_reset::PasswordResetMapper, refresh_token::RefreshTokenMapper, user::UserMapper,
+        user_settings::UserSettingsMapper,
     },
     openapi::ApiDoc,
     services::email::EmailService,
@@ -38,6 +41,7 @@ pub fn start(
     calendar_mapper: CalendarMapper,
     user_settings_mapper: UserSettingsMapper,
     token_mapper: PasswordResetMapper,
+    refresh_token_mapper: RefreshTokenMapper,
     email_service: EmailService,
 ) -> ServerResult<Server> {
     let level_filter = match LevelFilter::from_str(&config.log_level) {
@@ -100,6 +104,7 @@ pub fn start(
             .app_data(web::Data::new(jwt_secret.clone()))
             .app_data(web::Data::new(cookie_settings.clone()))
             .app_data(web::Data::new(token_mapper.clone()))
+            .app_data(web::Data::new(refresh_token_mapper.clone()))
             .app_data(web::Data::new(email_service.clone()))
             .app_data(web::Data::new(app_base_url.clone()))
             .service(item::get)
@@ -116,6 +121,7 @@ pub fn start(
             .service(auth::get_current_user)
             .service(auth::verify_token_endpoint)
             .service(auth::logout)
+            .service(refresh::refresh)
             .service(password_reset::forgot_password)
             .service(password_reset::reset_password)
             .service(user::get_user_details)

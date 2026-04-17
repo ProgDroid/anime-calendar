@@ -1,6 +1,7 @@
 use crate::config::server::{CookieSettings, JwtSecret};
-use crate::controllers::auth::build_auth_cookie;
+use crate::controllers::auth::{build_auth_cookie, build_refresh_cookie, generate_raw_token, hash_refresh_token};
 use crate::mappers::google_oauth::GoogleOauth;
+use crate::mappers::refresh_token::RefreshTokenMapper;
 use crate::mappers::user::UserMapper;
 use crate::services::auth::generate_token;
 use actix_web::{post, web, HttpResponse, ResponseError};
@@ -33,6 +34,7 @@ pub struct GoogleOAuthResponse {
 pub async fn google_oauth(
     user_mapper: web::Data<UserMapper>,
     google_oauth: web::Data<GoogleOauth>,
+    refresh_mapper: web::Data<RefreshTokenMapper>,
     google_request: web::Json<GoogleOAuthRequest>,
     jwt_secret: web::Data<JwtSecret>,
     cookie_settings: web::Data<CookieSettings>,
@@ -57,14 +59,24 @@ pub async fn google_oauth(
                 Err(e) => return e.error_response(),
             };
 
-            let cookie = build_auth_cookie(token, &cookie_settings);
+            let raw_refresh = generate_raw_token();
+            let refresh_hash = hash_refresh_token(&raw_refresh);
+            if let Err(e) = refresh_mapper.replace_token(user.id, &refresh_hash).await {
+                return e.error_response();
+            }
+
+            let auth_cookie = build_auth_cookie(token, &cookie_settings);
+            let refresh_cookie = build_refresh_cookie(raw_refresh, &cookie_settings);
             let response = GoogleOAuthResponse {
                 username: google_user.full_name,
                 email: user.email,
                 avatar: google_user.avatar_url,
             };
 
-            HttpResponse::Ok().cookie(cookie).json(response)
+            HttpResponse::Ok()
+                .cookie(auth_cookie)
+                .cookie(refresh_cookie)
+                .json(response)
         }
         Err(e) => {
             error!("{e}");
