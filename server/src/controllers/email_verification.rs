@@ -47,9 +47,8 @@ pub async fn verify_email(
 ) -> HttpResponse {
     let token_hash = hash_token(&body.token);
 
-    let token = match verification_mapper.find_valid_token(&token_hash).await {
-        Ok(t) => t,
-        Err(_) => return Error::InvalidVerificationToken.error_response(),
+    let Ok(token) = verification_mapper.find_valid_token(&token_hash).await else {
+        return Error::InvalidVerificationToken.error_response();
     };
 
     if let Err(e) = verification_mapper
@@ -71,9 +70,9 @@ pub async fn verify_email(
     };
 
     let cookie = build_auth_cookie(jwt, &cookie_settings);
-    HttpResponse::Ok()
-        .cookie(cookie)
-        .json(AuthResponse { username: user.username })
+    HttpResponse::Ok().cookie(cookie).json(AuthResponse {
+        username: user.username,
+    })
 }
 
 #[utoipa::path(
@@ -112,14 +111,14 @@ pub async fn resend_verification(
 
     let raw_token = generate_random_token();
     let token_hash = hash_token(&raw_token);
-    let verify_url = format!(
-        "{}/verify-email?token={raw_token}",
-        app_base_url.as_str()
-    );
+    let verify_url = format!("{}/verify-email?token={raw_token}", app_base_url.as_str());
 
     // Best-effort operations — errors are logged but always return 200 to
     // preserve the anti-enumeration guarantee.
-    if let Err(e) = verification_mapper.replace_token(user.id, &token_hash).await {
+    if let Err(e) = verification_mapper
+        .replace_token(user.id, &token_hash)
+        .await
+    {
         error!("{e}");
         return ok();
     }
@@ -186,7 +185,10 @@ mod integration_tests {
         let (user_id, _email) = seed_unverified_user(&pool).await;
         let ev_mapper = EmailVerificationMapper::from_pool(pool.clone());
         let raw = "validtoken123";
-        ev_mapper.replace_token(user_id, &hash_token(raw)).await.unwrap();
+        ev_mapper
+            .replace_token(user_id, &hash_token(raw))
+            .await
+            .unwrap();
 
         let app = test::init_service(
             App::new()
@@ -269,13 +271,11 @@ mod integration_tests {
 
         // Token row should exist after resend
         let count: i64 =
-            sqlx::query_scalar(
-                "SELECT COUNT(*) FROM email_verification_tokens WHERE user_id = $1",
-            )
-            .bind(user_id)
-            .fetch_one(&pool)
-            .await
-            .unwrap();
+            sqlx::query_scalar("SELECT COUNT(*) FROM email_verification_tokens WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
         assert_eq!(count, 1, "one token row must exist after resend");
     }
 
@@ -295,9 +295,6 @@ mod integration_tests {
             .uri("/auth/resend-verification")
             .set_json(serde_json::json!({ "email": "nobody@test.com" }))
             .to_request();
-        assert_eq!(
-            test::call_service(&app, req).await.status(),
-            StatusCode::OK
-        );
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
     }
 }
