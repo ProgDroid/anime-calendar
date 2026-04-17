@@ -79,7 +79,7 @@ pub fn validate_password_strength(password: &str) -> bool {
 pub fn generate_token<T: AsRef<[u8]>>(id: &i32, jwt_secret: T) -> ServerResult<String> {
     let claims = Claims {
         sub: id.to_string(),
-        exp: (chrono::Utc::now() + chrono::Duration::hours(24)).timestamp() as usize,
+        exp: (chrono::Utc::now() + chrono::Duration::minutes(30)).timestamp() as usize,
     };
 
     let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());

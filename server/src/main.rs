@@ -16,8 +16,8 @@ use crate::{
     error::Error,
     mappers::{
         anilist::Anilist, calendar::CalendarMapper, email_verification::EmailVerificationMapper,
-        google_oauth::GoogleOauth, password_reset::PasswordResetMapper, user::UserMapper,
-        user_settings::UserSettingsMapper,
+        google_oauth::GoogleOauth, password_reset::PasswordResetMapper,
+        refresh_token::RefreshTokenMapper, user::UserMapper, user_settings::UserSettingsMapper,
     },
     services::email::EmailService,
 };
@@ -39,6 +39,7 @@ async fn main() -> ServerResult<()> {
     let google_oauth = GoogleOauth::new(&settings.google_client_id);
     let token_mapper = PasswordResetMapper::new(db_config.clone()).await?;
     let verification_mapper = EmailVerificationMapper::new(db_config.clone()).await?;
+    let refresh_token_mapper = RefreshTokenMapper::new(db_config.clone()).await?;
     let email_service = EmailService::new(settings.smtp.clone());
 
     // Initialize Redis cache
@@ -61,6 +62,7 @@ async fn main() -> ServerResult<()> {
         user_settings_mapper,
         token_mapper,
         verification_mapper,
+        refresh_token_mapper,
         email_service,
     )?
     .await?)

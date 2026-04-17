@@ -51,6 +51,9 @@ impl Modify for BearerAuth {
         crate::controllers::auth::register,
         crate::controllers::auth::get_current_user,
         crate::controllers::auth::verify_token_endpoint,
+        crate::controllers::auth::logout,
+        // refresh
+        crate::controllers::refresh::refresh,
         // password reset
         crate::controllers::password_reset::forgot_password,
         crate::controllers::password_reset::reset_password,

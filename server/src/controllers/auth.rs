@@ -1,6 +1,7 @@
 use crate::config::server::{AppBaseUrl, CookieSettings, JwtSecret};
 use crate::error::Error;
 use crate::mappers::email_verification::EmailVerificationMapper;
+use crate::mappers::refresh_token::RefreshTokenMapper;
 use crate::mappers::user::UserMapper;
 use crate::middleware::auth::Claims;
 use crate::services::auth::{
@@ -11,8 +12,10 @@ use crate::services::email::EmailService;
 use actix_web::cookie::{time::Duration, Cookie, SameSite};
 use actix_web::{get, post, web, HttpResponse, ResponseError};
 use log::error;
+use rand::RngCore;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 
 /// Generic error response body
 #[derive(Serialize, utoipa::ToSchema)]
@@ -34,6 +37,27 @@ fn is_valid_email(email: &str) -> bool {
         .is_some_and(|pos| pos > 0 && pos < domain.len() - 1)
 }
 
+/// Generate 32 random bytes as a lowercase hex string.
+#[must_use]
+pub fn generate_raw_token() -> String {
+    let mut bytes = [0u8; 32];
+    rand::rng().fill_bytes(&mut bytes);
+    bytes.iter().fold(String::new(), |mut s, b| {
+        let _ = std::fmt::Write::write_fmt(&mut s, format_args!("{b:02x}"));
+        s
+    })
+}
+
+/// SHA-256 hash of `raw`, returned as a lowercase hex string.
+#[must_use]
+pub fn hash_refresh_token(raw: &str) -> String {
+    let h = Sha256::digest(raw.as_bytes());
+    h.iter().fold(String::new(), |mut s, b| {
+        let _ = std::fmt::Write::write_fmt(&mut s, format_args!("{b:02x}"));
+        s
+    })
+}
+
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct LoginRequest {
     pub email: String,
@@ -52,16 +76,37 @@ pub struct MessageResponse {
 }
 
 /// Build an httpOnly auth cookie from a JWT token and cookie settings.
-///
-/// # Errors
-/// This function is infallible; it returns a `Cookie` directly.
 #[must_use]
 pub fn build_auth_cookie(token: String, cookie_settings: &CookieSettings) -> Cookie<'static> {
     Cookie::build("auth_token", token)
         .http_only(true)
         .same_site(SameSite::Strict)
         .path("/api/")
-        .max_age(Duration::hours(24))
+        .max_age(Duration::minutes(30))
+        .secure(cookie_settings.secure)
+        .finish()
+}
+
+/// Build an httpOnly refresh token cookie scoped to the refresh endpoint.
+#[must_use]
+pub fn build_refresh_cookie(token: String, cookie_settings: &CookieSettings) -> Cookie<'static> {
+    Cookie::build("refresh_token", token)
+        .http_only(true)
+        .same_site(SameSite::Strict)
+        .path("/api/auth/refresh")
+        .max_age(Duration::days(30))
+        .secure(cookie_settings.secure)
+        .finish()
+}
+
+/// Build a zero-max-age refresh cookie to clear it on logout.
+#[must_use]
+fn clear_refresh_cookie(cookie_settings: &CookieSettings) -> Cookie<'static> {
+    Cookie::build("refresh_token", "")
+        .http_only(true)
+        .same_site(SameSite::Strict)
+        .path("/api/auth/refresh")
+        .max_age(Duration::ZERO)
         .secure(cookie_settings.secure)
         .finish()
 }
@@ -79,6 +124,7 @@ pub fn build_auth_cookie(token: String, cookie_settings: &CookieSettings) -> Coo
 #[post("/login")]
 pub async fn login(
     db: web::Data<UserMapper>,
+    refresh_mapper: web::Data<RefreshTokenMapper>,
     credentials: web::Json<LoginRequest>,
     jwt_secret: web::Data<JwtSecret>,
     cookie_settings: web::Data<CookieSettings>,
@@ -100,10 +146,20 @@ pub async fn login(
                     Err(e) => return e.error_response(),
                 };
 
-                let cookie = build_auth_cookie(token, &cookie_settings);
-                HttpResponse::Ok().cookie(cookie).json(AuthResponse {
-                    username: user.username,
-                })
+                let raw_refresh = generate_raw_token();
+                let refresh_hash = hash_refresh_token(&raw_refresh);
+                if let Err(e) = refresh_mapper.replace_token(user.id, &refresh_hash).await {
+                    return e.error_response();
+                }
+
+                let auth_cookie = build_auth_cookie(token, &cookie_settings);
+                let refresh_cookie = build_refresh_cookie(raw_refresh, &cookie_settings);
+                HttpResponse::Ok()
+                    .cookie(auth_cookie)
+                    .cookie(refresh_cookie)
+                    .json(AuthResponse {
+                        username: user.username,
+                    })
             } else {
                 Error::Unauthorised.error_response()
             }
@@ -165,7 +221,11 @@ pub async fn register(
     };
 
     let user = match db
-        .create_user(&user_data.username, &user_data.email, Some(&hashed_password))
+        .create_user(
+            &user_data.username,
+            &user_data.email,
+            Some(&hashed_password),
+        )
         .await
     {
         Ok(u) => u,
@@ -174,17 +234,20 @@ pub async fn register(
 
     let raw_token = generate_random_token();
     let token_hash = hash_token(&raw_token);
-    let verify_url = format!(
-        "{}/verify-email?token={raw_token}",
-        app_base_url.as_str()
-    );
+    let verify_url = format!("{}/verify-email?token={raw_token}", app_base_url.as_str());
 
-    if let Err(e) = verification_mapper.replace_token(user.id, &token_hash).await {
+    if let Err(e) = verification_mapper
+        .replace_token(user.id, &token_hash)
+        .await
+    {
         error!("{e}");
         // Compensate: delete the newly-created user so the email address is
         // not permanently stuck in an unverifiable state. Best-effort only.
         if let Err(del_err) = db.delete_user(user.id).await {
-            error!("Failed to rollback user {} after token error: {del_err}", user.id);
+            error!(
+                "Failed to rollback user {} after token error: {del_err}",
+                user.id
+            );
         }
         return e.error_response();
     }
@@ -260,7 +323,20 @@ pub async fn verify_token_endpoint(
     security(("bearer_auth" = []))
 )]
 #[post("/auth/logout")]
-pub async fn logout(_claims: Claims, cookie_settings: web::Data<CookieSettings>) -> HttpResponse {
+pub async fn logout(
+    claims: Claims,
+    refresh_mapper: web::Data<RefreshTokenMapper>,
+    cookie_settings: web::Data<CookieSettings>,
+) -> HttpResponse {
+    let user_id: i32 = match claims.sub.parse() {
+        Ok(id) => id,
+        Err(_) => return Error::Unauthorised.error_response(),
+    };
+
+    if let Err(e) = refresh_mapper.invalidate_all_for_user(user_id).await {
+        log::error!("Failed to invalidate refresh tokens on logout for user {user_id}: {e}");
+    }
+
     let removal_cookie = Cookie::build("auth_token", "")
         .http_only(true)
         .same_site(SameSite::Strict)
@@ -268,8 +344,11 @@ pub async fn logout(_claims: Claims, cookie_settings: web::Data<CookieSettings>)
         .max_age(Duration::ZERO)
         .secure(cookie_settings.secure)
         .finish();
+    let removal_refresh = clear_refresh_cookie(&cookie_settings);
+
     HttpResponse::Ok()
         .cookie(removal_cookie)
+        .cookie(removal_refresh)
         .json(serde_json::json!({}))
 }
 
@@ -300,8 +379,14 @@ mod integration_tests {
     use super::*;
     use crate::{
         config::server::AppBaseUrl,
-        mappers::{email_verification::EmailVerificationMapper, user::UserMapper},
-        services::{auth::{generate_token, hash_password}, email::EmailService},
+        mappers::{
+            email_verification::EmailVerificationMapper, refresh_token::RefreshTokenMapper,
+            user::UserMapper,
+        },
+        services::{
+            auth::{generate_token, hash_password},
+            email::EmailService,
+        },
     };
     use actix_web::{http::StatusCode, test, web, App};
     use secrecy::SecretString;
@@ -338,7 +423,8 @@ mod integration_tests {
         seed_user(&pool, "alice", "alice@test.com").await;
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .app_data(cookie_data())
                 .service(login)
@@ -374,7 +460,8 @@ mod integration_tests {
         seed_user(&pool, "bob", "bob@test.com").await;
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .app_data(cookie_data())
                 .service(login),
@@ -395,7 +482,8 @@ mod integration_tests {
         // User enumeration prevention: unknown user must return 401, not 404.
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .app_data(cookie_data())
                 .service(login),
@@ -420,7 +508,8 @@ mod integration_tests {
             .unwrap();
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .app_data(cookie_data())
                 .service(login),
@@ -447,7 +536,8 @@ mod integration_tests {
 
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .app_data(cookie_data())
                 .service(login),
@@ -474,9 +564,7 @@ mod integration_tests {
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(
-                    EmailVerificationMapper::from_pool(pool),
-                ))
+                .app_data(web::Data::new(EmailVerificationMapper::from_pool(pool)))
                 .app_data(web::Data::new(EmailService::new(
                     crate::config::server::SmtpConfig::default(),
                 )))
@@ -505,10 +593,16 @@ mod integration_tests {
             .and_then(|v| v.to_str().ok())
             .map(|s| s.contains("auth_token="))
             .unwrap_or(false);
-        assert!(!has_auth_cookie, "register must not issue auth cookie before verification");
+        assert!(
+            !has_auth_cookie,
+            "register must not issue auth cookie before verification"
+        );
 
         let body: serde_json::Value = test::read_body_json(resp).await;
-        assert!(body.get("message").is_some(), "response must contain a 'message' field");
+        assert!(
+            body.get("message").is_some(),
+            "response must contain a 'message' field"
+        );
     }
 
     #[sqlx::test(migrations = "../migrations")]
@@ -517,9 +611,18 @@ mod integration_tests {
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(EmailVerificationMapper::from_pool(pool)))
-                .app_data(web::Data::new(EmailService::new(crate::config::server::SmtpConfig::default())))
-                .app_data(web::Data::new(AppBaseUrl::new("http://localhost:5173".to_string())))
+                .app_data(web::Data::new(EmailVerificationMapper::from_pool(
+                    pool.clone(),
+                )))
+                .app_data(web::Data::new(EmailService::new(
+                    crate::config::server::SmtpConfig::default(),
+                )))
+                .app_data(web::Data::new(AppBaseUrl::new(
+                    "http://localhost:5173".to_string(),
+                )))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(register),
         )
         .await;
@@ -542,9 +645,18 @@ mod integration_tests {
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(EmailVerificationMapper::from_pool(pool)))
-                .app_data(web::Data::new(EmailService::new(crate::config::server::SmtpConfig::default())))
-                .app_data(web::Data::new(AppBaseUrl::new("http://localhost:5173".to_string())))
+                .app_data(web::Data::new(EmailVerificationMapper::from_pool(
+                    pool.clone(),
+                )))
+                .app_data(web::Data::new(EmailService::new(
+                    crate::config::server::SmtpConfig::default(),
+                )))
+                .app_data(web::Data::new(AppBaseUrl::new(
+                    "http://localhost:5173".to_string(),
+                )))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(register),
         )
         .await;
@@ -567,9 +679,18 @@ mod integration_tests {
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(EmailVerificationMapper::from_pool(pool)))
-                .app_data(web::Data::new(EmailService::new(crate::config::server::SmtpConfig::default())))
-                .app_data(web::Data::new(AppBaseUrl::new("http://localhost:5173".to_string())))
+                .app_data(web::Data::new(EmailVerificationMapper::from_pool(
+                    pool.clone(),
+                )))
+                .app_data(web::Data::new(EmailService::new(
+                    crate::config::server::SmtpConfig::default(),
+                )))
+                .app_data(web::Data::new(AppBaseUrl::new(
+                    "http://localhost:5173".to_string(),
+                )))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(register),
         )
         .await;
@@ -592,9 +713,18 @@ mod integration_tests {
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(EmailVerificationMapper::from_pool(pool)))
-                .app_data(web::Data::new(EmailService::new(crate::config::server::SmtpConfig::default())))
-                .app_data(web::Data::new(AppBaseUrl::new("http://localhost:5173".to_string())))
+                .app_data(web::Data::new(EmailVerificationMapper::from_pool(
+                    pool.clone(),
+                )))
+                .app_data(web::Data::new(EmailService::new(
+                    crate::config::server::SmtpConfig::default(),
+                )))
+                .app_data(web::Data::new(AppBaseUrl::new(
+                    "http://localhost:5173".to_string(),
+                )))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .app_data(cookie_data())
                 .service(register),
         )
         .await;
@@ -660,7 +790,8 @@ mod integration_tests {
         let user_id = seed_user(&pool, "hank", "hank@test.com").await;
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .app_data(cookie_data())
                 .service(get_current_user)
@@ -693,7 +824,8 @@ mod integration_tests {
     async fn logout_without_cookie_returns_401(pool: PgPool) {
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .app_data(cookie_data())
                 .service(logout),

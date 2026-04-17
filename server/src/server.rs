@@ -20,8 +20,10 @@ use crate::{
     },
     error::Error,
     mappers::{
-        anilist::Anilist, calendar::CalendarMapper, email_verification::EmailVerificationMapper,
-        google_oauth::GoogleOauth, password_reset::PasswordResetMapper, user::UserMapper,
+        anilist::Anilist, auth, cache_metrics, calendar, calendar::CalendarMapper,
+        email_verification::EmailVerificationMapper, google_oauth::GoogleOauth, item, items, oauth,
+        password_reset, password_reset::PasswordResetMapper, refresh,
+        refresh_token::RefreshTokenMapper, user, user::UserMapper,
         user_settings::UserSettingsMapper,
     },
     openapi::ApiDoc,
@@ -42,6 +44,7 @@ pub fn start(
     user_settings_mapper: UserSettingsMapper,
     token_mapper: PasswordResetMapper,
     verification_mapper: EmailVerificationMapper,
+    refresh_token_mapper: RefreshTokenMapper,
     email_service: EmailService,
 ) -> ServerResult<Server> {
     let level_filter = match LevelFilter::from_str(&config.log_level) {
@@ -105,6 +108,7 @@ pub fn start(
             .app_data(web::Data::new(cookie_settings.clone()))
             .app_data(web::Data::new(token_mapper.clone()))
             .app_data(web::Data::new(verification_mapper.clone()))
+            .app_data(web::Data::new(refresh_token_mapper.clone()))
             .app_data(web::Data::new(email_service.clone()))
             .app_data(web::Data::new(app_base_url.clone()))
             .service(item::get)
@@ -121,6 +125,7 @@ pub fn start(
             .service(auth::get_current_user)
             .service(auth::verify_token_endpoint)
             .service(auth::logout)
+            .service(refresh::refresh)
             .service(password_reset::forgot_password)
             .service(password_reset::reset_password)
             .service(email_verification::verify_email)
