@@ -144,8 +144,8 @@ mod tests {
     #[tokio::test]
     async fn get_settings_returns_default_when_no_row() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        let settings = UserSettingsMapper::get_user_settings_with(&mut *tx, user_id)
+        let user_id = create_test_user(&mut tx).await;
+        let settings = UserSettingsMapper::get_user_settings_with(&mut tx, user_id)
             .await
             .unwrap();
         assert!(matches!(settings.theme_preference, Theme::Dark));
@@ -156,11 +156,11 @@ mod tests {
     #[tokio::test]
     async fn update_settings_inserts_and_fetch_round_trips() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        UserSettingsMapper::update_user_settings_with(&mut *tx, user_id, &custom_settings(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        UserSettingsMapper::update_user_settings_with(&mut tx, user_id, &custom_settings(user_id))
             .await
             .unwrap();
-        let fetched = UserSettingsMapper::get_user_settings_with(&mut *tx, user_id)
+        let fetched = UserSettingsMapper::get_user_settings_with(&mut tx, user_id)
             .await
             .unwrap();
         assert!(matches!(fetched.theme_preference, Theme::Light));
@@ -172,8 +172,8 @@ mod tests {
     #[tokio::test]
     async fn update_settings_upserts_on_conflict() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        UserSettingsMapper::update_user_settings_with(&mut *tx, user_id, &custom_settings(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        UserSettingsMapper::update_user_settings_with(&mut tx, user_id, &custom_settings(user_id))
             .await
             .unwrap();
         let updated = UserSettings {
@@ -182,10 +182,10 @@ mod tests {
             timezone: "UTC".to_string(),
             ..custom_settings(user_id)
         };
-        UserSettingsMapper::update_user_settings_with(&mut *tx, user_id, &updated)
+        UserSettingsMapper::update_user_settings_with(&mut tx, user_id, &updated)
             .await
             .unwrap();
-        let fetched = UserSettingsMapper::get_user_settings_with(&mut *tx, user_id)
+        let fetched = UserSettingsMapper::get_user_settings_with(&mut tx, user_id)
             .await
             .unwrap();
         assert!(matches!(fetched.theme_preference, Theme::Dark));
@@ -196,14 +196,14 @@ mod tests {
     #[tokio::test]
     async fn delete_settings_removes_row_so_default_is_returned() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        UserSettingsMapper::update_user_settings_with(&mut *tx, user_id, &custom_settings(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        UserSettingsMapper::update_user_settings_with(&mut tx, user_id, &custom_settings(user_id))
             .await
             .unwrap();
-        UserSettingsMapper::delete_user_settings_with(&mut *tx, user_id)
+        UserSettingsMapper::delete_user_settings_with(&mut tx, user_id)
             .await
             .unwrap();
-        let settings = UserSettingsMapper::get_user_settings_with(&mut *tx, user_id)
+        let settings = UserSettingsMapper::get_user_settings_with(&mut tx, user_id)
             .await
             .unwrap();
         assert!(matches!(settings.theme_preference, Theme::Dark));

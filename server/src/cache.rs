@@ -52,7 +52,9 @@ impl Cache {
     where
         T: DeserializeOwned,
     {
-        use crate::metrics::names::*;
+        use crate::metrics::names::{
+            CACHE_HITS_TOTAL, CACHE_MISSES_TOTAL, CACHE_OPERATION_DURATION_SECONDS, LABEL_OP,
+        };
         let start = std::time::Instant::now();
         let mut conn = self.connection.clone();
         let result: RedisResult<Option<String>> =
@@ -61,22 +63,22 @@ impl Cache {
         metrics::histogram!(CACHE_OPERATION_DURATION_SECONDS, LABEL_OP => "get")
             .record(start.elapsed().as_secs_f64());
 
-        match result? {
-            Some(v) => {
-                metrics::counter!(CACHE_HITS_TOTAL).increment(1);
-                Ok(serde_json::from_str(&v).ok())
-            }
-            None => {
+        result?.map_or_else(
+            || {
                 metrics::counter!(CACHE_MISSES_TOTAL).increment(1);
                 Ok(None)
-            }
-        }
+            },
+            |v| {
+                metrics::counter!(CACHE_HITS_TOTAL).increment(1);
+                Ok(serde_json::from_str(&v).ok())
+            },
+        )
     }
 
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn delete(&self, key: &str) -> RedisResult<()> {
-        use crate::metrics::names::*;
+        use crate::metrics::names::{CACHE_OPERATION_DURATION_SECONDS, LABEL_OP};
         let start = std::time::Instant::now();
         let result = async {
             let mut conn = self.connection.clone();
@@ -92,17 +94,14 @@ impl Cache {
     /// Fails if Redis query fails.
     pub async fn exists(&self, key: &str) -> RedisResult<bool> {
         let mut conn = self.connection.clone();
-        let result: i64 = redis::cmd("EXISTS")
-            .arg(key)
-            .query_async(&mut conn)
-            .await?;
+        let result: i64 = redis::cmd("EXISTS").arg(key).query_async(&mut conn).await?;
         Ok(result > 0)
     }
 
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn get_keys(&self, pattern: &str) -> RedisResult<Vec<String>> {
-        use crate::metrics::names::*;
+        use crate::metrics::names::{CACHE_OPERATION_DURATION_SECONDS, LABEL_OP};
         let start = std::time::Instant::now();
         let result = async {
             let mut keys: Vec<String> = Vec::new();
@@ -134,7 +133,7 @@ impl Cache {
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn flush(&self) -> RedisResult<()> {
-        use crate::metrics::names::*;
+        use crate::metrics::names::{CACHE_OPERATION_DURATION_SECONDS, LABEL_OP};
         let start = std::time::Instant::now();
         let result = async {
             let mut conn = self.connection.clone();
@@ -152,7 +151,7 @@ impl Cache {
     where
         T: Serialize + Sync,
     {
-        use crate::metrics::names::*;
+        use crate::metrics::names::{CACHE_OPERATION_DURATION_SECONDS, LABEL_OP};
         let start = std::time::Instant::now();
         let result = async {
             let serialized = serde_json::to_string(value).map_err(|e| {
@@ -286,7 +285,6 @@ impl Cache {
         let pattern = generate_user_paged_calendars_key(user_id);
         self.invalidate_pattern(&pattern).await
     }
-
 }
 
 #[must_use]
@@ -480,6 +478,7 @@ mod tests {
     // so accumulated state from other tests does not cause false negatives.
 
     #[tokio::test]
+    #[allow(clippy::mutable_key_type)]
     async fn get_on_hit_increments_hit_counter() {
         let _ = crate::test_helpers::shared_snapshotter(); // ensure recorder installed before ops
         let cache = Cache::for_tests().await;
@@ -488,7 +487,9 @@ mod tests {
         let _: Option<u8> = cache.get(&key).await.unwrap();
         cache.delete(&key).await.unwrap();
 
-        let snapshot = crate::test_helpers::shared_snapshotter().snapshot().into_hashmap();
+        let snapshot = crate::test_helpers::shared_snapshotter()
+            .snapshot()
+            .into_hashmap();
         assert!(
             snapshot
                 .keys()
@@ -498,6 +499,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::mutable_key_type)]
     async fn get_on_miss_increments_miss_counter() {
         let _ = crate::test_helpers::shared_snapshotter();
         let cache = Cache::for_tests().await;
@@ -505,7 +507,9 @@ mod tests {
         cache.delete(&key).await.unwrap();
         let _: Option<u8> = cache.get(&key).await.unwrap();
 
-        let snapshot = crate::test_helpers::shared_snapshotter().snapshot().into_hashmap();
+        let snapshot = crate::test_helpers::shared_snapshotter()
+            .snapshot()
+            .into_hashmap();
         assert!(
             snapshot
                 .keys()
@@ -515,6 +519,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[allow(clippy::mutable_key_type)]
     async fn set_emits_duration_histogram() {
         let _ = crate::test_helpers::shared_snapshotter();
         let cache = Cache::for_tests().await;
@@ -522,10 +527,13 @@ mod tests {
         cache.set(&key, &1_u8, 300).await.unwrap();
         cache.delete(&key).await.unwrap();
 
-        let snapshot = crate::test_helpers::shared_snapshotter().snapshot().into_hashmap();
+        let snapshot = crate::test_helpers::shared_snapshotter()
+            .snapshot()
+            .into_hashmap();
         assert!(
-            snapshot.keys().any(|k| k.key().name()
-                == crate::metrics::names::CACHE_OPERATION_DURATION_SECONDS),
+            snapshot
+                .keys()
+                .any(|k| k.key().name() == crate::metrics::names::CACHE_OPERATION_DURATION_SECONDS),
             "cache_operation_duration_seconds not recorded"
         );
     }

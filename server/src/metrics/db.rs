@@ -1,9 +1,13 @@
 //! Wrap database calls with duration + outcome metrics.
 
-use crate::metrics::names::*;
+use crate::metrics::names::{
+    DB_QUERIES_TOTAL, DB_QUERY_DURATION_SECONDS, LABEL_OP, LABEL_OUTCOME, OUTCOME_ERR, OUTCOME_OK,
+};
 
 /// Instrument a fallible async operation with a duration histogram and a
 /// queries-total counter labelled by outcome.
+/// # Errors
+/// Query errors are propagated
 pub async fn timed<F, T, E>(op: &'static str, fut: F) -> Result<T, E>
 where
     F: std::future::Future<Output = Result<T, E>>,
@@ -11,7 +15,11 @@ where
     let start = std::time::Instant::now();
     let result = fut.await;
     let elapsed = start.elapsed().as_secs_f64();
-    let outcome = if result.is_ok() { OUTCOME_OK } else { OUTCOME_ERR };
+    let outcome = if result.is_ok() {
+        OUTCOME_OK
+    } else {
+        OUTCOME_ERR
+    };
 
     metrics::histogram!(
         DB_QUERY_DURATION_SECONDS,
@@ -33,6 +41,7 @@ where
 mod tests {
     use super::*;
     #[tokio::test]
+    #[allow(clippy::mutable_key_type)]
     async fn timed_records_ok_outcome() {
         let snapshotter = crate::test_helpers::shared_snapshotter();
         let _: Result<u32, ()> = timed("test.ok", async { Ok(42) }).await;
@@ -41,13 +50,16 @@ mod tests {
             .iter()
             .filter(|(k, _)| k.key().name() == DB_QUERIES_TOTAL)
             .filter(|(k, _)| {
-                k.key().labels().any(|l| l.key() == LABEL_OUTCOME && l.value() == OUTCOME_OK)
+                k.key()
+                    .labels()
+                    .any(|l| l.key() == LABEL_OUTCOME && l.value() == OUTCOME_OK)
             })
             .count();
         assert!(ok_count >= 1, "ok counter missing");
     }
 
     #[tokio::test]
+    #[allow(clippy::mutable_key_type)]
     async fn timed_records_err_outcome() {
         let snapshotter = crate::test_helpers::shared_snapshotter();
         let _: Result<(), &'static str> = timed("test.err", async { Err("boom") }).await;
@@ -56,7 +68,9 @@ mod tests {
             .iter()
             .filter(|(k, _)| k.key().name() == DB_QUERIES_TOTAL)
             .filter(|(k, _)| {
-                k.key().labels().any(|l| l.key() == LABEL_OUTCOME && l.value() == OUTCOME_ERR)
+                k.key()
+                    .labels()
+                    .any(|l| l.key() == LABEL_OUTCOME && l.value() == OUTCOME_ERR)
             })
             .count();
         assert!(err_count >= 1, "err counter missing");

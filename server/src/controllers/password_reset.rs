@@ -39,6 +39,7 @@ const RESET_RESPONSE: &str =
     )
 )]
 #[post("/auth/forgot-password")]
+#[allow(clippy::future_not_send)]
 pub async fn forgot_password(
     user_mapper: web::Data<UserMapper>,
     token_mapper: web::Data<PasswordResetMapper>,

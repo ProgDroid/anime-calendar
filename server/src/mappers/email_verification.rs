@@ -39,7 +39,7 @@ impl EmailVerificationMapper {
     pub async fn replace_token(&self, user_id: i32, token_hash: &str) -> ServerResult<()> {
         crate::metrics::db::timed("email_verification.replace_token", async {
             let mut tx = self.db.pool.begin().await?;
-            if let Err(e) = Self::replace_token_with(&mut *tx, user_id, token_hash).await {
+            if let Err(e) = Self::replace_token_with(&mut tx, user_id, token_hash).await {
                 tx.rollback().await?;
                 return Err(e);
             }
@@ -114,7 +114,7 @@ impl EmailVerificationMapper {
     pub async fn consume_and_verify(&self, token_id: i32, user_id: i32) -> ServerResult<()> {
         crate::metrics::db::timed("email_verification.consume_and_verify", async {
             let mut tx = self.db.pool.begin().await?;
-            if let Err(e) = Self::consume_and_verify_with(&mut *tx, token_id, user_id).await {
+            if let Err(e) = Self::consume_and_verify_with(&mut tx, token_id, user_id).await {
                 tx.rollback().await?;
                 return Err(e);
             }
@@ -170,11 +170,11 @@ mod tests {
     #[tokio::test]
     async fn replace_token_creates_and_find_valid_returns_it() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = seed_user(&mut *tx).await;
-        EmailVerificationMapper::replace_token_with(&mut *tx, user_id, "hash_abc")
+        let user_id = seed_user(&mut tx).await;
+        EmailVerificationMapper::replace_token_with(&mut tx, user_id, "hash_abc")
             .await
             .unwrap();
-        let token = EmailVerificationMapper::find_valid_token_with(&mut *tx, "hash_abc")
+        let token = EmailVerificationMapper::find_valid_token_with(&mut tx, "hash_abc")
             .await
             .unwrap();
         assert_eq!(token.user_id, user_id);
@@ -184,20 +184,20 @@ mod tests {
     #[tokio::test]
     async fn replace_token_removes_previous_token() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = seed_user(&mut *tx).await;
-        EmailVerificationMapper::replace_token_with(&mut *tx, user_id, "old_hash")
+        let user_id = seed_user(&mut tx).await;
+        EmailVerificationMapper::replace_token_with(&mut tx, user_id, "old_hash")
             .await
             .unwrap();
-        EmailVerificationMapper::replace_token_with(&mut *tx, user_id, "new_hash")
+        EmailVerificationMapper::replace_token_with(&mut tx, user_id, "new_hash")
             .await
             .unwrap();
         assert!(
-            EmailVerificationMapper::find_valid_token_with(&mut *tx, "old_hash")
+            EmailVerificationMapper::find_valid_token_with(&mut tx, "old_hash")
                 .await
                 .is_err(),
             "old token must be gone"
         );
-        let _tok = EmailVerificationMapper::find_valid_token_with(&mut *tx, "new_hash")
+        let _tok = EmailVerificationMapper::find_valid_token_with(&mut tx, "new_hash")
             .await
             .expect("new token must still be valid");
         tx.rollback().await.unwrap();
@@ -207,7 +207,7 @@ mod tests {
     async fn find_valid_token_not_found_returns_error() {
         let mut tx = crate::test_helpers::test_tx().await;
         assert!(
-            EmailVerificationMapper::find_valid_token_with(&mut *tx, "nonexistent")
+            EmailVerificationMapper::find_valid_token_with(&mut tx, "nonexistent")
                 .await
                 .is_err()
         );
@@ -217,20 +217,20 @@ mod tests {
     #[tokio::test]
     async fn consume_and_verify_deletes_token_and_marks_user_verified() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = seed_user(&mut *tx).await;
-        EmailVerificationMapper::replace_token_with(&mut *tx, user_id, "consume_hash")
+        let user_id = seed_user(&mut tx).await;
+        EmailVerificationMapper::replace_token_with(&mut tx, user_id, "consume_hash")
             .await
             .unwrap();
-        let token = EmailVerificationMapper::find_valid_token_with(&mut *tx, "consume_hash")
+        let token = EmailVerificationMapper::find_valid_token_with(&mut tx, "consume_hash")
             .await
             .unwrap();
 
-        EmailVerificationMapper::consume_and_verify_with(&mut *tx, token.id, user_id)
+        EmailVerificationMapper::consume_and_verify_with(&mut tx, token.id, user_id)
             .await
             .unwrap();
 
         assert!(
-            EmailVerificationMapper::find_valid_token_with(&mut *tx, "consume_hash")
+            EmailVerificationMapper::find_valid_token_with(&mut tx, "consume_hash")
                 .await
                 .is_err()
         );

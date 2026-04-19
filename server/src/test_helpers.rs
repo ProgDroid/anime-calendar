@@ -1,21 +1,21 @@
-/// Test infrastructure for transaction-based isolation.
-///
-/// Rather than using `#[sqlx::test]` (which creates a new Postgres database per
-/// test and is limited by a 20-connection setup pool), mapper tests use a shared
-/// `DATABASE_URL` database and wrap each test in a transaction that is always
-/// rolled back.  This keeps tests fully isolated with zero per-test database
-/// creation overhead.
-///
-/// # Usage
-/// ```ignore
-/// #[tokio::test]
-/// async fn my_test() {
-///     let mut tx = test_tx().await;
-///     let user = UserMapper::create_user_with(&mut *tx, "alice", "a@b.com", None).await.unwrap();
-///     // assertions ...
-///     tx.rollback().await.unwrap(); // always roll back — no data persists
-/// }
-/// ```
+//! Test infrastructure for transaction-based isolation.
+//!
+//! Rather than using `#[sqlx::test]` (which creates a new Postgres database per
+//! test and is limited by a 20-connection setup pool), mapper tests use a shared
+//! `DATABASE_URL` database and wrap each test in a transaction that is always
+//! rolled back.  This keeps tests fully isolated with zero per-test database
+//! creation overhead.
+//!
+//! # Usage
+//! ```ignore
+//! #[tokio::test]
+//! async fn my_test() {
+//!     let mut tx = test_tx().await;
+//!     let user = UserMapper::create_user_with(&mut *tx, "alice", "a@b.com", None).await.unwrap();
+//!     // assertions ...
+//!     tx.rollback().await.unwrap(); // always roll back — no data persists
+//! }
+//! ```
 
 /// Shared pool for controller integration tests.
 ///
@@ -46,8 +46,8 @@ pub(crate) fn shared_snapshotter() -> metrics_util::debugging::Snapshotter {
 
 #[cfg(test)]
 pub(crate) async fn test_pool() -> sqlx::PgPool {
-    let url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set to run controller tests");
+    let url =
+        std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run controller tests");
     sqlx::PgPool::connect(&url)
         .await
         .expect("Failed to connect to test database")
@@ -55,8 +55,7 @@ pub(crate) async fn test_pool() -> sqlx::PgPool {
 
 #[cfg(test)]
 pub(crate) async fn test_tx() -> sqlx::Transaction<'static, sqlx::Postgres> {
-    let url = std::env::var("DATABASE_URL")
-        .expect("DATABASE_URL must be set to run mapper tests");
+    let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set to run mapper tests");
     let pool = sqlx::PgPool::connect(&url)
         .await
         .expect("Failed to connect to test database");

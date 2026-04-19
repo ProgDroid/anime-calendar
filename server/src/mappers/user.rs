@@ -222,7 +222,7 @@ impl UserMapper {
     pub async fn delete_user(&self, id: i32) -> ServerResult<()> {
         crate::metrics::db::timed("user.delete", async {
             let mut tx = self.db.pool.begin().await?;
-            if let Err(e) = Self::delete_user_with(&mut *tx, id).await {
+            if let Err(e) = Self::delete_user_with(&mut tx, id).await {
                 tx.rollback().await?;
                 return Err(e);
             }
@@ -279,7 +279,7 @@ mod tests {
     async fn create_user_returns_correct_fields() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user = UserMapper::create_user_with(
-            &mut *tx,
+            &mut tx,
             "alice",
             "alice@example.com",
             Some("hash123"),
@@ -296,7 +296,7 @@ mod tests {
     #[tokio::test]
     async fn create_user_oauth_has_no_password() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user = UserMapper::create_user_with(&mut *tx, "oauthuser", "oauth@example.com", None)
+        let user = UserMapper::create_user_with(&mut tx, "oauthuser", "oauth@example.com", None)
             .await
             .unwrap();
         assert!(user.password_hash.is_none());
@@ -306,10 +306,10 @@ mod tests {
     #[tokio::test]
     async fn get_user_by_email_finds_existing() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let created = UserMapper::create_user_with(&mut *tx, "bob", "bob@example.com", None)
+        let created = UserMapper::create_user_with(&mut tx, "bob", "bob@example.com", None)
             .await
             .unwrap();
-        let found = UserMapper::get_user_by_email_with(&mut *tx, "bob@example.com")
+        let found = UserMapper::get_user_by_email_with(&mut tx, "bob@example.com")
             .await
             .unwrap();
         assert_eq!(found.id, created.id);
@@ -321,7 +321,7 @@ mod tests {
     async fn get_user_by_email_not_found() {
         let mut tx = crate::test_helpers::test_tx().await;
         assert!(
-            UserMapper::get_user_by_email_with(&mut *tx, "nobody@example.com")
+            UserMapper::get_user_by_email_with(&mut tx, "nobody@example.com")
                 .await
                 .is_err()
         );
@@ -332,10 +332,10 @@ mod tests {
     async fn get_user_by_id_finds_existing() {
         let mut tx = crate::test_helpers::test_tx().await;
         let created =
-            UserMapper::create_user_with(&mut *tx, "carol", "carol@example.com", None)
+            UserMapper::create_user_with(&mut tx, "carol", "carol@example.com", None)
                 .await
                 .unwrap();
-        let fetched = UserMapper::get_user_by_id_with(&mut *tx, created.id)
+        let fetched = UserMapper::get_user_by_id_with(&mut tx, created.id)
             .await
             .unwrap();
         assert_eq!(fetched.id, created.id);
@@ -346,7 +346,7 @@ mod tests {
     #[tokio::test]
     async fn get_user_by_id_not_found() {
         let mut tx = crate::test_helpers::test_tx().await;
-        assert!(UserMapper::get_user_by_id_with(&mut *tx, i32::MAX)
+        assert!(UserMapper::get_user_by_id_with(&mut tx, i32::MAX)
             .await
             .is_err());
         tx.rollback().await.unwrap();
@@ -355,11 +355,11 @@ mod tests {
     #[tokio::test]
     async fn update_user_changes_username_and_email() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let created = UserMapper::create_user_with(&mut *tx, "dave", "dave@example.com", None)
+        let created = UserMapper::create_user_with(&mut tx, "dave", "dave@example.com", None)
             .await
             .unwrap();
         let updated =
-            UserMapper::update_user_with(&mut *tx, created.id, "david", "david@example.com")
+            UserMapper::update_user_with(&mut tx, created.id, "david", "david@example.com")
                 .await
                 .unwrap();
         assert_eq!(updated.username, "david");
@@ -371,13 +371,13 @@ mod tests {
     async fn update_user_password_persists() {
         let mut tx = crate::test_helpers::test_tx().await;
         let created =
-            UserMapper::create_user_with(&mut *tx, "eve", "eve@example.com", Some("oldhash"))
+            UserMapper::create_user_with(&mut tx, "eve", "eve@example.com", Some("oldhash"))
                 .await
                 .unwrap();
-        UserMapper::update_user_password_with(&mut *tx, created.id, "newhash")
+        UserMapper::update_user_password_with(&mut tx, created.id, "newhash")
             .await
             .unwrap();
-        let fetched = UserMapper::get_user_by_id_with(&mut *tx, created.id)
+        let fetched = UserMapper::get_user_by_id_with(&mut tx, created.id)
             .await
             .unwrap();
         assert_eq!(fetched.password_hash.as_deref(), Some("newhash"));
@@ -388,17 +388,17 @@ mod tests {
     async fn delete_user_soft_deletes_so_lookup_fails() {
         let mut tx = crate::test_helpers::test_tx().await;
         let created =
-            UserMapper::create_user_with(&mut *tx, "frank", "frank@example.com", None)
+            UserMapper::create_user_with(&mut tx, "frank", "frank@example.com", None)
                 .await
                 .unwrap();
-        UserMapper::delete_user_with(&mut *tx, created.id)
+        UserMapper::delete_user_with(&mut tx, created.id)
             .await
             .unwrap();
-        assert!(UserMapper::get_user_by_id_with(&mut *tx, created.id)
+        assert!(UserMapper::get_user_by_id_with(&mut tx, created.id)
             .await
             .is_err());
         assert!(
-            UserMapper::get_user_by_email_with(&mut *tx, "frank@example.com")
+            UserMapper::get_user_by_email_with(&mut tx, "frank@example.com")
                 .await
                 .is_err()
         );
@@ -409,17 +409,17 @@ mod tests {
     async fn mark_email_verified_sets_timestamp() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user =
-            UserMapper::create_user_with(&mut *tx, "vera", "vera@example.com", Some("hash"))
+            UserMapper::create_user_with(&mut tx, "vera", "vera@example.com", Some("hash"))
                 .await
                 .unwrap();
         assert!(
             user.email_verified_at.is_none(),
             "new user should be unverified"
         );
-        UserMapper::mark_email_verified_with(&mut *tx, user.id)
+        UserMapper::mark_email_verified_with(&mut tx, user.id)
             .await
             .unwrap();
-        let fetched = UserMapper::get_user_by_id_with(&mut *tx, user.id)
+        let fetched = UserMapper::get_user_by_id_with(&mut tx, user.id)
             .await
             .unwrap();
         assert!(
@@ -433,7 +433,7 @@ mod tests {
     async fn delete_user_cascades_soft_delete_to_calendars() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user =
-            UserMapper::create_user_with(&mut *tx, "grace", "grace@example.com", None)
+            UserMapper::create_user_with(&mut tx, "grace", "grace@example.com", None)
                 .await
                 .unwrap();
 
@@ -446,7 +446,7 @@ mod tests {
         .await
         .unwrap();
 
-        UserMapper::delete_user_with(&mut *tx, user.id)
+        UserMapper::delete_user_with(&mut tx, user.id)
             .await
             .unwrap();
 

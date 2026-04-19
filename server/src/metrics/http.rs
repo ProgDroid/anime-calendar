@@ -7,7 +7,9 @@ use futures_util::future::{ok, LocalBoxFuture, Ready};
 use std::rc::Rc;
 use std::time::Instant;
 
-use crate::metrics::names::*;
+use crate::metrics::names::{
+    HTTP_REQUESTS_TOTAL, HTTP_REQUEST_DURATION_SECONDS, LABEL_METHOD, LABEL_PATH, LABEL_STATUS,
+};
 
 pub struct HttpMetrics;
 
@@ -23,7 +25,9 @@ where
     type Future = Ready<Result<Self::Transform, Self::InitError>>;
 
     fn new_transform(&self, service: S) -> Self::Future {
-        ok(HttpMetricsMiddleware { service: Rc::new(service) })
+        ok(HttpMetricsMiddleware {
+            service: Rc::new(service),
+        })
     }
 }
 
@@ -47,7 +51,9 @@ where
         let method = req.method().as_str().to_owned();
         // match_pattern() returns the route template (e.g. "/calendars/{id}") instead of the
         // raw URI ("/calendars/42"), keeping Prometheus label cardinality bounded.
-        let path = req.match_pattern().unwrap_or_else(|| "unmatched".to_owned());
+        let path = req
+            .match_pattern()
+            .unwrap_or_else(|| "unmatched".to_owned());
         let start = Instant::now();
 
         Box::pin(async move {
@@ -82,14 +88,14 @@ mod tests {
     use actix_web::{test, web, App, HttpResponse};
 
     #[actix_web::test]
+    #[allow(clippy::mutable_key_type)]
     async fn middleware_records_request_count_and_duration() {
         let snapshotter = crate::test_helpers::shared_snapshotter();
 
-        let app = test::init_service(
-            App::new()
-                .wrap(HttpMetrics)
-                .route("/probe/{id}", web::get().to(|| async { HttpResponse::Ok().finish() })),
-        )
+        let app = test::init_service(App::new().wrap(HttpMetrics).route(
+            "/probe/{id}",
+            web::get().to(|| async { HttpResponse::Ok().finish() }),
+        ))
         .await;
 
         let req = test::TestRequest::get().uri("/probe/42").to_request();
@@ -97,7 +103,10 @@ mod tests {
         assert!(resp.status().is_success());
 
         let snapshot = snapshotter.snapshot().into_hashmap();
-        let names: Vec<_> = snapshot.keys().map(|k| k.key().name().to_string()).collect();
+        let names: Vec<_> = snapshot
+            .keys()
+            .map(|k| k.key().name().to_string())
+            .collect();
         assert!(
             names.contains(&crate::metrics::names::HTTP_REQUESTS_TOTAL.to_string()),
             "http_requests_total missing; got {names:?}"
@@ -114,7 +123,9 @@ mod tests {
             .map(|l| (l.key().to_string(), l.value().to_string()))
             .collect();
         assert!(
-            labels.iter().any(|(k, v)| k == crate::metrics::names::LABEL_PATH && v == "/probe/{id}"),
+            labels
+                .iter()
+                .any(|(k, v)| k == crate::metrics::names::LABEL_PATH && v == "/probe/{id}"),
             "path label should be pattern '/probe/{{id}}' not raw URI; got {labels:?}"
         );
     }

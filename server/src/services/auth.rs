@@ -12,6 +12,7 @@ use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use log::error;
 use rand::RngCore as _;
 use sha2::{Digest as _, Sha256};
+use std::fmt::Write;
 
 use crate::{middleware::auth::Claims, ServerResult};
 
@@ -91,14 +92,21 @@ pub fn generate_token<T: AsRef<[u8]>>(id: &i32, jwt_secret: T) -> ServerResult<S
 pub fn generate_random_token() -> String {
     let mut bytes = [0u8; 32];
     rand::rng().fill_bytes(&mut bytes);
-    bytes.iter().map(|b| format!("{b:02x}")).collect()
+    hash(&bytes)
 }
 
 /// SHA-256 hash a raw token, returning a 64-char hex string.
 #[must_use]
 pub fn hash_token(raw_token: &str) -> String {
-    let hash = Sha256::digest(raw_token.as_bytes());
-    hash.iter().map(|b| format!("{b:02x}")).collect()
+    let sha_hash = Sha256::digest(raw_token.as_bytes());
+    hash(&sha_hash)
+}
+
+fn hash(data: &[u8]) -> String {
+    data.iter().fold(String::new(), |mut s, b| {
+        let _ = write!(s, "{b:02x}");
+        s
+    })
 }
 
 // Add a function to verify token

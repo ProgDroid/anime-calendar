@@ -10,7 +10,7 @@ Anime Calendar is a web app for tracking anime series across personal calendars 
 - Backend build: `AWS_LC_SYS_PREBUILT_NASM=1 cargo build` (Windows requires nasm for aws-lc-sys)
 - Backend test: `cargo test` or `cargo test --package server`
 - Backend code quality checks: `cargo clippy --package server --all-targets -- -W clippy::all -W clippy::pedantic -W clippy::nursery -A clippy::missing_docs_in_private_items -A clippy::separated_literal_suffix -A clippy::implicit_return -A clippy::print_stderr -A clippy::exhaustive_enums -A clippy::exhaustive_structs -A clippy::single_char_lifetime_names -A clippy::missing_inline_in_public_items -A clippy::self_named_module_files -A clippy::wildcard_enum_match_arm -A clippy::pattern_type_mismatch -A clippy::std-instead-of-core`
-- Automatic clippy issue fixes: `cargo clippy --fix --allow-dirty`
+- Automatic clippy issue fixes: `cargo clippy --fix --allow-dirty --workspace --all-targets -- -W clippy::all -W clippy::pedantic -W clippy::nursery -A clippy::missing_docs_in_private_items -A clippy::separated_literal_suffix -A clippy::implicit_return -A clippy::print_stderr -A clippy::exhaustive_enums -A clippy::exhaustive_structs -A clippy::single_char_lifetime_names -A clippy::missing_inline_in_public_items -A clippy::self_named_module_files -A clippy::wildcard_enum_match_arm -A clippy::pattern_type_mismatch -A clippy::std-instead-of-core`
 - Frontend dev: `cd frontend && npm run dev`
 - Frontend test: `cd frontend && npm run test:unit`
 - sqlx offline cache: `DATABASE_URL=... cargo sqlx prepare --workspace` (commit .sqlx/ after)

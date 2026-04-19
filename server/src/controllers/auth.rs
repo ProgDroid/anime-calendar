@@ -141,48 +141,45 @@ pub async fn login(
         return Error::Unauthorised.error_response();
     };
 
-    match user.password_hash {
-        Some(hash) => {
-            if validate_password(credentials.password.expose_secret(), &hash) {
-                // Block login if email has not been verified yet.
-                if user.email_verified_at.is_none() {
-                    record(OUTCOME_FAILED);
-                    return Error::EmailNotVerified.error_response();
-                }
+    if let Some(hash) = user.password_hash {
+        if validate_password(credentials.password.expose_secret(), &hash) {
+            // Block login if email has not been verified yet.
+            if user.email_verified_at.is_none() {
+                record(OUTCOME_FAILED);
+                return Error::EmailNotVerified.error_response();
+            }
 
-                let token = match generate_token(&user.id, jwt_secret.expose_secret()) {
-                    Ok(token) => token,
-                    Err(e) => {
-                        record(OUTCOME_FAILED);
-                        return e.error_response();
-                    }
-                };
-
-                let raw_refresh = generate_raw_token();
-                let refresh_hash = hash_refresh_token(&raw_refresh);
-                if let Err(e) = refresh_mapper.replace_token(user.id, &refresh_hash).await {
+            let token = match generate_token(&user.id, jwt_secret.expose_secret()) {
+                Ok(token) => token,
+                Err(e) => {
                     record(OUTCOME_FAILED);
                     return e.error_response();
                 }
+            };
 
-                let auth_cookie = build_auth_cookie(token, &cookie_settings);
-                let refresh_cookie = build_refresh_cookie(raw_refresh, &cookie_settings);
-                record(OUTCOME_OK);
-                HttpResponse::Ok()
-                    .cookie(auth_cookie)
-                    .cookie(refresh_cookie)
-                    .json(AuthResponse {
-                        username: user.username,
-                    })
-            } else {
+            let raw_refresh = generate_raw_token();
+            let refresh_hash = hash_refresh_token(&raw_refresh);
+            if let Err(e) = refresh_mapper.replace_token(user.id, &refresh_hash).await {
                 record(OUTCOME_FAILED);
-                Error::Unauthorised.error_response()
+                return e.error_response();
             }
-        }
-        None => {
+
+            let auth_cookie = build_auth_cookie(token, &cookie_settings);
+            let refresh_cookie = build_refresh_cookie(raw_refresh, &cookie_settings);
+            record(OUTCOME_OK);
+            HttpResponse::Ok()
+                .cookie(auth_cookie)
+                .cookie(refresh_cookie)
+                .json(AuthResponse {
+                    username: user.username,
+                })
+        } else {
             record(OUTCOME_FAILED);
             Error::Unauthorised.error_response()
         }
+    } else {
+        record(OUTCOME_FAILED);
+        Error::Unauthorised.error_response()
     }
 }
 
@@ -644,8 +641,7 @@ mod integration_tests {
             .headers()
             .get("Set-Cookie")
             .and_then(|v| v.to_str().ok())
-            .map(|s| s.contains("auth_token="))
-            .unwrap_or(false);
+            .is_some_and(|s| s.contains("auth_token="));
         assert!(
             !has_auth_cookie,
             "register must not issue auth cookie before verification"

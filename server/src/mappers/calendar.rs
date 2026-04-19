@@ -502,8 +502,8 @@ mod tests {
     #[tokio::test]
     async fn insert_calendar_returns_calendar_with_43_char_token() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        let cal = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        let cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         assert!(cal.id > 0);
@@ -516,12 +516,12 @@ mod tests {
     #[tokio::test]
     async fn get_calendar_by_id_finds_inserted() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         let fetched =
-            CalendarMapper::get_calendar_by_id_with(&mut *tx, inserted.id, user_id)
+            CalendarMapper::get_calendar_by_id_with(&mut tx, inserted.id, user_id)
                 .await
                 .unwrap();
         assert_eq!(fetched.id, inserted.id);
@@ -532,12 +532,12 @@ mod tests {
     #[tokio::test]
     async fn get_calendar_by_id_wrong_user_returns_error() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         assert!(
-            CalendarMapper::get_calendar_by_id_with(&mut *tx, inserted.id, i32::MAX)
+            CalendarMapper::get_calendar_by_id_with(&mut tx, inserted.id, i32::MAX)
                 .await
                 .is_err()
         );
@@ -547,12 +547,12 @@ mod tests {
     #[tokio::test]
     async fn get_calendar_by_token_finds_inserted() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         let fetched =
-            CalendarMapper::get_calendar_by_token_with(&mut *tx, &inserted.subscription_token)
+            CalendarMapper::get_calendar_by_token_with(&mut tx, &inserted.subscription_token)
                 .await
                 .unwrap();
         assert_eq!(fetched.id, inserted.id);
@@ -562,8 +562,8 @@ mod tests {
     #[tokio::test]
     async fn update_calendar_changes_name_and_language() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         let to_update = Calendar {
@@ -573,7 +573,7 @@ mod tests {
             item_ids: vec![],
             ..inserted.clone()
         };
-        let updated = CalendarMapper::update_calendar_with(&mut *tx, to_update)
+        let updated = CalendarMapper::update_calendar_with(&mut tx, to_update)
             .await
             .unwrap();
         assert_eq!(updated.name, "Renamed");
@@ -584,14 +584,14 @@ mod tests {
     #[tokio::test]
     async fn save_calendar_with_item_ids_round_trips() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
+        let user_id = create_test_user(&mut tx).await;
         let cal = Calendar {
             item_ids: vec![101, 202, 303],
             ..new_calendar(user_id)
         };
-        let saved = CalendarMapper::save_calendar_with(&mut *tx, cal).await.unwrap();
+        let saved = CalendarMapper::save_calendar_with(&mut tx, cal).await.unwrap();
         let fetched =
-            CalendarMapper::get_calendar_by_id_with(&mut *tx, saved.id, user_id)
+            CalendarMapper::get_calendar_by_id_with(&mut tx, saved.id, user_id)
                 .await
                 .unwrap();
         let mut ids = fetched.item_ids;
@@ -603,20 +603,20 @@ mod tests {
     #[tokio::test]
     async fn delete_calendar_soft_deletes_so_lookup_fails() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
-        CalendarMapper::delete_calendar_with(&mut *tx, inserted.id, user_id)
+        CalendarMapper::delete_calendar_with(&mut tx, inserted.id, user_id)
             .await
             .unwrap();
         assert!(
-            CalendarMapper::get_calendar_by_id_with(&mut *tx, inserted.id, user_id)
+            CalendarMapper::get_calendar_by_id_with(&mut tx, inserted.id, user_id)
                 .await
                 .is_err()
         );
         assert!(
-            CalendarMapper::get_calendar_by_token_with(&mut *tx, &inserted.subscription_token)
+            CalendarMapper::get_calendar_by_token_with(&mut tx, &inserted.subscription_token)
                 .await
                 .is_err()
         );
@@ -626,12 +626,12 @@ mod tests {
     #[tokio::test]
     async fn delete_calendar_returns_subscription_token() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         let token =
-            CalendarMapper::delete_calendar_with(&mut *tx, inserted.id, user_id)
+            CalendarMapper::delete_calendar_with(&mut tx, inserted.id, user_id)
                 .await
                 .unwrap();
         assert_eq!(token, inserted.subscription_token);
@@ -641,13 +641,13 @@ mod tests {
     #[tokio::test]
     async fn delete_calendar_preserves_calendar_items_as_audit_trail() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
+        let user_id = create_test_user(&mut tx).await;
         let cal = Calendar {
             item_ids: vec![42, 43],
             ..new_calendar(user_id)
         };
-        let inserted = CalendarMapper::save_calendar_with(&mut *tx, cal).await.unwrap();
-        CalendarMapper::delete_calendar_with(&mut *tx, inserted.id, user_id)
+        let inserted = CalendarMapper::save_calendar_with(&mut tx, cal).await.unwrap();
+        CalendarMapper::delete_calendar_with(&mut tx, inserted.id, user_id)
             .await
             .unwrap();
         let count: i64 =
@@ -666,12 +666,12 @@ mod tests {
     #[tokio::test]
     async fn delete_calendar_wrong_user_returns_not_found() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         assert!(
-            CalendarMapper::delete_calendar_with(&mut *tx, inserted.id, i32::MAX)
+            CalendarMapper::delete_calendar_with(&mut tx, inserted.id, i32::MAX)
                 .await
                 .is_err()
         );
@@ -681,12 +681,12 @@ mod tests {
     #[tokio::test]
     async fn get_calendars_paginated_returns_all_active() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         CalendarMapper::insert_calendar_with(
-            &mut *tx,
+            &mut tx,
             Calendar {
                 name: "Second".to_string(),
                 ..new_calendar(user_id)
@@ -695,7 +695,7 @@ mod tests {
         .await
         .unwrap();
         let (cals, total) =
-            CalendarMapper::get_calendars_by_user_paginated_with(&mut *tx, user_id, 1, 10)
+            CalendarMapper::get_calendars_by_user_paginated_with(&mut tx, user_id, 1, 10)
                 .await
                 .unwrap();
         assert_eq!(total, 2);
@@ -706,15 +706,15 @@ mod tests {
     #[tokio::test]
     async fn get_calendars_paginated_excludes_deleted() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let user_id = create_test_user(&mut *tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
-        CalendarMapper::delete_calendar_with(&mut *tx, inserted.id, user_id)
+        CalendarMapper::delete_calendar_with(&mut tx, inserted.id, user_id)
             .await
             .unwrap();
         let (cals, total) =
-            CalendarMapper::get_calendars_by_user_paginated_with(&mut *tx, user_id, 1, 10)
+            CalendarMapper::get_calendars_by_user_paginated_with(&mut tx, user_id, 1, 10)
                 .await
                 .unwrap();
         assert_eq!(total, 0);

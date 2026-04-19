@@ -1,5 +1,7 @@
 use crate::config::server::{CookieSettings, JwtSecret};
-use crate::controllers::auth::{build_auth_cookie, build_refresh_cookie, generate_raw_token, hash_refresh_token};
+use crate::controllers::auth::{
+    build_auth_cookie, build_refresh_cookie, generate_raw_token, hash_refresh_token,
+};
 use crate::error::Error;
 use crate::mappers::refresh_token::RefreshTokenMapper;
 use crate::services::auth::generate_token;
@@ -16,6 +18,7 @@ use actix_web::{post, web, HttpRequest, HttpResponse, ResponseError};
     )
 )]
 #[post("/auth/refresh")]
+#[allow(clippy::future_not_send)]
 pub async fn refresh(
     req: HttpRequest,
     refresh_mapper: web::Data<RefreshTokenMapper>,
@@ -60,9 +63,9 @@ pub async fn refresh(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mappers::refresh_token::RefreshTokenMapper;
     use crate::config::server::CookieSettings;
     use crate::controllers::auth::hash_refresh_token;
+    use crate::mappers::refresh_token::RefreshTokenMapper;
     use actix_web::{http::StatusCode, test, web, App};
     use secrecy::SecretString;
 
@@ -143,9 +146,7 @@ mod tests {
         )
         .await;
 
-        let req = test::TestRequest::post()
-            .uri("/auth/refresh")
-            .to_request();
+        let req = test::TestRequest::post().uri("/auth/refresh").to_request();
         assert_eq!(
             test::call_service(&app, req).await.status(),
             StatusCode::UNAUTHORIZED
@@ -163,7 +164,11 @@ mod tests {
         let row = mapper.find_valid_token(&h).await.unwrap();
         let n: u64 = rand::random();
         mapper
-            .rotate_token(row.id, row.user_id, &hash_refresh_token(&format!("new_token_{n}")))
+            .rotate_token(
+                row.id,
+                row.user_id,
+                &hash_refresh_token(&format!("new_token_{n}")),
+            )
             .await
             .unwrap();
 
