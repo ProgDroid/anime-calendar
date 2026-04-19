@@ -37,15 +37,16 @@ impl EmailVerificationMapper {
     /// # Errors
     /// Rolls back and propagates the error if either query fails.
     pub async fn replace_token(&self, user_id: i32, token_hash: &str) -> ServerResult<()> {
-        let mut tx = self.db.pool.begin().await?;
-
-        if let Err(e) = Self::replace_token_with(&mut *tx, user_id, token_hash).await {
-            tx.rollback().await?;
-            return Err(e);
-        }
-
-        tx.commit().await?;
-        Ok(())
+        crate::metrics::db::timed("email_verification.replace_token", async {
+            let mut tx = self.db.pool.begin().await?;
+            if let Err(e) = Self::replace_token_with(&mut *tx, user_id, token_hash).await {
+                tx.rollback().await?;
+                return Err(e);
+            }
+            tx.commit().await?;
+            Ok(())
+        })
+        .await
     }
 
     pub(crate) async fn replace_token_with(
@@ -80,7 +81,10 @@ impl EmailVerificationMapper {
         &self,
         token_hash: &str,
     ) -> ServerResult<EmailVerificationToken> {
-        Self::find_valid_token_with(&mut *self.db.pool.acquire().await?, token_hash).await
+        crate::metrics::db::timed("email_verification.find_valid_token", async {
+            Self::find_valid_token_with(&mut *self.db.pool.acquire().await?, token_hash).await
+        })
+        .await
     }
 
     pub(crate) async fn find_valid_token_with(
@@ -108,15 +112,16 @@ impl EmailVerificationMapper {
     /// # Errors
     /// Rolls back and propagates the error if either query fails.
     pub async fn consume_and_verify(&self, token_id: i32, user_id: i32) -> ServerResult<()> {
-        let mut tx = self.db.pool.begin().await?;
-
-        if let Err(e) = Self::consume_and_verify_with(&mut *tx, token_id, user_id).await {
-            tx.rollback().await?;
-            return Err(e);
-        }
-
-        tx.commit().await?;
-        Ok(())
+        crate::metrics::db::timed("email_verification.consume_and_verify", async {
+            let mut tx = self.db.pool.begin().await?;
+            if let Err(e) = Self::consume_and_verify_with(&mut *tx, token_id, user_id).await {
+                tx.rollback().await?;
+                return Err(e);
+            }
+            tx.commit().await?;
+            Ok(())
+        })
+        .await
     }
 
     pub(crate) async fn consume_and_verify_with(

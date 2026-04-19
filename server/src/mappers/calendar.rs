@@ -42,7 +42,10 @@ impl CalendarMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn get_calendar_by_id(&self, id: i32, user_id: i32) -> ServerResult<Calendar> {
-        Self::get_calendar_by_id_with(&mut *self.db.pool.acquire().await?, id, user_id).await
+        crate::metrics::db::timed("calendar.get_by_id", async {
+            Self::get_calendar_by_id_with(&mut *self.db.pool.acquire().await?, id, user_id).await
+        })
+        .await
     }
 
     pub(crate) async fn get_calendar_by_id_with(
@@ -91,7 +94,10 @@ impl CalendarMapper {
     /// # Errors
     /// Returns an error if the query fails or the token is not found
     pub async fn get_calendar_by_token(&self, token: &str) -> ServerResult<Calendar> {
-        Self::get_calendar_by_token_with(&mut *self.db.pool.acquire().await?, token).await
+        crate::metrics::db::timed("calendar.get_by_token", async {
+            Self::get_calendar_by_token_with(&mut *self.db.pool.acquire().await?, token).await
+        })
+        .await
     }
 
     pub(crate) async fn get_calendar_by_token_with(
@@ -144,12 +150,15 @@ impl CalendarMapper {
         page: usize,
         page_size: usize,
     ) -> ServerResult<(Vec<Calendar>, usize)> {
-        Self::get_calendars_by_user_paginated_with(
-            &mut *self.db.pool.acquire().await?,
-            user_id,
-            page,
-            page_size,
-        )
+        crate::metrics::db::timed("calendar.list_paginated", async {
+            Self::get_calendars_by_user_paginated_with(
+                &mut *self.db.pool.acquire().await?,
+                user_id,
+                page,
+                page_size,
+            )
+            .await
+        })
         .await
     }
 
@@ -218,58 +227,64 @@ impl CalendarMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn insert_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
-        let token = Self::generate_subscription_token();
-        let inserted_calendar = sqlx::query!(
-            "INSERT INTO calendars (name, language, user_id, subscription_token) VALUES ($1, $2, $3, $4) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
-            calendar.name,
-            calendar.language as Language,
-            calendar.user_id,
-            token,
-        )
-        .fetch_one(&self.db.pool)
-        .await?;
-
-        self.update_calendar_items(inserted_calendar.id, calendar.item_ids.clone())
+        crate::metrics::db::timed("calendar.insert", async {
+            let token = Self::generate_subscription_token();
+            let inserted_calendar = sqlx::query!(
+                "INSERT INTO calendars (name, language, user_id, subscription_token) VALUES ($1, $2, $3, $4) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
+                calendar.name,
+                calendar.language as Language,
+                calendar.user_id,
+                token,
+            )
+            .fetch_one(&self.db.pool)
             .await?;
 
-        Ok(Calendar {
-            id: inserted_calendar.id,
-            name: inserted_calendar.name,
-            item_ids: calendar.item_ids,
-            language: inserted_calendar.language,
-            subscription_token: inserted_calendar.subscription_token,
-            user_id: inserted_calendar.user_id,
-            created_at: inserted_calendar.created_at,
-            updated_at: inserted_calendar.updated_at,
+            self.update_calendar_items(inserted_calendar.id, calendar.item_ids.clone())
+                .await?;
+
+            Ok(Calendar {
+                id: inserted_calendar.id,
+                name: inserted_calendar.name,
+                item_ids: calendar.item_ids,
+                language: inserted_calendar.language,
+                subscription_token: inserted_calendar.subscription_token,
+                user_id: inserted_calendar.user_id,
+                created_at: inserted_calendar.created_at,
+                updated_at: inserted_calendar.updated_at,
+            })
         })
+        .await
     }
 
     /// # Errors
     /// Returns an error if the query fails.
     pub async fn update_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
-        let updated_calendar = sqlx::query!(
-            "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 AND deleted_at IS NULL RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
-            calendar.name,
-            calendar.language as Language,
-            calendar.id,
-            calendar.user_id,
-        )
-        .fetch_one(&self.db.pool)
-        .await?;
-
-        self.update_calendar_items(updated_calendar.id, calendar.item_ids.clone())
+        crate::metrics::db::timed("calendar.update", async {
+            let updated_calendar = sqlx::query!(
+                "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 AND deleted_at IS NULL RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
+                calendar.name,
+                calendar.language as Language,
+                calendar.id,
+                calendar.user_id,
+            )
+            .fetch_one(&self.db.pool)
             .await?;
 
-        Ok(Calendar {
-            id: updated_calendar.id,
-            name: updated_calendar.name,
-            item_ids: calendar.item_ids,
-            language: updated_calendar.language,
-            subscription_token: updated_calendar.subscription_token,
-            user_id: updated_calendar.user_id,
-            created_at: updated_calendar.created_at,
-            updated_at: updated_calendar.updated_at,
+            self.update_calendar_items(updated_calendar.id, calendar.item_ids.clone())
+                .await?;
+
+            Ok(Calendar {
+                id: updated_calendar.id,
+                name: updated_calendar.name,
+                item_ids: calendar.item_ids,
+                language: updated_calendar.language,
+                subscription_token: updated_calendar.subscription_token,
+                user_id: updated_calendar.user_id,
+                created_at: updated_calendar.created_at,
+                updated_at: updated_calendar.updated_at,
+            })
         })
+        .await
     }
 
     async fn update_calendar_items(
@@ -323,7 +338,10 @@ impl CalendarMapper {
     /// Returns `Error::NotFound` if the calendar does not exist, is already deleted,
     /// or does not belong to `user_id`.
     pub async fn delete_calendar(&self, id: i32, user_id: i32) -> ServerResult<String> {
-        Self::delete_calendar_with(&mut *self.db.pool.acquire().await?, id, user_id).await
+        crate::metrics::db::timed("calendar.delete", async {
+            Self::delete_calendar_with(&mut *self.db.pool.acquire().await?, id, user_id).await
+        })
+        .await
     }
 
     pub(crate) async fn delete_calendar_with(

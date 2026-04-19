@@ -38,15 +38,16 @@ impl RefreshTokenMapper {
     /// # Errors
     /// Rolls back and propagates the error if either query fails.
     pub async fn replace_token(&self, user_id: i32, token_hash: &str) -> ServerResult<()> {
-        let mut tx = self.db.pool.begin().await?;
-
-        if let Err(e) = Self::replace_token_with(&mut *tx, user_id, token_hash).await {
-            tx.rollback().await?;
-            return Err(e);
-        }
-
-        tx.commit().await?;
-        Ok(())
+        crate::metrics::db::timed("refresh_token.replace_token", async {
+            let mut tx = self.db.pool.begin().await?;
+            if let Err(e) = Self::replace_token_with(&mut *tx, user_id, token_hash).await {
+                tx.rollback().await?;
+                return Err(e);
+            }
+            tx.commit().await?;
+            Ok(())
+        })
+        .await
     }
 
     pub(crate) async fn replace_token_with(
@@ -79,7 +80,10 @@ impl RefreshTokenMapper {
     /// # Errors
     /// Returns `Error::Unauthorised` if no valid token matches.
     pub async fn find_valid_token(&self, token_hash: &str) -> ServerResult<RefreshToken> {
-        Self::find_valid_token_with(&mut *self.db.pool.acquire().await?, token_hash).await
+        crate::metrics::db::timed("refresh_token.find_valid_token", async {
+            Self::find_valid_token_with(&mut *self.db.pool.acquire().await?, token_hash).await
+        })
+        .await
     }
 
     pub(crate) async fn find_valid_token_with(
@@ -115,17 +119,18 @@ impl RefreshTokenMapper {
         user_id: i32,
         new_token_hash: &str,
     ) -> ServerResult<()> {
-        let mut tx = self.db.pool.begin().await?;
-
-        if let Err(e) =
-            Self::rotate_token_with(&mut *tx, old_token_id, user_id, new_token_hash).await
-        {
-            tx.rollback().await?;
-            return Err(e);
-        }
-
-        tx.commit().await?;
-        Ok(())
+        crate::metrics::db::timed("refresh_token.rotate_token", async {
+            let mut tx = self.db.pool.begin().await?;
+            if let Err(e) =
+                Self::rotate_token_with(&mut *tx, old_token_id, user_id, new_token_hash).await
+            {
+                tx.rollback().await?;
+                return Err(e);
+            }
+            tx.commit().await?;
+            Ok(())
+        })
+        .await
     }
 
     pub(crate) async fn rotate_token_with(
@@ -158,7 +163,10 @@ impl RefreshTokenMapper {
     /// # Errors
     /// Returns an error if the query fails.
     pub async fn invalidate_all_for_user(&self, user_id: i32) -> ServerResult<()> {
-        Self::invalidate_all_for_user_with(&mut *self.db.pool.acquire().await?, user_id).await
+        crate::metrics::db::timed("refresh_token.invalidate_all", async {
+            Self::invalidate_all_for_user_with(&mut *self.db.pool.acquire().await?, user_id).await
+        })
+        .await
     }
 
     pub(crate) async fn invalidate_all_for_user_with(

@@ -34,7 +34,10 @@ impl UserSettingsMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn get_user_settings(&self, user_id: i32) -> ServerResult<UserSettings> {
-        Self::get_user_settings_with(&mut *self.db.pool.acquire().await?, user_id).await
+        crate::metrics::db::timed("user_settings.get", async {
+            Self::get_user_settings_with(&mut *self.db.pool.acquire().await?, user_id).await
+        })
+        .await
     }
 
     pub(crate) async fn get_user_settings_with(
@@ -59,8 +62,15 @@ impl UserSettingsMapper {
         user_id: i32,
         settings: &UserSettings,
     ) -> ServerResult<()> {
-        Self::update_user_settings_with(&mut *self.db.pool.acquire().await?, user_id, settings)
+        crate::metrics::db::timed("user_settings.update", async {
+            Self::update_user_settings_with(
+                &mut *self.db.pool.acquire().await?,
+                user_id,
+                settings,
+            )
             .await
+        })
+        .await
     }
 
     pub(crate) async fn update_user_settings_with(
@@ -85,7 +95,10 @@ impl UserSettingsMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn delete_user_settings(&self, user_id: i32) -> ServerResult<()> {
-        Self::delete_user_settings_with(&mut *self.db.pool.acquire().await?, user_id).await
+        crate::metrics::db::timed("user_settings.delete", async {
+            Self::delete_user_settings_with(&mut *self.db.pool.acquire().await?, user_id).await
+        })
+        .await
     }
 
     pub(crate) async fn delete_user_settings_with(

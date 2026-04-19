@@ -20,7 +20,10 @@ impl UserMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn get_user_by_email(&self, email: &str) -> ServerResult<User> {
-        Self::get_user_by_email_with(&mut *self.db.pool.acquire().await?, email).await
+        crate::metrics::db::timed("user.get_by_email", async {
+            Self::get_user_by_email_with(&mut *self.db.pool.acquire().await?, email).await
+        })
+        .await
     }
 
     pub(crate) async fn get_user_by_email_with(
@@ -53,8 +56,16 @@ impl UserMapper {
         email: &str,
         password_hash: Option<&str>,
     ) -> ServerResult<User> {
-        Self::create_user_with(&mut *self.db.pool.acquire().await?, username, email, password_hash)
+        crate::metrics::db::timed("user.create", async {
+            Self::create_user_with(
+                &mut *self.db.pool.acquire().await?,
+                username,
+                email,
+                password_hash,
+            )
             .await
+        })
+        .await
     }
 
     pub(crate) async fn create_user_with(
@@ -86,7 +97,10 @@ impl UserMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn get_user_by_id(&self, id: i32) -> ServerResult<User> {
-        Self::get_user_by_id_with(&mut *self.db.pool.acquire().await?, id).await
+        crate::metrics::db::timed("user.get_by_id", async {
+            Self::get_user_by_id_with(&mut *self.db.pool.acquire().await?, id).await
+        })
+        .await
     }
 
     pub(crate) async fn get_user_by_id_with(
@@ -114,7 +128,10 @@ impl UserMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn update_user(&self, id: i32, username: &str, email: &str) -> ServerResult<User> {
-        Self::update_user_with(&mut *self.db.pool.acquire().await?, id, username, email).await
+        crate::metrics::db::timed("user.update", async {
+            Self::update_user_with(&mut *self.db.pool.acquire().await?, id, username, email).await
+        })
+        .await
     }
 
     pub(crate) async fn update_user_with(
@@ -146,8 +163,15 @@ impl UserMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn update_user_password(&self, id: i32, password_hash: &str) -> ServerResult<()> {
-        Self::update_user_password_with(&mut *self.db.pool.acquire().await?, id, password_hash)
+        crate::metrics::db::timed("user.update_password", async {
+            Self::update_user_password_with(
+                &mut *self.db.pool.acquire().await?,
+                id,
+                password_hash,
+            )
             .await
+        })
+        .await
     }
 
     pub(crate) async fn update_user_password_with(
@@ -171,7 +195,10 @@ impl UserMapper {
     /// # Errors
     /// Returns an error if the query fails.
     pub async fn mark_email_verified(&self, user_id: i32) -> ServerResult<()> {
-        Self::mark_email_verified_with(&mut *self.db.pool.acquire().await?, user_id).await
+        crate::metrics::db::timed("user.mark_email_verified", async {
+            Self::mark_email_verified_with(&mut *self.db.pool.acquire().await?, user_id).await
+        })
+        .await
     }
 
     pub(crate) async fn mark_email_verified_with(
@@ -193,15 +220,16 @@ impl UserMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn delete_user(&self, id: i32) -> ServerResult<()> {
-        let mut tx = self.db.pool.begin().await?;
-
-        if let Err(e) = Self::delete_user_with(&mut *tx, id).await {
-            tx.rollback().await?;
-            return Err(e);
-        }
-
-        tx.commit().await?;
-        Ok(())
+        crate::metrics::db::timed("user.delete", async {
+            let mut tx = self.db.pool.begin().await?;
+            if let Err(e) = Self::delete_user_with(&mut *tx, id).await {
+                tx.rollback().await?;
+                return Err(e);
+            }
+            tx.commit().await?;
+            Ok(())
+        })
+        .await
     }
 
     pub(crate) async fn delete_user_with(

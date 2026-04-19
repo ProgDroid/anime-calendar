@@ -37,7 +37,11 @@ impl PasswordResetMapper {
     /// # Errors
     /// Returns an error if the query fails.
     pub async fn invalidate_previous_tokens(&self, user_id: i32) -> ServerResult<()> {
-        Self::invalidate_previous_tokens_with(&mut *self.db.pool.acquire().await?, user_id).await
+        crate::metrics::db::timed("password_reset.invalidate_tokens", async {
+            Self::invalidate_previous_tokens_with(&mut *self.db.pool.acquire().await?, user_id)
+                .await
+        })
+        .await
     }
 
     pub(crate) async fn invalidate_previous_tokens_with(
@@ -58,7 +62,10 @@ impl PasswordResetMapper {
     /// # Errors
     /// Returns an error if the query fails.
     pub async fn create_token(&self, user_id: i32, token_hash: &str) -> ServerResult<()> {
-        Self::create_token_with(&mut *self.db.pool.acquire().await?, user_id, token_hash).await
+        crate::metrics::db::timed("password_reset.create_token", async {
+            Self::create_token_with(&mut *self.db.pool.acquire().await?, user_id, token_hash).await
+        })
+        .await
     }
 
     pub(crate) async fn create_token_with(
@@ -84,15 +91,16 @@ impl PasswordResetMapper {
     /// # Errors
     /// Rolls back and propagates the error if either query fails.
     pub async fn replace_token(&self, user_id: i32, token_hash: &str) -> ServerResult<()> {
-        let mut tx = self.db.pool.begin().await?;
-
-        if let Err(e) = Self::replace_token_with(&mut *tx, user_id, token_hash).await {
-            tx.rollback().await?;
-            return Err(e);
-        }
-
-        tx.commit().await?;
-        Ok(())
+        crate::metrics::db::timed("password_reset.replace_token", async {
+            let mut tx = self.db.pool.begin().await?;
+            if let Err(e) = Self::replace_token_with(&mut *tx, user_id, token_hash).await {
+                tx.rollback().await?;
+                return Err(e);
+            }
+            tx.commit().await?;
+            Ok(())
+        })
+        .await
     }
 
     pub(crate) async fn replace_token_with(
@@ -124,7 +132,10 @@ impl PasswordResetMapper {
     /// # Errors
     /// Returns `Error::Database` (row-not-found) if no valid token matches.
     pub async fn find_valid_token(&self, token_hash: &str) -> ServerResult<PasswordResetToken> {
-        Self::find_valid_token_with(&mut *self.db.pool.acquire().await?, token_hash).await
+        crate::metrics::db::timed("password_reset.find_valid_token", async {
+            Self::find_valid_token_with(&mut *self.db.pool.acquire().await?, token_hash).await
+        })
+        .await
     }
 
     pub(crate) async fn find_valid_token_with(
@@ -159,17 +170,18 @@ impl PasswordResetMapper {
         user_id: i32,
         password_hash: &str,
     ) -> ServerResult<()> {
-        let mut tx = self.db.pool.begin().await?;
-
-        if let Err(e) =
-            Self::complete_reset_with(&mut *tx, token_id, user_id, password_hash).await
-        {
-            tx.rollback().await?;
-            return Err(e);
-        }
-
-        tx.commit().await?;
-        Ok(())
+        crate::metrics::db::timed("password_reset.complete_reset", async {
+            let mut tx = self.db.pool.begin().await?;
+            if let Err(e) =
+                Self::complete_reset_with(&mut *tx, token_id, user_id, password_hash).await
+            {
+                tx.rollback().await?;
+                return Err(e);
+            }
+            tx.commit().await?;
+            Ok(())
+        })
+        .await
     }
 
     pub(crate) async fn complete_reset_with(
