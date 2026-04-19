@@ -16,8 +16,7 @@ use crate::{
     cache::Cache,
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig},
     controllers::{
-        auth, cache_metrics, calendar, email_verification, item, items, oauth, password_reset,
-        refresh, user,
+        auth, calendar, email_verification, item, items, oauth, password_reset, refresh, user,
     },
     error::Error,
     mappers::{
@@ -134,12 +133,6 @@ pub fn start(
             .service(user::delete_user)
             .service(user::update_password)
             .service(oauth::google_oauth)
-            .service(cache_metrics::get_cache_metrics)
-            .service(cache_metrics::get_cache_performance)
-            .service(cache_metrics::get_cache_health)
-            .service(cache_metrics::reset_metrics)
-            .service(cache_metrics::get_cache_stats)
-            .service(cache_metrics::flush_cache)
             .service(user::get_user_settings)
             .service(user::update_user_settings)
     })

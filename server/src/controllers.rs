@@ -1,5 +1,4 @@
 pub mod auth;
-pub mod cache_metrics;
 pub mod calendar;
 pub mod email_verification;
 pub mod item;
