@@ -80,13 +80,10 @@ where
 mod tests {
     use super::*;
     use actix_web::{test, web, App, HttpResponse};
-    use metrics_util::debugging::DebuggingRecorder;
 
     #[actix_web::test]
     async fn middleware_records_request_count_and_duration() {
-        let recorder = DebuggingRecorder::new();
-        let snapshotter = recorder.snapshotter();
-        let _ = recorder.install();
+        let snapshotter = crate::test_helpers::shared_snapshotter();
 
         let app = test::init_service(
             App::new()

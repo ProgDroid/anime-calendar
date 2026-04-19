@@ -24,6 +24,26 @@
 /// because the Actix test app injects mapper instances that acquire connections
 /// internally.  Use random usernames/emails in each test to avoid unique-key
 /// collisions when tests run in parallel.
+/// Returns a metrics snapshotter backed by the single global `DebuggingRecorder`.
+///
+/// Calling `install()` on a second recorder panics (or silently fails), so all
+/// metric tests must share the one recorder that is installed here via
+/// `OnceLock`. Tests only assert metric *presence*, not exact counts, so shared
+/// state across test cases is fine.
+#[cfg(test)]
+pub(crate) fn shared_snapshotter() -> metrics_util::debugging::Snapshotter {
+    use metrics_util::debugging::DebuggingRecorder;
+    use std::sync::OnceLock;
+    static S: OnceLock<metrics_util::debugging::Snapshotter> = OnceLock::new();
+    S.get_or_init(|| {
+        let recorder = DebuggingRecorder::new();
+        let snapshotter = recorder.snapshotter();
+        let _ = recorder.install();
+        snapshotter
+    })
+    .clone()
+}
+
 #[cfg(test)]
 pub(crate) async fn test_pool() -> sqlx::PgPool {
     let url = std::env::var("DATABASE_URL")

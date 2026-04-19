@@ -45,9 +45,18 @@ pub async fn verify_email(
     cookie_settings: web::Data<CookieSettings>,
     body: web::Json<VerifyEmailRequest>,
 ) -> HttpResponse {
+    use crate::metrics::names::{
+        EMAIL_VERIFICATIONS_CONFIRMED_TOTAL, LABEL_OUTCOME, OUTCOME_FAILED, OUTCOME_OK,
+    };
+    let record = |outcome: &'static str| {
+        metrics::counter!(EMAIL_VERIFICATIONS_CONFIRMED_TOTAL, LABEL_OUTCOME => outcome)
+            .increment(1);
+    };
+
     let token_hash = hash_token(&body.token);
 
     let Ok(token) = verification_mapper.find_valid_token(&token_hash).await else {
+        record(OUTCOME_FAILED);
         return Error::InvalidVerificationToken.error_response();
     };
 
@@ -56,20 +65,28 @@ pub async fn verify_email(
         .await
     {
         error!("{e}");
+        record(OUTCOME_FAILED);
         return e.error_response();
     }
 
     let user = match user_mapper.get_user_by_id(token.user_id).await {
         Ok(u) => u,
-        Err(e) => return e.error_response(),
+        Err(e) => {
+            record(OUTCOME_FAILED);
+            return e.error_response();
+        }
     };
 
     let jwt = match generate_token(&user.id, jwt_secret.expose_secret()) {
         Ok(t) => t,
-        Err(e) => return e.error_response(),
+        Err(e) => {
+            record(OUTCOME_FAILED);
+            return e.error_response();
+        }
     };
 
     let cookie = build_auth_cookie(jwt, &cookie_settings);
+    record(OUTCOME_OK);
     HttpResponse::Ok().cookie(cookie).json(AuthResponse {
         username: user.username,
     })
@@ -131,6 +148,10 @@ pub async fn resend_verification(
         return ok();
     }
 
+    metrics::counter!(
+        crate::metrics::names::EMAIL_VERIFICATIONS_SENT_TOTAL
+    )
+    .increment(1);
     ok()
 }
 

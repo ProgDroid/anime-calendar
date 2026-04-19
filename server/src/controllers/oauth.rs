@@ -39,6 +39,18 @@ pub async fn google_oauth(
     jwt_secret: web::Data<JwtSecret>,
     cookie_settings: web::Data<CookieSettings>,
 ) -> HttpResponse {
+    use crate::metrics::names::{
+        AUTH_OAUTH_ATTEMPTS_TOTAL, LABEL_OUTCOME, LABEL_PROVIDER, OUTCOME_FAILED, OUTCOME_OK,
+    };
+    let record = |outcome: &'static str| {
+        metrics::counter!(
+            AUTH_OAUTH_ATTEMPTS_TOTAL,
+            LABEL_PROVIDER => "google",
+            LABEL_OUTCOME => outcome,
+        )
+        .increment(1);
+    };
+
     match google_oauth.validate_id_token(&google_request.token).await {
         Ok(google_user) => {
             let user = match user_mapper.get_user_by_email(&google_user.email).await {
@@ -52,23 +64,31 @@ pub async fn google_oauth(
                             // Mark the email as verified — Google has already confirmed ownership.
                             if let Err(e) = user_mapper.mark_email_verified(user.id).await {
                                 error!("Failed to mark OAuth user {} as verified: {e}", user.id);
+                                record(OUTCOME_FAILED);
                                 return e.error_response();
                             }
                             user
                         }
-                        Err(e) => return e.error_response(),
+                        Err(e) => {
+                            record(OUTCOME_FAILED);
+                            return e.error_response();
+                        }
                     }
                 }
             };
 
             let token = match generate_token(&user.id, jwt_secret.expose_secret()) {
                 Ok(token) => token,
-                Err(e) => return e.error_response(),
+                Err(e) => {
+                    record(OUTCOME_FAILED);
+                    return e.error_response();
+                }
             };
 
             let raw_refresh = generate_raw_token();
             let refresh_hash = hash_refresh_token(&raw_refresh);
             if let Err(e) = refresh_mapper.replace_token(user.id, &refresh_hash).await {
+                record(OUTCOME_FAILED);
                 return e.error_response();
             }
 
@@ -80,6 +100,7 @@ pub async fn google_oauth(
                 avatar: google_user.avatar_url,
             };
 
+            record(OUTCOME_OK);
             HttpResponse::Ok()
                 .cookie(auth_cookie)
                 .cookie(refresh_cookie)
@@ -87,6 +108,7 @@ pub async fn google_oauth(
         }
         Err(e) => {
             error!("{e}");
+            record(OUTCOME_FAILED);
             e.error_response()
         }
     }

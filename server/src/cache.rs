@@ -479,29 +479,16 @@ mod tests {
     // Assertions only check for the *presence* of a metric name, not exact values,
     // so accumulated state from other tests does not cause false negatives.
 
-    fn shared_snapshotter() -> metrics_util::debugging::Snapshotter {
-        use metrics_util::debugging::DebuggingRecorder;
-        use std::sync::OnceLock;
-        static S: OnceLock<metrics_util::debugging::Snapshotter> = OnceLock::new();
-        S.get_or_init(|| {
-            let recorder = DebuggingRecorder::new();
-            let snapshotter = recorder.snapshotter();
-            let _ = recorder.install();
-            snapshotter
-        })
-        .clone()
-    }
-
     #[tokio::test]
     async fn get_on_hit_increments_hit_counter() {
-        let _ = shared_snapshotter(); // ensure recorder installed before ops
+        let _ = crate::test_helpers::shared_snapshotter(); // ensure recorder installed before ops
         let cache = Cache::for_tests().await;
         let key = k("metric_hit", "v");
         cache.set(&key, &1_u8, 300).await.unwrap();
         let _: Option<u8> = cache.get(&key).await.unwrap();
         cache.delete(&key).await.unwrap();
 
-        let snapshot = shared_snapshotter().snapshot().into_hashmap();
+        let snapshot = crate::test_helpers::shared_snapshotter().snapshot().into_hashmap();
         assert!(
             snapshot
                 .keys()
@@ -512,13 +499,13 @@ mod tests {
 
     #[tokio::test]
     async fn get_on_miss_increments_miss_counter() {
-        let _ = shared_snapshotter();
+        let _ = crate::test_helpers::shared_snapshotter();
         let cache = Cache::for_tests().await;
         let key = k("metric_miss", "v");
         cache.delete(&key).await.unwrap();
         let _: Option<u8> = cache.get(&key).await.unwrap();
 
-        let snapshot = shared_snapshotter().snapshot().into_hashmap();
+        let snapshot = crate::test_helpers::shared_snapshotter().snapshot().into_hashmap();
         assert!(
             snapshot
                 .keys()
@@ -529,13 +516,13 @@ mod tests {
 
     #[tokio::test]
     async fn set_emits_duration_histogram() {
-        let _ = shared_snapshotter();
+        let _ = crate::test_helpers::shared_snapshotter();
         let cache = Cache::for_tests().await;
         let key = k("metric_set_dur", "v");
         cache.set(&key, &1_u8, 300).await.unwrap();
         cache.delete(&key).await.unwrap();
 
-        let snapshot = shared_snapshotter().snapshot().into_hashmap();
+        let snapshot = crate::test_helpers::shared_snapshotter().snapshot().into_hashmap();
         assert!(
             snapshot.keys().any(|k| k.key().name()
                 == crate::metrics::names::CACHE_OPERATION_DURATION_SECONDS),

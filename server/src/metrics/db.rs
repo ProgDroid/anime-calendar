@@ -32,24 +32,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use metrics_util::debugging::Snapshotter;
-
-    fn shared_snapshotter() -> Snapshotter {
-        use metrics_util::debugging::DebuggingRecorder;
-        use std::sync::OnceLock;
-        static S: OnceLock<Snapshotter> = OnceLock::new();
-        S.get_or_init(|| {
-            let recorder = DebuggingRecorder::new();
-            let snapshotter = recorder.snapshotter();
-            let _ = recorder.install();
-            snapshotter
-        })
-        .clone()
-    }
-
     #[tokio::test]
     async fn timed_records_ok_outcome() {
-        let snapshotter = shared_snapshotter();
+        let snapshotter = crate::test_helpers::shared_snapshotter();
         let _: Result<u32, ()> = timed("test.ok", async { Ok(42) }).await;
         let snapshot = snapshotter.snapshot().into_hashmap();
         let ok_count = snapshot
@@ -64,7 +49,7 @@ mod tests {
 
     #[tokio::test]
     async fn timed_records_err_outcome() {
-        let snapshotter = shared_snapshotter();
+        let snapshotter = crate::test_helpers::shared_snapshotter();
         let _: Result<(), &'static str> = timed("test.err", async { Err("boom") }).await;
         let snapshot = snapshotter.snapshot().into_hashmap();
         let err_count = snapshot

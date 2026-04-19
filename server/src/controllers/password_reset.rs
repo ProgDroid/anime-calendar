@@ -85,6 +85,7 @@ pub async fn forgot_password(
         return e.error_response();
     }
 
+    metrics::counter!(crate::metrics::names::PASSWORD_RESETS_REQUESTED_TOTAL).increment(1);
     HttpResponse::Ok().json(MessageResponse {
         message: RESET_RESPONSE.into(),
     })
@@ -105,29 +106,45 @@ pub async fn reset_password(
     token_mapper: web::Data<PasswordResetMapper>,
     body: web::Json<ResetPasswordRequest>,
 ) -> HttpResponse {
+    use crate::metrics::names::{
+        LABEL_OUTCOME, OUTCOME_FAILED, OUTCOME_OK, PASSWORD_RESETS_COMPLETED_TOTAL,
+    };
+    let record = |outcome: &'static str| {
+        metrics::counter!(PASSWORD_RESETS_COMPLETED_TOTAL, LABEL_OUTCOME => outcome).increment(1);
+    };
+
     // Validate password before touching the DB.
     if body.new_password.len() > 128 || !validate_password_strength(&body.new_password) {
+        record(OUTCOME_FAILED);
         return Error::InvalidPassword.error_response();
     }
 
     let token_hash = hash_token(&body.token);
 
     let Ok(token) = token_mapper.find_valid_token(&token_hash).await else {
+        record(OUTCOME_FAILED);
         return Error::InvalidResetToken.error_response();
     };
 
     let new_hash = match hash_password(&body.new_password) {
         Ok(h) => h,
-        Err(e) => return e.error_response(),
+        Err(e) => {
+            record(OUTCOME_FAILED);
+            return e.error_response();
+        }
     };
 
     match token_mapper
         .complete_reset(token.id, token.user_id, &new_hash)
         .await
     {
-        Ok(()) => HttpResponse::Ok().finish(),
+        Ok(()) => {
+            record(OUTCOME_OK);
+            HttpResponse::Ok().finish()
+        }
         Err(e) => {
             error!("{e}");
+            record(OUTCOME_FAILED);
             e.error_response()
         }
     }

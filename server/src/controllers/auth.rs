@@ -129,7 +129,15 @@ pub async fn login(
     jwt_secret: web::Data<JwtSecret>,
     cookie_settings: web::Data<CookieSettings>,
 ) -> HttpResponse {
+    use crate::metrics::names::{
+        AUTH_LOGIN_ATTEMPTS_TOTAL, LABEL_OUTCOME, OUTCOME_FAILED, OUTCOME_OK,
+    };
+    let record = |outcome: &'static str| {
+        metrics::counter!(AUTH_LOGIN_ATTEMPTS_TOTAL, LABEL_OUTCOME => outcome).increment(1);
+    };
+
     let Ok(user) = db.get_user_by_email(&credentials.email).await else {
+        record(OUTCOME_FAILED);
         return Error::Unauthorised.error_response();
     };
 
@@ -138,22 +146,28 @@ pub async fn login(
             if validate_password(credentials.password.expose_secret(), &hash) {
                 // Block login if email has not been verified yet.
                 if user.email_verified_at.is_none() {
+                    record(OUTCOME_FAILED);
                     return Error::EmailNotVerified.error_response();
                 }
 
                 let token = match generate_token(&user.id, jwt_secret.expose_secret()) {
                     Ok(token) => token,
-                    Err(e) => return e.error_response(),
+                    Err(e) => {
+                        record(OUTCOME_FAILED);
+                        return e.error_response();
+                    }
                 };
 
                 let raw_refresh = generate_raw_token();
                 let refresh_hash = hash_refresh_token(&raw_refresh);
                 if let Err(e) = refresh_mapper.replace_token(user.id, &refresh_hash).await {
+                    record(OUTCOME_FAILED);
                     return e.error_response();
                 }
 
                 let auth_cookie = build_auth_cookie(token, &cookie_settings);
                 let refresh_cookie = build_refresh_cookie(raw_refresh, &cookie_settings);
+                record(OUTCOME_OK);
                 HttpResponse::Ok()
                     .cookie(auth_cookie)
                     .cookie(refresh_cookie)
@@ -161,10 +175,14 @@ pub async fn login(
                         username: user.username,
                     })
             } else {
+                record(OUTCOME_FAILED);
                 Error::Unauthorised.error_response()
             }
         }
-        None => Error::Unauthorised.error_response(),
+        None => {
+            record(OUTCOME_FAILED);
+            Error::Unauthorised.error_response()
+        }
     }
 }
 
@@ -194,30 +212,45 @@ pub async fn register(
     app_base_url: web::Data<AppBaseUrl>,
     user_data: web::Json<RegisterRequest>,
 ) -> HttpResponse {
+    use crate::metrics::names::{
+        AUTH_REGISTRATIONS_TOTAL, LABEL_OUTCOME, OUTCOME_FAILED, OUTCOME_OK,
+    };
+    let record = |outcome: &'static str| {
+        metrics::counter!(AUTH_REGISTRATIONS_TOTAL, LABEL_OUTCOME => outcome).increment(1);
+    };
+
     // Check if user already exists
     if (db.get_user_by_email(&user_data.email).await).is_ok() {
+        record(OUTCOME_FAILED);
         return Error::UserAlreadyExists.error_response();
     }
 
     if user_data.username.len() > 50 {
+        record(OUTCOME_FAILED);
         return Error::InvalidRequest.error_response();
     }
 
     if !is_valid_email(&user_data.email) {
+        record(OUTCOME_FAILED);
         return Error::InvalidRequest.error_response();
     }
 
     if user_data.password.expose_secret().len() > 128 {
+        record(OUTCOME_FAILED);
         return Error::InvalidRequest.error_response();
     }
 
     if !validate_password_strength(user_data.password.expose_secret()) {
+        record(OUTCOME_FAILED);
         return Error::InvalidPassword.error_response();
     }
 
     let hashed_password = match hash_password(user_data.password.expose_secret()) {
         Ok(h) => h,
-        Err(e) => return e.error_response(),
+        Err(e) => {
+            record(OUTCOME_FAILED);
+            return e.error_response();
+        }
     };
 
     let user = match db
@@ -229,7 +262,10 @@ pub async fn register(
         .await
     {
         Ok(u) => u,
-        Err(e) => return e.error_response(),
+        Err(e) => {
+            record(OUTCOME_FAILED);
+            return e.error_response();
+        }
     };
 
     let raw_token = generate_random_token();
@@ -249,6 +285,7 @@ pub async fn register(
                 user.id
             );
         }
+        record(OUTCOME_FAILED);
         return e.error_response();
     }
 
@@ -257,9 +294,11 @@ pub async fn register(
         .await
     {
         error!("{e}");
+        record(OUTCOME_FAILED);
         return e.error_response();
     }
 
+    record(OUTCOME_OK);
     HttpResponse::Ok().json(MessageResponse {
         message: "Verification email sent. Please check your inbox.".into(),
     })
