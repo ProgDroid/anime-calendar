@@ -52,27 +52,40 @@ impl Cache {
     where
         T: DeserializeOwned,
     {
+        use crate::metrics::names::*;
+        let start = std::time::Instant::now();
         let mut conn = self.connection.clone();
-        let value: Option<String> = redis::cmd("GET")
-            .arg(key)
-            .query_async(&mut conn)
-            .await?;
+        let result: RedisResult<Option<String>> =
+            redis::cmd("GET").arg(key).query_async(&mut conn).await;
 
-        match value {
-            Some(v) => Ok(serde_json::from_str(&v).ok()),
-            None => Ok(None),
+        metrics::histogram!(CACHE_OPERATION_DURATION_SECONDS, LABEL_OP => "get")
+            .record(start.elapsed().as_secs_f64());
+
+        match result? {
+            Some(v) => {
+                metrics::counter!(CACHE_HITS_TOTAL).increment(1);
+                Ok(serde_json::from_str(&v).ok())
+            }
+            None => {
+                metrics::counter!(CACHE_MISSES_TOTAL).increment(1);
+                Ok(None)
+            }
         }
     }
 
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn delete(&self, key: &str) -> RedisResult<()> {
-        let mut conn = self.connection.clone();
-        redis::cmd("DEL")
-            .arg(key)
-            .exec_async(&mut conn)
-            .await?;
-        Ok(())
+        use crate::metrics::names::*;
+        let start = std::time::Instant::now();
+        let result = async {
+            let mut conn = self.connection.clone();
+            redis::cmd("DEL").arg(key).exec_async(&mut conn).await
+        }
+        .await;
+        metrics::histogram!(CACHE_OPERATION_DURATION_SECONDS, LABEL_OP => "delete")
+            .record(start.elapsed().as_secs_f64());
+        result
     }
 
     /// # Errors
@@ -89,35 +102,48 @@ impl Cache {
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn get_keys(&self, pattern: &str) -> RedisResult<Vec<String>> {
-        let mut keys: Vec<String> = Vec::new();
-        let mut cursor: u64 = 0;
-        let mut conn = self.connection.clone();
-        loop {
-            let (next_cursor, batch): (u64, Vec<String>) = redis::cmd("SCAN")
-                .arg(cursor)
-                .arg("MATCH")
-                .arg(pattern)
-                .arg("COUNT")
-                .arg(100)
-                .query_async(&mut conn)
-                .await?;
-            keys.extend(batch);
-            cursor = next_cursor;
-            if cursor == 0 {
-                break;
+        use crate::metrics::names::*;
+        let start = std::time::Instant::now();
+        let result = async {
+            let mut keys: Vec<String> = Vec::new();
+            let mut cursor: u64 = 0;
+            let mut conn = self.connection.clone();
+            loop {
+                let (next_cursor, batch): (u64, Vec<String>) = redis::cmd("SCAN")
+                    .arg(cursor)
+                    .arg("MATCH")
+                    .arg(pattern)
+                    .arg("COUNT")
+                    .arg(100)
+                    .query_async(&mut conn)
+                    .await?;
+                keys.extend(batch);
+                cursor = next_cursor;
+                if cursor == 0 {
+                    break;
+                }
             }
+            RedisResult::Ok(keys)
         }
-        Ok(keys)
+        .await;
+        metrics::histogram!(CACHE_OPERATION_DURATION_SECONDS, LABEL_OP => "scan")
+            .record(start.elapsed().as_secs_f64());
+        result
     }
 
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn flush(&self) -> RedisResult<()> {
-        let mut conn = self.connection.clone();
-        redis::cmd("FLUSHALL")
-            .exec_async(&mut conn)
-            .await?;
-        Ok(())
+        use crate::metrics::names::*;
+        let start = std::time::Instant::now();
+        let result = async {
+            let mut conn = self.connection.clone();
+            redis::cmd("FLUSHALL").exec_async(&mut conn).await
+        }
+        .await;
+        metrics::histogram!(CACHE_OPERATION_DURATION_SECONDS, LABEL_OP => "flush")
+            .record(start.elapsed().as_secs_f64());
+        result
     }
 
     /// # Errors
@@ -126,20 +152,29 @@ impl Cache {
     where
         T: Serialize + Sync,
     {
-        let serialized = serde_json::to_string(value).map_err(|e| {
-            redis::RedisError::from((redis::ErrorKind::Io, "Serialization failed", e.to_string()))
-        })?;
-
-        let mut conn = self.connection.clone();
-        redis::cmd("SET")
-            .arg(key)
-            .arg(serialized)
-            .arg("EX")
-            .arg(ttl_seconds)
-            .exec_async(&mut conn)
-            .await?;
-
-        Ok(())
+        use crate::metrics::names::*;
+        let start = std::time::Instant::now();
+        let result = async {
+            let serialized = serde_json::to_string(value).map_err(|e| {
+                redis::RedisError::from((
+                    redis::ErrorKind::Io,
+                    "Serialization failed",
+                    e.to_string(),
+                ))
+            })?;
+            let mut conn = self.connection.clone();
+            redis::cmd("SET")
+                .arg(key)
+                .arg(serialized)
+                .arg("EX")
+                .arg(ttl_seconds)
+                .exec_async(&mut conn)
+                .await
+        }
+        .await;
+        metrics::histogram!(CACHE_OPERATION_DURATION_SECONDS, LABEL_OP => "set")
+            .record(start.elapsed().as_secs_f64());
+        result
     }
 
     /// # Errors
@@ -434,6 +469,78 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         let result: Option<String> = cache.get(&key).await.unwrap();
         assert!(result.is_none(), "key should have expired after 1 s TTL");
+    }
+
+    // ── Metrics ────────────────────────────────────────────────────────────
+    //
+    // All three metric tests share ONE DebuggingRecorder installed via OnceLock.
+    // Only one recorder can be global per process, so the recorder is installed
+    // once and the snapshotter captures metrics emitted by any test in this binary.
+    // Assertions only check for the *presence* of a metric name, not exact values,
+    // so accumulated state from other tests does not cause false negatives.
+
+    fn shared_snapshotter() -> metrics_util::debugging::Snapshotter {
+        use metrics_util::debugging::DebuggingRecorder;
+        use std::sync::OnceLock;
+        static S: OnceLock<metrics_util::debugging::Snapshotter> = OnceLock::new();
+        S.get_or_init(|| {
+            let recorder = DebuggingRecorder::new();
+            let snapshotter = recorder.snapshotter();
+            let _ = recorder.install();
+            snapshotter
+        })
+        .clone()
+    }
+
+    #[tokio::test]
+    async fn get_on_hit_increments_hit_counter() {
+        let _ = shared_snapshotter(); // ensure recorder installed before ops
+        let cache = Cache::for_tests().await;
+        let key = k("metric_hit", "v");
+        cache.set(&key, &1_u8, 300).await.unwrap();
+        let _: Option<u8> = cache.get(&key).await.unwrap();
+        cache.delete(&key).await.unwrap();
+
+        let snapshot = shared_snapshotter().snapshot().into_hashmap();
+        assert!(
+            snapshot
+                .keys()
+                .any(|k| k.key().name() == crate::metrics::names::CACHE_HITS_TOTAL),
+            "cache_hits_total not recorded"
+        );
+    }
+
+    #[tokio::test]
+    async fn get_on_miss_increments_miss_counter() {
+        let _ = shared_snapshotter();
+        let cache = Cache::for_tests().await;
+        let key = k("metric_miss", "v");
+        cache.delete(&key).await.unwrap();
+        let _: Option<u8> = cache.get(&key).await.unwrap();
+
+        let snapshot = shared_snapshotter().snapshot().into_hashmap();
+        assert!(
+            snapshot
+                .keys()
+                .any(|k| k.key().name() == crate::metrics::names::CACHE_MISSES_TOTAL),
+            "cache_misses_total not recorded"
+        );
+    }
+
+    #[tokio::test]
+    async fn set_emits_duration_histogram() {
+        let _ = shared_snapshotter();
+        let cache = Cache::for_tests().await;
+        let key = k("metric_set_dur", "v");
+        cache.set(&key, &1_u8, 300).await.unwrap();
+        cache.delete(&key).await.unwrap();
+
+        let snapshot = shared_snapshotter().snapshot().into_hashmap();
+        assert!(
+            snapshot.keys().any(|k| k.key().name()
+                == crate::metrics::names::CACHE_OPERATION_DURATION_SECONDS),
+            "cache_operation_duration_seconds not recorded"
+        );
     }
 
     // ── Invalidation ────────────────────────────────────────────────────────
