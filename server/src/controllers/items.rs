@@ -1,4 +1,4 @@
-use actix_web::{get, web, HttpResponse};
+use actix_web::{HttpResponse, get, web};
 use actix_web_lab::extract::Query;
 use common::{
     id::Id,
@@ -7,7 +7,10 @@ use common::{
 use log::error;
 use serde::Deserialize;
 
-use crate::{cache::{Cache, CACHE_TTL_ITEM, CACHE_TTL_SEARCH}, mappers::anilist::Anilist};
+use crate::{
+    cache::{CACHE_TTL_ITEM, CACHE_TTL_SEARCH, Cache},
+    mappers::anilist::Anilist,
+};
 
 #[derive(Deserialize, utoipa::IntoParams)]
 #[into_params(parameter_in = Query)]

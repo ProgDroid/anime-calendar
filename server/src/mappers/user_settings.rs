@@ -1,11 +1,11 @@
 use crate::{
+    ServerResult,
     config::database::Database as DatabaseConfig,
     entity::{
         calendar::Language,
         user_settings::{SiteLanguage, Theme, UserSettings},
     },
     mappers::database::Database,
-    ServerResult,
 };
 
 #[derive(Clone)]
@@ -63,12 +63,8 @@ impl UserSettingsMapper {
         settings: &UserSettings,
     ) -> ServerResult<()> {
         crate::metrics::db::timed("user_settings.update", async {
-            Self::update_user_settings_with(
-                &mut *self.db.pool.acquire().await?,
-                user_id,
-                settings,
-            )
-            .await
+            Self::update_user_settings_with(&mut *self.db.pool.acquire().await?, user_id, settings)
+                .await
         })
         .await
     }
@@ -119,14 +115,12 @@ mod tests {
 
     async fn create_test_user(conn: &mut sqlx::PgConnection) -> i32 {
         let n: u64 = rand::random();
-        sqlx::query_scalar(
-            "INSERT INTO users (username, email) VALUES ($1, $2) RETURNING id",
-        )
-        .bind(format!("settingsuser_{n}"))
-        .bind(format!("settings_{n}@example.com"))
-        .fetch_one(conn)
-        .await
-        .unwrap()
+        sqlx::query_scalar("INSERT INTO users (username, email) VALUES ($1, $2) RETURNING id")
+            .bind(format!("settingsuser_{n}"))
+            .bind(format!("settings_{n}@example.com"))
+            .fetch_one(conn)
+            .await
+            .unwrap()
     }
 
     fn custom_settings(user_id: i32) -> UserSettings {

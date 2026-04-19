@@ -1,11 +1,11 @@
 use lettre::{
-    message::header::ContentType, transport::smtp::authentication::Credentials, AsyncSmtpTransport,
-    AsyncTransport, Message, Tokio1Executor,
+    AsyncSmtpTransport, AsyncTransport, Message, Tokio1Executor, message::header::ContentType,
+    transport::smtp::authentication::Credentials,
 };
 use log::warn;
 use secrecy::ExposeSecret as _;
 
-use crate::{config::server::SmtpConfig, error::Error, ServerResult};
+use crate::{ServerResult, config::server::SmtpConfig, error::Error};
 
 #[derive(Clone)]
 pub struct EmailService {
@@ -86,9 +86,7 @@ impl EmailService {
         verify_url: &str,
     ) -> ServerResult<()> {
         if self.config.host.is_empty() {
-            warn!(
-                "SMTP not configured — email verification URL for {to_email}: {verify_url}"
-            );
+            warn!("SMTP not configured — email verification URL for {to_email}: {verify_url}");
             return Ok(());
         }
 

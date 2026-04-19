@@ -1,10 +1,12 @@
 use crate::config::server::{CookieSettings, JwtSecret};
-use crate::controllers::auth::{build_auth_cookie, build_refresh_cookie, generate_raw_token, hash_refresh_token};
+use crate::controllers::auth::{
+    build_auth_cookie, build_refresh_cookie, generate_raw_token, hash_refresh_token,
+};
 use crate::mappers::google_oauth::GoogleOauth;
 use crate::mappers::refresh_token::RefreshTokenMapper;
 use crate::mappers::user::UserMapper;
 use crate::services::auth::generate_token;
-use actix_web::{post, web, HttpResponse, ResponseError};
+use actix_web::{HttpResponse, ResponseError, post, web};
 use log::error;
 use serde::{Deserialize, Serialize};
 
@@ -124,10 +126,17 @@ mod tests {
         let n: u64 = rand::random();
         let mapper = UserMapper::from_pool(pool.clone());
         let user = mapper
-            .create_user(&format!("oauthtest_{n}"), &format!("oauth_{n}@test.com"), None)
+            .create_user(
+                &format!("oauthtest_{n}"),
+                &format!("oauth_{n}@test.com"),
+                None,
+            )
             .await
             .unwrap();
-        assert!(user.email_verified_at.is_none(), "freshly created user is unverified");
+        assert!(
+            user.email_verified_at.is_none(),
+            "freshly created user is unverified"
+        );
         mapper.mark_email_verified(user.id).await.unwrap();
         let fetched = mapper.get_user_by_id(user.id).await.unwrap();
         assert!(fetched.email_verified_at.is_some());

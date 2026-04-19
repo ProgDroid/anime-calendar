@@ -1,4 +1,4 @@
-use actix_web::{post, web, HttpResponse, ResponseError};
+use actix_web::{HttpResponse, ResponseError, post, web};
 use log::error;
 use serde::Deserialize;
 use utoipa::ToSchema;
@@ -159,7 +159,7 @@ mod integration_tests {
         mappers::{password_reset::PasswordResetMapper, user::UserMapper},
         services::{auth::hash_password, email::EmailService},
     };
-    use actix_web::{http::StatusCode, test, web, App};
+    use actix_web::{App, http::StatusCode, test, web};
 
     const STRONG_PW: &str = "SecurePass12!@";
 

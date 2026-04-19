@@ -1,6 +1,6 @@
 use crate::{
-    config::database::Database as DatabaseConfig, error::Error, mappers::database::Database,
-    ServerResult,
+    ServerResult, config::database::Database as DatabaseConfig, error::Error,
+    mappers::database::Database,
 };
 
 #[derive(Clone)]
@@ -55,12 +55,9 @@ impl RefreshTokenMapper {
         user_id: i32,
         token_hash: &str,
     ) -> ServerResult<()> {
-        sqlx::query!(
-            "DELETE FROM refresh_tokens WHERE user_id = $1",
-            user_id,
-        )
-        .execute(&mut *conn)
-        .await?;
+        sqlx::query!("DELETE FROM refresh_tokens WHERE user_id = $1", user_id,)
+            .execute(&mut *conn)
+            .await?;
 
         sqlx::query!(
             "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) \
@@ -173,12 +170,9 @@ impl RefreshTokenMapper {
         conn: &mut sqlx::PgConnection,
         user_id: i32,
     ) -> ServerResult<()> {
-        sqlx::query!(
-            "DELETE FROM refresh_tokens WHERE user_id = $1",
-            user_id,
-        )
-        .execute(conn)
-        .await?;
+        sqlx::query!("DELETE FROM refresh_tokens WHERE user_id = $1", user_id,)
+            .execute(conn)
+            .await?;
         Ok(())
     }
 }
@@ -236,12 +230,16 @@ mod tests {
         RefreshTokenMapper::replace_token_with(&mut tx, user_id, &h2)
             .await
             .unwrap();
-        assert!(RefreshTokenMapper::find_valid_token_with(&mut tx, &h1)
-            .await
-            .is_err());
-        assert!(RefreshTokenMapper::find_valid_token_with(&mut tx, &h2)
-            .await
-            .is_ok());
+        assert!(
+            RefreshTokenMapper::find_valid_token_with(&mut tx, &h1)
+                .await
+                .is_err()
+        );
+        assert!(
+            RefreshTokenMapper::find_valid_token_with(&mut tx, &h2)
+                .await
+                .is_ok()
+        );
         tx.rollback().await.unwrap();
     }
 
@@ -262,12 +260,16 @@ mod tests {
             .await
             .unwrap();
 
-        assert!(RefreshTokenMapper::find_valid_token_with(&mut tx, &h1)
-            .await
-            .is_err());
-        assert!(RefreshTokenMapper::find_valid_token_with(&mut tx, &h2)
-            .await
-            .is_ok());
+        assert!(
+            RefreshTokenMapper::find_valid_token_with(&mut tx, &h1)
+                .await
+                .is_err()
+        );
+        assert!(
+            RefreshTokenMapper::find_valid_token_with(&mut tx, &h2)
+                .await
+                .is_ok()
+        );
         tx.rollback().await.unwrap();
     }
 
@@ -282,9 +284,11 @@ mod tests {
         RefreshTokenMapper::invalidate_all_for_user_with(&mut tx, user_id)
             .await
             .unwrap();
-        assert!(RefreshTokenMapper::find_valid_token_with(&mut tx, &h)
-            .await
-            .is_err());
+        assert!(
+            RefreshTokenMapper::find_valid_token_with(&mut tx, &h)
+                .await
+                .is_err()
+        );
         tx.rollback().await.unwrap();
     }
 

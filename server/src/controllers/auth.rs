@@ -9,8 +9,8 @@ use crate::services::auth::{
     validate_password_strength, verify_token,
 };
 use crate::services::email::EmailService;
-use actix_web::cookie::{time::Duration, Cookie, SameSite};
-use actix_web::{get, post, web, HttpResponse, ResponseError};
+use actix_web::cookie::{Cookie, SameSite, time::Duration};
+use actix_web::{HttpResponse, ResponseError, get, post, web};
 use log::error;
 use rand::RngCore;
 use secrecy::{ExposeSecret, SecretString};
@@ -424,7 +424,7 @@ mod integration_tests {
             email::EmailService,
         },
     };
-    use actix_web::{http::StatusCode, test, web, App};
+    use actix_web::{App, http::StatusCode, test, web};
     use secrecy::SecretString;
     use serde_json::Value;
 
@@ -457,7 +457,11 @@ mod integration_tests {
             .await
             .unwrap();
         mapper.mark_email_verified(user.id).await.unwrap();
-        SeedUser { id: user.id, username, email }
+        SeedUser {
+            id: user.id,
+            username,
+            email,
+        }
     }
 
     // ─── POST /login ──────────────────────────────────────────────────────────

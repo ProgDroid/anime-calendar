@@ -3,16 +3,18 @@ use std::str::FromStr;
 use actix_cors::Cors;
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{
+    App, HttpServer,
     dev::Server,
     middleware::{Compress, Condition, Logger},
-    web, App, HttpServer,
+    web,
 };
 use env_logger::Builder;
-use log::{error, LevelFilter};
+use log::{LevelFilter, error};
 use utoipa::OpenApi as _;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
+    ServerResult,
     cache::Cache,
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig},
     controllers::{
@@ -26,7 +28,6 @@ use crate::{
     },
     openapi::ApiDoc,
     services::email::EmailService,
-    ServerResult,
 };
 
 #[allow(clippy::too_many_arguments)]

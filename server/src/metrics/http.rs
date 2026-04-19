@@ -1,14 +1,14 @@
 use actix_web::{
-    body::MessageBody,
-    dev::{forward_ready, Service, ServiceRequest, ServiceResponse, Transform},
     Error,
+    body::MessageBody,
+    dev::{Service, ServiceRequest, ServiceResponse, Transform, forward_ready},
 };
-use futures_util::future::{ok, LocalBoxFuture, Ready};
+use futures_util::future::{LocalBoxFuture, Ready, ok};
 use std::rc::Rc;
 use std::time::Instant;
 
 use crate::metrics::names::{
-    HTTP_REQUESTS_TOTAL, HTTP_REQUEST_DURATION_SECONDS, LABEL_METHOD, LABEL_PATH, LABEL_STATUS,
+    HTTP_REQUEST_DURATION_SECONDS, HTTP_REQUESTS_TOTAL, LABEL_METHOD, LABEL_PATH, LABEL_STATUS,
 };
 
 pub struct HttpMetrics;
@@ -85,7 +85,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use actix_web::{test, web, App, HttpResponse};
+    use actix_web::{App, HttpResponse, test, web};
 
     #[actix_web::test]
     #[allow(clippy::mutable_key_type)]

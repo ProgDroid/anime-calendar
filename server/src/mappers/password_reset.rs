@@ -1,5 +1,5 @@
 use crate::{
-    config::database::Database as DatabaseConfig, mappers::database::Database, ServerResult,
+    ServerResult, config::database::Database as DatabaseConfig, mappers::database::Database,
 };
 
 #[derive(Clone)]

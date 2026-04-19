@@ -1,8 +1,11 @@
-use actix_web::{get, web, HttpResponse};
+use actix_web::{HttpResponse, get, web};
 use common::{id::Id, item::Repository};
 use log::error;
 
-use crate::{cache::{Cache, CACHE_TTL_ITEM}, mappers::anilist::Anilist};
+use crate::{
+    cache::{CACHE_TTL_ITEM, Cache},
+    mappers::anilist::Anilist,
+};
 
 #[utoipa::path(
     get,

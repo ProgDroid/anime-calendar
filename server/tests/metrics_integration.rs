@@ -7,8 +7,8 @@ use std::net::{IpAddr, Ipv4Addr};
 async fn prometheus_endpoint_serves_emitted_metrics() {
     // Bind to port 0 to let the OS pick a free port — avoids conflicts
     // when tests run in parallel.
-    let listener = std::net::TcpListener::bind((IpAddr::V4(Ipv4Addr::LOCALHOST), 0))
-        .expect("bind 0");
+    let listener =
+        std::net::TcpListener::bind((IpAddr::V4(Ipv4Addr::LOCALHOST), 0)).expect("bind 0");
     let port = listener.local_addr().unwrap().port();
     drop(listener);
 
@@ -27,7 +27,12 @@ async fn prometheus_endpoint_serves_emitted_metrics() {
     tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
     let url = format!("http://127.0.0.1:{port}/metrics");
-    let body = reqwest::get(&url).await.expect("scrape").text().await.unwrap();
+    let body = reqwest::get(&url)
+        .await
+        .expect("scrape")
+        .text()
+        .await
+        .unwrap();
 
     assert!(
         body.contains("cache_hits_total"),

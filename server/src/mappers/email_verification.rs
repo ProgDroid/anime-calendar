@@ -1,8 +1,6 @@
 use crate::{
-    config::database::Database as DatabaseConfig,
-    error::Error,
+    ServerResult, config::database::Database as DatabaseConfig, error::Error,
     mappers::database::Database,
-    ServerResult,
 };
 
 #[derive(Clone)]
@@ -21,14 +19,18 @@ impl EmailVerificationMapper {
     /// # Errors
     /// Fails if the database connection cannot be established.
     pub async fn new(config: DatabaseConfig) -> ServerResult<Self> {
-        Ok(Self { db: Database::new(config).await? })
+        Ok(Self {
+            db: Database::new(config).await?,
+        })
     }
 
     /// Construct from a bare pool — for integration tests only.
     #[cfg(test)]
     #[must_use]
     pub const fn from_pool(pool: sqlx::PgPool) -> Self {
-        Self { db: Database { pool } }
+        Self {
+            db: Database { pool },
+        }
     }
 
     /// Atomically delete any existing token for `user_id` and insert a new one
@@ -77,10 +79,7 @@ impl EmailVerificationMapper {
     ///
     /// # Errors
     /// Returns `Error::InvalidVerificationToken` if no valid token matches.
-    pub async fn find_valid_token(
-        &self,
-        token_hash: &str,
-    ) -> ServerResult<EmailVerificationToken> {
+    pub async fn find_valid_token(&self, token_hash: &str) -> ServerResult<EmailVerificationToken> {
         crate::metrics::db::timed("email_verification.find_valid_token", async {
             Self::find_valid_token_with(&mut *self.db.pool.acquire().await?, token_hash).await
         })
@@ -103,7 +102,10 @@ impl EmailVerificationMapper {
             other => Error::Database(other),
         })?;
 
-        Ok(EmailVerificationToken { id: row.id, user_id: row.user_id })
+        Ok(EmailVerificationToken {
+            id: row.id,
+            user_id: row.user_id,
+        })
     }
 
     /// Atomically delete the verification token AND mark the user's email as

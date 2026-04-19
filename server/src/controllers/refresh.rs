@@ -5,7 +5,7 @@ use crate::controllers::auth::{
 use crate::error::Error;
 use crate::mappers::refresh_token::RefreshTokenMapper;
 use crate::services::auth::generate_token;
-use actix_web::{post, web, HttpRequest, HttpResponse, ResponseError};
+use actix_web::{HttpRequest, HttpResponse, ResponseError, post, web};
 
 #[utoipa::path(
     post,
@@ -66,7 +66,7 @@ mod tests {
     use crate::config::server::CookieSettings;
     use crate::controllers::auth::hash_refresh_token;
     use crate::mappers::refresh_token::RefreshTokenMapper;
-    use actix_web::{http::StatusCode, test, web, App};
+    use actix_web::{App, http::StatusCode, test, web};
     use secrecy::SecretString;
 
     const SECRET: &str = "test-jwt-secret-at-least-32-bytes";

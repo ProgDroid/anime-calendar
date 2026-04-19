@@ -1,11 +1,11 @@
 use crate::{
+    ServerResult,
     config::database::Database as DatabaseConfig,
     entity::calendar::{Calendar, Language},
     error::Error,
     mappers::database::Database,
-    ServerResult,
 };
-use rand::{distr::Alphanumeric, Rng};
+use rand::{Rng, distr::Alphanumeric};
 use sqlx::{Postgres, QueryBuilder};
 
 #[derive(Clone)]
@@ -476,14 +476,12 @@ mod tests {
 
     async fn create_test_user(conn: &mut sqlx::PgConnection) -> i32 {
         let n: u64 = rand::random();
-        sqlx::query_scalar(
-            "INSERT INTO users (username, email) VALUES ($1, $2) RETURNING id",
-        )
-        .bind(format!("caltest_{n}"))
-        .bind(format!("caltest_{n}@example.com"))
-        .fetch_one(conn)
-        .await
-        .unwrap()
+        sqlx::query_scalar("INSERT INTO users (username, email) VALUES ($1, $2) RETURNING id")
+            .bind(format!("caltest_{n}"))
+            .bind(format!("caltest_{n}@example.com"))
+            .fetch_one(conn)
+            .await
+            .unwrap()
     }
 
     fn new_calendar(user_id: i32) -> Calendar {
@@ -520,10 +518,9 @@ mod tests {
         let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
-        let fetched =
-            CalendarMapper::get_calendar_by_id_with(&mut tx, inserted.id, user_id)
-                .await
-                .unwrap();
+        let fetched = CalendarMapper::get_calendar_by_id_with(&mut tx, inserted.id, user_id)
+            .await
+            .unwrap();
         assert_eq!(fetched.id, inserted.id);
         assert_eq!(fetched.name, "My Calendar");
         tx.rollback().await.unwrap();
@@ -589,11 +586,12 @@ mod tests {
             item_ids: vec![101, 202, 303],
             ..new_calendar(user_id)
         };
-        let saved = CalendarMapper::save_calendar_with(&mut tx, cal).await.unwrap();
-        let fetched =
-            CalendarMapper::get_calendar_by_id_with(&mut tx, saved.id, user_id)
-                .await
-                .unwrap();
+        let saved = CalendarMapper::save_calendar_with(&mut tx, cal)
+            .await
+            .unwrap();
+        let fetched = CalendarMapper::get_calendar_by_id_with(&mut tx, saved.id, user_id)
+            .await
+            .unwrap();
         let mut ids = fetched.item_ids;
         ids.sort_unstable();
         assert_eq!(ids, vec![101, 202, 303]);
@@ -630,10 +628,9 @@ mod tests {
         let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
-        let token =
-            CalendarMapper::delete_calendar_with(&mut tx, inserted.id, user_id)
-                .await
-                .unwrap();
+        let token = CalendarMapper::delete_calendar_with(&mut tx, inserted.id, user_id)
+            .await
+            .unwrap();
         assert_eq!(token, inserted.subscription_token);
         tx.rollback().await.unwrap();
     }
@@ -646,7 +643,9 @@ mod tests {
             item_ids: vec![42, 43],
             ..new_calendar(user_id)
         };
-        let inserted = CalendarMapper::save_calendar_with(&mut tx, cal).await.unwrap();
+        let inserted = CalendarMapper::save_calendar_with(&mut tx, cal)
+            .await
+            .unwrap();
         CalendarMapper::delete_calendar_with(&mut tx, inserted.id, user_id)
             .await
             .unwrap();

@@ -1,7 +1,7 @@
 use crate::config::server::JwtSecret;
 use crate::error::Error;
-use actix_web::{dev::Payload, FromRequest, HttpRequest};
-use jsonwebtoken::{decode, DecodingKey, Validation};
+use actix_web::{FromRequest, HttpRequest, dev::Payload};
+use jsonwebtoken::{DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
@@ -45,8 +45,8 @@ impl FromRequest for Claims {
 
 #[cfg(test)]
 mod tests {
-    use actix_web::{get, http::StatusCode, test, web, App, HttpResponse};
-    use jsonwebtoken::{encode, EncodingKey, Header};
+    use actix_web::{App, HttpResponse, get, http::StatusCode, test, web};
+    use jsonwebtoken::{EncodingKey, Header, encode};
 
     use super::*;
     use crate::config::server::JwtSecret;
@@ -67,10 +67,7 @@ mod tests {
 
     #[actix_web::test]
     async fn valid_jwt_allows_access() {
-        let app = test::init_service(
-            App::new().app_data(secret_data()).service(guarded),
-        )
-        .await;
+        let app = test::init_service(App::new().app_data(secret_data()).service(guarded)).await;
         let token = generate_token(&99, SECRET).unwrap();
         let req = test::TestRequest::get()
             .uri("/protected")
@@ -81,11 +78,11 @@ mod tests {
 
     #[actix_web::test]
     async fn expired_jwt_returns_401() {
-        let app = test::init_service(
-            App::new().app_data(secret_data()).service(guarded),
-        )
-        .await;
-        let claims = Claims { sub: "1".to_owned(), exp: 0 };
+        let app = test::init_service(App::new().app_data(secret_data()).service(guarded)).await;
+        let claims = Claims {
+            sub: "1".to_owned(),
+            exp: 0,
+        };
         let token = encode(
             &Header::default(),
             &claims,
@@ -96,45 +93,48 @@ mod tests {
             .uri("/protected")
             .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[actix_web::test]
     async fn no_cookie_returns_401() {
-        let app = test::init_service(
-            App::new().app_data(secret_data()).service(guarded),
-        )
-        .await;
+        let app = test::init_service(App::new().app_data(secret_data()).service(guarded)).await;
         let req = test::TestRequest::get().uri("/protected").to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[actix_web::test]
     async fn wrong_cookie_name_returns_401() {
-        let app = test::init_service(
-            App::new().app_data(secret_data()).service(guarded),
-        )
-        .await;
+        let app = test::init_service(App::new().app_data(secret_data()).service(guarded)).await;
         let token = generate_token(&1, SECRET).unwrap();
         // "session" instead of "auth_token"
         let req = test::TestRequest::get()
             .uri("/protected")
             .insert_header(("Cookie", format!("session={token}")))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[actix_web::test]
     async fn wrong_secret_returns_401() {
-        let app = test::init_service(
-            App::new().app_data(secret_data()).service(guarded),
-        )
-        .await;
+        let app = test::init_service(App::new().app_data(secret_data()).service(guarded)).await;
         let token = generate_token(&1, "a-completely-different-secret!!").unwrap();
         let req = test::TestRequest::get()
             .uri("/protected")
             .insert_header(("Cookie", format!("auth_token={token}")))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 }

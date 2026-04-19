@@ -1,5 +1,5 @@
-use redis::{aio::MultiplexedConnection, Client, RedisResult};
-use serde::{de::DeserializeOwned, Serialize};
+use redis::{Client, RedisResult, aio::MultiplexedConnection};
+use serde::{Serialize, de::DeserializeOwned};
 
 /// Cache TTL for item lookups and single-resource responses (1 hour).
 pub const CACHE_TTL_ITEM: u64 = 3600;

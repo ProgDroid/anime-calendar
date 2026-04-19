@@ -8,7 +8,7 @@ use crate::{
 
 use crate::entity::user_settings::UserSettings;
 use crate::mappers::user_settings::UserSettingsMapper;
-use actix_web::{delete, get, post, put, web, HttpResponse, ResponseError};
+use actix_web::{HttpResponse, ResponseError, delete, get, post, put, web};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 
@@ -322,7 +322,7 @@ mod integration_tests {
     use crate::mappers::user::UserMapper;
     use crate::mappers::user_settings::UserSettingsMapper;
     use crate::services::auth::{generate_token, hash_password};
-    use actix_web::{http::StatusCode, test, web, App};
+    use actix_web::{App, http::StatusCode, test, web};
     use secrecy::SecretString;
     use serde_json::Value;
 
@@ -351,7 +351,12 @@ mod integration_tests {
             .await
             .unwrap();
         let token = generate_token(&user.id, SECRET).unwrap();
-        SeedUser { id: user.id, username, email, token }
+        SeedUser {
+            id: user.id,
+            username,
+            email,
+            token,
+        }
     }
 
     async fn seed_oauth_user(pool: &sqlx::PgPool) -> SeedUser {
@@ -363,7 +368,12 @@ mod integration_tests {
             .await
             .unwrap();
         let token = generate_token(&user.id, SECRET).unwrap();
-        SeedUser { id: user.id, username, email, token }
+        SeedUser {
+            id: user.id,
+            username,
+            email,
+            token,
+        }
     }
 
     // ─── GET /user/details ───────────────────────────────────────────────────
@@ -424,7 +434,10 @@ mod integration_tests {
         )
         .await;
         let req = test::TestRequest::get().uri("/user/details").to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     // ─── PUT /user ───────────────────────────────────────────────────────────
@@ -477,7 +490,10 @@ mod integration_tests {
             .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .set_json(serde_json::json!({ "username": long_name, "email": user.email }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     // ─── POST /user/password ─────────────────────────────────────────────────
@@ -527,7 +543,10 @@ mod integration_tests {
                 "new_password": NEW_PW
             }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
     }
 
     #[tokio::test]
@@ -551,7 +570,10 @@ mod integration_tests {
                 "new_password": STRONG_PW
             }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     #[tokio::test]
@@ -575,7 +597,10 @@ mod integration_tests {
                 "new_password": NEW_PW
             }))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
     }
 
     // ─── DELETE /user/{id} ───────────────────────────────────────────────────
@@ -597,7 +622,10 @@ mod integration_tests {
             .uri(&format!("/user/{}", user.id))
             .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::NO_CONTENT
+        );
     }
 
     #[tokio::test]
@@ -619,7 +647,10 @@ mod integration_tests {
             .uri(&format!("/user/{}", user_b.id))
             .insert_header(("Cookie", format!("auth_token={}", user_a.token)))
             .to_request();
-        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::FORBIDDEN);
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::FORBIDDEN
+        );
     }
 
     // ─── GET /user/settings ──────────────────────────────────────────────────
@@ -677,7 +708,10 @@ mod integration_tests {
                 "timezone": "Europe/Lisbon"
             }))
             .to_request();
-        assert_eq!(test::call_service(&app, put_req).await.status(), StatusCode::OK);
+        assert_eq!(
+            test::call_service(&app, put_req).await.status(),
+            StatusCode::OK
+        );
 
         // Read back and verify
         let get_req = test::TestRequest::get()

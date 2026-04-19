@@ -1,11 +1,11 @@
-use actix_web::{post, web, HttpResponse, ResponseError};
+use actix_web::{HttpResponse, ResponseError, post, web};
 use log::error;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
 use crate::{
     config::server::{AppBaseUrl, CookieSettings, JwtSecret},
-    controllers::auth::{build_auth_cookie, AuthResponse, ErrorResponse, MessageResponse},
+    controllers::auth::{AuthResponse, ErrorResponse, MessageResponse, build_auth_cookie},
     error::Error,
     mappers::{email_verification::EmailVerificationMapper, user::UserMapper},
     services::{
@@ -148,10 +148,7 @@ pub async fn resend_verification(
         return ok();
     }
 
-    metrics::counter!(
-        crate::metrics::names::EMAIL_VERIFICATIONS_SENT_TOTAL
-    )
-    .increment(1);
+    metrics::counter!(crate::metrics::names::EMAIL_VERIFICATIONS_SENT_TOTAL).increment(1);
     ok()
 }
 
@@ -166,7 +163,7 @@ mod integration_tests {
             email::EmailService,
         },
     };
-    use actix_web::{http::StatusCode, test, web, App};
+    use actix_web::{App, http::StatusCode, test, web};
     use secrecy::SecretString;
 
     const STRONG_PW: &str = "SecurePass12!@";

@@ -1,4 +1,5 @@
 use server::{
+    ServerResult,
     cache::Cache,
     config::{database::Database as DatabaseConfig, server::Server as ServerConfig},
     mappers::{
@@ -7,7 +8,6 @@ use server::{
         refresh_token::RefreshTokenMapper, user::UserMapper, user_settings::UserSettingsMapper,
     },
     services::email::EmailService,
-    ServerResult,
 };
 
 #[actix_web::main]

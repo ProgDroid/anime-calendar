@@ -1,14 +1,17 @@
 use std::str::FromStr;
 
-use anilist::{MediaTrait, TitleTrait, CoverImageTrait, AiringScheduleTrait, RecommendationTrait, RecommendationMediaTrait, ResponseItemTrait, SearchItemsByTypeMediaType, client::Client};
+use anilist::{
+    AiringScheduleTrait, CoverImageTrait, MediaTrait, RecommendationMediaTrait,
+    RecommendationTrait, ResponseItemTrait, SearchItemsByTypeMediaType, TitleTrait, client::Client,
+};
 use common::{
     id::Id,
     item::{Item, Repository as RepositoryItem, Type},
     media_cover::MediaCover,
+    recommendation::{Recommendation, RecommendationMedia},
     schedule::Schedule,
     timestamp::Timestamp,
     title::Title,
-    recommendation::{Recommendation, RecommendationMedia},
 };
 use log::error;
 
@@ -87,60 +90,27 @@ impl RepositoryItem for Anilist {
                     error!("{e}");
                     Vec::default()
                 }
-            }
+            },
         }
     }
 }
 
 fn response_to_items<T: ResponseItemTrait>(response: T) -> Vec<Item> {
-    response.media().iter().filter_map(|media| {
-        let media_id = Id::new(media.id());
-
-        media_id.as_ref()?;
-
-        let media_type = Type::from_str(&media.media_type());
-
-        if media_type.is_err() {
-            return None;
-        }
-
-        let media_title = media.title();
-
-        let title = Title {
-            english: media_title.english(),
-            native: media_title.native(),
-            romaji: media_title.romaji(),
-        };
-
-        let media_airing_schedule = media.airing_schedule();
-
-        let airing_schedule = media_airing_schedule
-            .iter()
-            .filter_map(|schedule| {
-                if let Some(id) = Id::new(schedule.id()) && let Some(airing_at) = Timestamp::new(schedule.airing_at()) {
-                    Some(Schedule {
-                        id,
-                        airing_at,
-                        episode: schedule.episode(),
-                        media_id: None,
-                    })
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        let media_cover_image = media.cover_image();
-
-        let cover_image = MediaCover { extra_large: media_cover_image.extra_large(), large: media_cover_image.large(), medium: media_cover_image.medium(), color: media_cover_image.color() };
-
-        let recommendations = media.recommendations().iter().filter_map(|recommendation| {
-            let recommendation_media = recommendation.media();
-            let media_id = Id::new(recommendation_media.id());
+    response
+        .media()
+        .iter()
+        .filter_map(|media| {
+            let media_id = Id::new(media.id());
 
             media_id.as_ref()?;
 
-            let media_title = recommendation_media.title();
+            let media_type = Type::from_str(&media.media_type());
+
+            if media_type.is_err() {
+                return None;
+            }
+
+            let media_title = media.title();
 
             let title = Title {
                 english: media_title.english(),
@@ -148,32 +118,84 @@ fn response_to_items<T: ResponseItemTrait>(response: T) -> Vec<Item> {
                 romaji: media_title.romaji(),
             };
 
-            let media_cover_image = recommendation_media.cover_image();
+            let media_airing_schedule = media.airing_schedule();
 
-            let cover_image = MediaCover { extra_large: media_cover_image.extra_large(), large: media_cover_image.large(), medium: media_cover_image.medium(), color: media_cover_image.color() };
+            let airing_schedule = media_airing_schedule
+                .iter()
+                .filter_map(|schedule| {
+                    if let Some(id) = Id::new(schedule.id())
+                        && let Some(airing_at) = Timestamp::new(schedule.airing_at())
+                    {
+                        Some(Schedule {
+                            id,
+                            airing_at,
+                            episode: schedule.episode(),
+                            media_id: None,
+                        })
+                    } else {
+                        None
+                    }
+                })
+                .collect();
 
-            Some(Recommendation {
-                rating: recommendation.rating(),
-                media: RecommendationMedia {
-                    id: media_id.unwrap(),
-                    id_mal: recommendation_media.id_mal(),
-                    title,
-                    cover_image,
-                }
+            let media_cover_image = media.cover_image();
+
+            let cover_image = MediaCover {
+                extra_large: media_cover_image.extra_large(),
+                large: media_cover_image.large(),
+                medium: media_cover_image.medium(),
+                color: media_cover_image.color(),
+            };
+
+            let recommendations = media
+                .recommendations()
+                .iter()
+                .filter_map(|recommendation| {
+                    let recommendation_media = recommendation.media();
+                    let media_id = Id::new(recommendation_media.id());
+
+                    media_id.as_ref()?;
+
+                    let media_title = recommendation_media.title();
+
+                    let title = Title {
+                        english: media_title.english(),
+                        native: media_title.native(),
+                        romaji: media_title.romaji(),
+                    };
+
+                    let media_cover_image = recommendation_media.cover_image();
+
+                    let cover_image = MediaCover {
+                        extra_large: media_cover_image.extra_large(),
+                        large: media_cover_image.large(),
+                        medium: media_cover_image.medium(),
+                        color: media_cover_image.color(),
+                    };
+
+                    Some(Recommendation {
+                        rating: recommendation.rating(),
+                        media: RecommendationMedia {
+                            id: media_id.unwrap(),
+                            id_mal: recommendation_media.id_mal(),
+                            title,
+                            cover_image,
+                        },
+                    })
+                })
+                .collect();
+
+            Some(Item {
+                id: media_id.unwrap(),
+                id_mal: media.id_mal(),
+                title,
+                airing_schedule,
+                episode_duration: media.episode_duration(),
+                media_type: media_type.unwrap(),
+                cover_image,
+                banner_image: media.banner_image(),
+                recommendations,
             })
-            }).collect();
-
-        Some(Item {
-            id: media_id.unwrap(),
-            id_mal: media.id_mal(),
-            title,
-            airing_schedule,
-            episode_duration: media.episode_duration(),
-            media_type: media_type.unwrap(),
-            cover_image,
-            banner_image: media.banner_image(),
-            recommendations,
         })
-    })
-    .collect()
+        .collect()
 }

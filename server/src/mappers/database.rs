@@ -1,7 +1,7 @@
 use secrecy::ExposeSecret;
 use sqlx::{PgPool, Pool};
 
-use crate::{config::database::Database as Config, ServerResult};
+use crate::{ServerResult, config::database::Database as Config};
 
 #[derive(Clone)]
 pub struct Database {
