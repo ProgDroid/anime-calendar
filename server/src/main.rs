@@ -1,17 +1,4 @@
-pub mod cache;
-pub mod config;
-pub mod controllers;
-pub mod entity;
-pub mod error;
-pub mod mappers;
-pub mod metrics;
-pub mod middleware;
-pub mod openapi;
-pub mod server;
-pub mod services;
-#[cfg(test)]
-pub mod test_helpers;
-use crate::{
+use server::{
     cache::Cache,
     config::{database::Database as DatabaseConfig, server::Server as ServerConfig},
     error::Error,
@@ -21,9 +8,8 @@ use crate::{
         refresh_token::RefreshTokenMapper, user::UserMapper, user_settings::UserSettingsMapper,
     },
     services::email::EmailService,
+    ServerResult,
 };
-
-pub type ServerResult<T> = std::result::Result<T, Error>;
 
 #[actix_web::main]
 async fn main() -> ServerResult<()> {
@@ -43,7 +29,7 @@ async fn main() -> ServerResult<()> {
     let refresh_token_mapper = RefreshTokenMapper::new(db_config.clone()).await?;
     let email_service = EmailService::new(settings.smtp.clone());
 
-    if let Err(e) = crate::metrics::init(&settings.metrics) {
+    if let Err(e) = server::metrics::init(&settings.metrics) {
         log::error!("failed to initialise metrics: {e}");
         // Don't abort startup — degraded mode without metrics is preferable
         // to a crashloop.
@@ -59,7 +45,7 @@ async fn main() -> ServerResult<()> {
     .await
     .expect("Failed to initialize Redis cache");
 
-    Ok(server::start(
+    Ok(server::server::start(
         settings,
         anilist,
         google_oauth,
