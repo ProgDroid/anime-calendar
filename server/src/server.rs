@@ -93,6 +93,7 @@ pub fn start(
                     .url("/api-docs/openapi.json", ApiDoc::openapi()),
             )
             .wrap(Condition::new(compress, Compress::default()))
+            .wrap(crate::metrics::http::HttpMetrics)
             .wrap(Logger::default())
             .wrap(Governor::new(&governor_conf))
             .wrap(cors)
