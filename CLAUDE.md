@@ -182,10 +182,5 @@ Core features are complete:
 - `fetchSettings` concurrent-call deduplication in Pinia store
 
 ## Known TODOs (from source)
-- More backend tests (controllers + services)
 - Episode-specific times (not just all-day calendar entries)
 - Load testing
-- DB indexes: `calendars.user_id`, `calendars.subscription_token`, `calendar_items.calendar_id`
-- JWT in localStorage → httpOnly cookies
-- TypeScript `strict: true`
-- Docker / CI-CD pipeline
