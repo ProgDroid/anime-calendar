@@ -1,0 +1,58 @@
+groups:
+  - name: anime-calendar-recording
+    interval: 30s
+    rules:
+      - record: job:http_requests:rate5m
+        expr: sum by (job, path, method, status) (rate(http_requests_total[5m]))
+
+      - record: job:http_request_duration_seconds:p99_5m
+        expr: histogram_quantile(0.99, sum by (le, path, method) (rate(http_request_duration_seconds_bucket[5m])))
+
+      - record: job:cache_hit_rate:5m
+        expr: |
+          sum(rate(cache_hits_total[5m]))
+          /
+          (sum(rate(cache_hits_total[5m])) + sum(rate(cache_misses_total[5m])))
+
+      - record: job:db_query_error_rate:5m
+        expr: |
+          sum by (op) (rate(db_queries_total{outcome="err"}[5m]))
+          /
+          sum by (op) (rate(db_queries_total[5m]))
+
+  - name: anime-calendar-alerts
+    rules:
+      - alert: HighHttp5xxRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.05
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "5xx error rate above 5% for 5m"
+
+      - alert: HighRequestLatencyP99
+        expr: job:http_request_duration_seconds:p99_5m > 2
+        for: 10m
+        labels: { severity: ticket }
+        annotations:
+          summary: "P99 latency above 2s for 10m on {{ $labels.path }}"
+
+      - alert: LowCacheHitRate
+        expr: job:cache_hit_rate:5m < 0.5
+        for: 15m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Cache hit rate below 50% for 15m (currently {{ $value | humanizePercentage }})"
+
+      - alert: DbQueryErrorsSpiking
+        expr: job:db_query_error_rate:5m > 0.02
+        for: 5m
+        labels: { severity: page }
+        annotations:
+          summary: "DB query error rate above 2% on op {{ $labels.op }}"
+
+      - alert: LoginFailureSpike
+        expr: sum(rate(auth_login_attempts_total{outcome="failed"}[5m])) > 5
+        for: 5m
+        labels: { severity: ticket }
+        annotations:
+          summary: "Login failures >5/s over 5m — possible brute force"

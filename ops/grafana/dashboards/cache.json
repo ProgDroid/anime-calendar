@@ -1,0 +1,79 @@
+{
+  "title": "Cache",
+  "uid": "ac-cache",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-1h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "title": "Cache Hit Rate (5m)",
+      "type": "stat",
+      "gridPos": { "x": 0, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "job:cache_hit_rate:5m",
+          "legendFormat": "hit rate"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "unit": "percentunit" }
+    },
+    {
+      "id": 2,
+      "title": "Redis Memory Used",
+      "type": "stat",
+      "gridPos": { "x": 6, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "redis_memory_used_bytes",
+          "legendFormat": "memory"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] }, "unit": "decbytes" }
+    },
+    {
+      "id": 3,
+      "title": "Redis Connected Clients",
+      "type": "stat",
+      "gridPos": { "x": 12, "y": 0, "w": 6, "h": 4 },
+      "datasource": { "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "redis_connected_clients",
+          "legendFormat": "clients"
+        }
+      ],
+      "options": { "reduceOptions": { "calcs": ["lastNotNull"] } }
+    },
+    {
+      "id": 4,
+      "title": "Cache Operations/s by Op",
+      "type": "timeseries",
+      "gridPos": { "x": 0, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "sum by (op) (rate(cache_operation_duration_seconds_count[1m]))",
+          "legendFormat": "{{op}}"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "title": "Cache Op P99 Latency",
+      "type": "timeseries",
+      "gridPos": { "x": 12, "y": 4, "w": 12, "h": 8 },
+      "datasource": { "uid": "prometheus" },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.99, sum by (le, op) (rate(cache_operation_duration_seconds_bucket[5m])))",
+          "legendFormat": "{{op}} p99"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    }
+  ]
+}
