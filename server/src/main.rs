@@ -43,6 +43,12 @@ async fn main() -> ServerResult<()> {
     let refresh_token_mapper = RefreshTokenMapper::new(db_config.clone()).await?;
     let email_service = EmailService::new(settings.smtp.clone());
 
+    if let Err(e) = crate::metrics::init(&settings.metrics) {
+        log::error!("failed to initialise metrics: {e}");
+        // Don't abort startup — degraded mode without metrics is preferable
+        // to a crashloop.
+    }
+
     // Initialize Redis cache
     let cache = Cache::new(
         &settings.redis.host,
