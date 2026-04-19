@@ -1,7 +1,6 @@
 use server::{
     cache::Cache,
     config::{database::Database as DatabaseConfig, server::Server as ServerConfig},
-    error::Error,
     mappers::{
         anilist::Anilist, calendar::CalendarMapper, email_verification::EmailVerificationMapper,
         google_oauth::GoogleOauth, password_reset::PasswordResetMapper,
