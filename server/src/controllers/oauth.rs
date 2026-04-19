@@ -95,12 +95,16 @@ pub async fn google_oauth(
 #[cfg(test)]
 mod tests {
     use crate::mappers::user::UserMapper;
-    use sqlx::PgPool;
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn oauth_create_user_is_unverified_until_mark_called(pool: PgPool) {
+    #[tokio::test]
+    async fn oauth_create_user_is_unverified_until_mark_called() {
+        let pool = crate::test_helpers::test_pool().await;
+        let n: u64 = rand::random();
         let mapper = UserMapper::from_pool(pool.clone());
-        let user = mapper.create_user("oauthtest", "oauth@test.com", None).await.unwrap();
+        let user = mapper
+            .create_user(&format!("oauthtest_{n}"), &format!("oauth_{n}@test.com"), None)
+            .await
+            .unwrap();
         assert!(user.email_verified_at.is_none(), "freshly created user is unverified");
         mapper.mark_email_verified(user.id).await.unwrap();
         let fetched = mapper.get_user_by_id(user.id).await.unwrap();

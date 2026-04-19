@@ -40,31 +40,36 @@ impl RefreshTokenMapper {
     pub async fn replace_token(&self, user_id: i32, token_hash: &str) -> ServerResult<()> {
         let mut tx = self.db.pool.begin().await?;
 
-        if let Err(e) = sqlx::query!(
+        if let Err(e) = Self::replace_token_with(&mut *tx, user_id, token_hash).await {
+            tx.rollback().await?;
+            return Err(e);
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn replace_token_with(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+        token_hash: &str,
+    ) -> ServerResult<()> {
+        sqlx::query!(
             "DELETE FROM refresh_tokens WHERE user_id = $1",
             user_id,
         )
-        .execute(&mut *tx)
-        .await
-        {
-            tx.rollback().await?;
-            return Err(e.into());
-        }
+        .execute(&mut *conn)
+        .await?;
 
-        if let Err(e) = sqlx::query!(
+        sqlx::query!(
             "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) \
              VALUES ($1, $2, NOW() + INTERVAL '30 days')",
             user_id,
             token_hash,
         )
-        .execute(&mut *tx)
-        .await
-        {
-            tx.rollback().await?;
-            return Err(e.into());
-        }
+        .execute(&mut *conn)
+        .await?;
 
-        tx.commit().await?;
         Ok(())
     }
 
@@ -74,12 +79,19 @@ impl RefreshTokenMapper {
     /// # Errors
     /// Returns `Error::Unauthorised` if no valid token matches.
     pub async fn find_valid_token(&self, token_hash: &str) -> ServerResult<RefreshToken> {
+        Self::find_valid_token_with(&mut *self.db.pool.acquire().await?, token_hash).await
+    }
+
+    pub(crate) async fn find_valid_token_with(
+        conn: &mut sqlx::PgConnection,
+        token_hash: &str,
+    ) -> ServerResult<RefreshToken> {
         let row = sqlx::query!(
             "SELECT id, user_id FROM refresh_tokens \
              WHERE token_hash = $1 AND used_at IS NULL AND expires_at > NOW()",
             token_hash,
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(conn)
         .await
         .map_err(|e| match e {
             sqlx::Error::RowNotFound => Error::Unauthorised,
@@ -90,17 +102,6 @@ impl RefreshTokenMapper {
             id: row.id,
             user_id: row.user_id,
         })
-    }
-
-    /// Mark a token as used.  Called atomically inside `rotate_token`.
-    async fn mark_used(&self, tx: &mut sqlx::Transaction<'_, sqlx::Postgres>, token_id: i32) -> ServerResult<()> {
-        sqlx::query!(
-            "UPDATE refresh_tokens SET used_at = NOW() WHERE id = $1",
-            token_id,
-        )
-        .execute(&mut **tx)
-        .await?;
-        Ok(())
     }
 
     /// Rotate a token: atomically mark the old one used and insert a new one.
@@ -116,25 +117,39 @@ impl RefreshTokenMapper {
     ) -> ServerResult<()> {
         let mut tx = self.db.pool.begin().await?;
 
-        if let Err(e) = self.mark_used(&mut tx, old_token_id).await {
+        if let Err(e) =
+            Self::rotate_token_with(&mut *tx, old_token_id, user_id, new_token_hash).await
+        {
             tx.rollback().await?;
             return Err(e);
         }
 
-        if let Err(e) = sqlx::query!(
+        tx.commit().await?;
+        Ok(())
+    }
+
+    pub(crate) async fn rotate_token_with(
+        conn: &mut sqlx::PgConnection,
+        old_token_id: i32,
+        user_id: i32,
+        new_token_hash: &str,
+    ) -> ServerResult<()> {
+        sqlx::query!(
+            "UPDATE refresh_tokens SET used_at = NOW() WHERE id = $1",
+            old_token_id,
+        )
+        .execute(&mut *conn)
+        .await?;
+
+        sqlx::query!(
             "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) \
              VALUES ($1, $2, NOW() + INTERVAL '30 days')",
             user_id,
             new_token_hash,
         )
-        .execute(&mut *tx)
-        .await
-        {
-            tx.rollback().await?;
-            return Err(e.into());
-        }
+        .execute(&mut *conn)
+        .await?;
 
-        tx.commit().await?;
         Ok(())
     }
 
@@ -143,11 +158,18 @@ impl RefreshTokenMapper {
     /// # Errors
     /// Returns an error if the query fails.
     pub async fn invalidate_all_for_user(&self, user_id: i32) -> ServerResult<()> {
+        Self::invalidate_all_for_user_with(&mut *self.db.pool.acquire().await?, user_id).await
+    }
+
+    pub(crate) async fn invalidate_all_for_user_with(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+    ) -> ServerResult<()> {
         sqlx::query!(
             "DELETE FROM refresh_tokens WHERE user_id = $1",
             user_id,
         )
-        .execute(&self.db.pool)
+        .execute(conn)
         .await?;
         Ok(())
     }
@@ -156,7 +178,6 @@ impl RefreshTokenMapper {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::PgPool;
 
     fn hash(raw: &str) -> String {
         use sha2::{Digest, Sha256};
@@ -167,72 +188,103 @@ mod tests {
         })
     }
 
-    async fn seed_user(pool: &PgPool) -> i32 {
-        sqlx::query_scalar!(
-            "INSERT INTO users (username, email, password_hash) \
-             VALUES ('tester', 'tester@test.com', 'hash') RETURNING id"
+    async fn seed_user(conn: &mut sqlx::PgConnection) -> i32 {
+        let n: u64 = rand::random();
+        sqlx::query_scalar(
+            "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, 'hash') RETURNING id",
         )
-        .fetch_one(pool)
+        .bind(format!("tester_{n}"))
+        .bind(format!("tester_{n}@test.com"))
+        .fetch_one(conn)
         .await
         .unwrap()
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn replace_token_stores_and_can_be_found(pool: PgPool) {
-        let user_id = seed_user(&pool).await;
-        let mapper = RefreshTokenMapper::from_pool(pool);
+    #[tokio::test]
+    async fn replace_token_stores_and_can_be_found() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = seed_user(&mut *tx).await;
         let raw = "raw_token_abc";
         let h = hash(raw);
-        mapper.replace_token(user_id, &h).await.unwrap();
-        let tok = mapper.find_valid_token(&h).await.unwrap();
+        RefreshTokenMapper::replace_token_with(&mut *tx, user_id, &h)
+            .await
+            .unwrap();
+        let tok = RefreshTokenMapper::find_valid_token_with(&mut *tx, &h)
+            .await
+            .unwrap();
         assert_eq!(tok.user_id, user_id);
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn replace_token_clears_previous(pool: PgPool) {
-        let user_id = seed_user(&pool).await;
-        let mapper = RefreshTokenMapper::from_pool(pool);
+    #[tokio::test]
+    async fn replace_token_clears_previous() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = seed_user(&mut *tx).await;
         let h1 = hash("first_token");
         let h2 = hash("second_token");
-        mapper.replace_token(user_id, &h1).await.unwrap();
-        mapper.replace_token(user_id, &h2).await.unwrap();
-        // old token should no longer be valid
-        assert!(mapper.find_valid_token(&h1).await.is_err());
-        // new token should be valid
-        assert!(mapper.find_valid_token(&h2).await.is_ok());
+        RefreshTokenMapper::replace_token_with(&mut *tx, user_id, &h1)
+            .await
+            .unwrap();
+        RefreshTokenMapper::replace_token_with(&mut *tx, user_id, &h2)
+            .await
+            .unwrap();
+        assert!(RefreshTokenMapper::find_valid_token_with(&mut *tx, &h1)
+            .await
+            .is_err());
+        assert!(RefreshTokenMapper::find_valid_token_with(&mut *tx, &h2)
+            .await
+            .is_ok());
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn rotate_token_marks_old_used_and_stores_new(pool: PgPool) {
-        let user_id = seed_user(&pool).await;
-        let mapper = RefreshTokenMapper::from_pool(pool);
+    #[tokio::test]
+    async fn rotate_token_marks_old_used_and_stores_new() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = seed_user(&mut *tx).await;
         let h1 = hash("first_token");
-        mapper.replace_token(user_id, &h1).await.unwrap();
-        let old = mapper.find_valid_token(&h1).await.unwrap();
+        RefreshTokenMapper::replace_token_with(&mut *tx, user_id, &h1)
+            .await
+            .unwrap();
+        let old = RefreshTokenMapper::find_valid_token_with(&mut *tx, &h1)
+            .await
+            .unwrap();
 
         let h2 = hash("rotated_token");
-        mapper.rotate_token(old.id, user_id, &h2).await.unwrap();
+        RefreshTokenMapper::rotate_token_with(&mut *tx, old.id, user_id, &h2)
+            .await
+            .unwrap();
 
-        // old must be invalid
-        assert!(mapper.find_valid_token(&h1).await.is_err());
-        // new must be valid
-        assert!(mapper.find_valid_token(&h2).await.is_ok());
+        assert!(RefreshTokenMapper::find_valid_token_with(&mut *tx, &h1)
+            .await
+            .is_err());
+        assert!(RefreshTokenMapper::find_valid_token_with(&mut *tx, &h2)
+            .await
+            .is_ok());
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn invalidate_all_removes_tokens(pool: PgPool) {
-        let user_id = seed_user(&pool).await;
-        let mapper = RefreshTokenMapper::from_pool(pool);
+    #[tokio::test]
+    async fn invalidate_all_removes_tokens() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = seed_user(&mut *tx).await;
         let h = hash("some_token");
-        mapper.replace_token(user_id, &h).await.unwrap();
-        mapper.invalidate_all_for_user(user_id).await.unwrap();
-        assert!(mapper.find_valid_token(&h).await.is_err());
+        RefreshTokenMapper::replace_token_with(&mut *tx, user_id, &h)
+            .await
+            .unwrap();
+        RefreshTokenMapper::invalidate_all_for_user_with(&mut *tx, user_id)
+            .await
+            .unwrap();
+        assert!(RefreshTokenMapper::find_valid_token_with(&mut *tx, &h)
+            .await
+            .is_err());
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn missing_token_returns_unauthorised(pool: PgPool) {
-        let mapper = RefreshTokenMapper::from_pool(pool);
-        let result = mapper.find_valid_token("nonexistent_hash").await;
+    #[tokio::test]
+    async fn missing_token_returns_unauthorised() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let result = RefreshTokenMapper::find_valid_token_with(&mut *tx, "nonexistent_hash").await;
         assert!(matches!(result, Err(Error::Unauthorised)));
+        tx.rollback().await.unwrap();
     }
 }

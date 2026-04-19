@@ -12,7 +12,7 @@ pub const CACHE_TTL_CALENDAR: u64 = 7200;
 
 #[derive(Clone)]
 pub struct Cache {
-    connection: Arc<Mutex<MultiplexedConnection>>,
+    connection: MultiplexedConnection,
     metrics: Arc<Mutex<CacheMetrics>>,
 }
 
@@ -47,7 +47,7 @@ impl Cache {
         let connection = client.get_multiplexed_async_connection().await?;
 
         Ok(Self {
-            connection: Arc::new(Mutex::new(connection)),
+            connection,
             metrics: Arc::new(Mutex::new(CacheMetrics::default())),
         })
     }
@@ -58,9 +58,10 @@ impl Cache {
     where
         T: DeserializeOwned,
     {
+        let mut conn = self.connection.clone();
         let value: Option<String> = redis::cmd("GET")
             .arg(key)
-            .query_async(&mut *self.connection.lock().await)
+            .query_async(&mut conn)
             .await?;
 
         if let Some(v) = value {
@@ -80,9 +81,10 @@ impl Cache {
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn delete(&self, key: &str) -> RedisResult<()> {
+        let mut conn = self.connection.clone();
         redis::cmd("DEL")
             .arg(key)
-            .exec_async(&mut *self.connection.lock().await)
+            .exec_async(&mut conn)
             .await?;
         Ok(())
     }
@@ -90,9 +92,10 @@ impl Cache {
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn exists(&self, key: &str) -> RedisResult<bool> {
+        let mut conn = self.connection.clone();
         let result: i64 = redis::cmd("EXISTS")
             .arg(key)
-            .query_async(&mut *self.connection.lock().await)
+            .query_async(&mut conn)
             .await?;
         Ok(result > 0)
     }
@@ -102,6 +105,7 @@ impl Cache {
     pub async fn get_keys(&self, pattern: &str) -> RedisResult<Vec<String>> {
         let mut keys: Vec<String> = Vec::new();
         let mut cursor: u64 = 0;
+        let mut conn = self.connection.clone();
         loop {
             let (next_cursor, batch): (u64, Vec<String>) = redis::cmd("SCAN")
                 .arg(cursor)
@@ -109,7 +113,7 @@ impl Cache {
                 .arg(pattern)
                 .arg("COUNT")
                 .arg(100)
-                .query_async(&mut *self.connection.lock().await)
+                .query_async(&mut conn)
                 .await?;
             keys.extend(batch);
             cursor = next_cursor;
@@ -123,8 +127,9 @@ impl Cache {
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn flush(&self) -> RedisResult<()> {
+        let mut conn = self.connection.clone();
         redis::cmd("FLUSHALL")
-            .exec_async(&mut *self.connection.lock().await)
+            .exec_async(&mut conn)
             .await?;
         Ok(())
     }
@@ -139,12 +144,13 @@ impl Cache {
             redis::RedisError::from((redis::ErrorKind::Io, "Serialization failed", e.to_string()))
         })?;
 
+        let mut conn = self.connection.clone();
         redis::cmd("SET")
             .arg(key)
             .arg(serialized)
             .arg("EX")
             .arg(ttl_seconds)
-            .exec_async(&mut *self.connection.lock().await)
+            .exec_async(&mut conn)
             .await?;
 
         Ok(())

@@ -601,7 +601,7 @@ mod integration_tests {
     use actix_web::{http::StatusCode, test, web, App};
     use secrecy::SecretString;
     use serde_json::Value;
-    use sqlx::{PgPool, Row};
+    use sqlx::Row;
 
     const SECRET: &str = "test-jwt-secret-at-least-32-bytes";
 
@@ -609,19 +609,29 @@ mod integration_tests {
         web::Data::new(JwtSecret::new(SecretString::from(SECRET)))
     }
 
-    async fn seed_user(pool: &PgPool, username: &str, email: &str) -> (i32, String) {
+    struct SeedUser {
+        id: i32,
+        token: String,
+    }
+
+    async fn seed_user(pool: &sqlx::PgPool) -> SeedUser {
         use crate::services::auth::generate_token;
+        let n: u64 = rand::random();
         let hash = hash_password("SecurePass12!@").unwrap();
         let user = UserMapper::from_pool(pool.clone())
-            .create_user(username, email, Some(&hash))
+            .create_user(
+                &format!("caltest_{n}"),
+                &format!("caltest_{n}@test.com"),
+                Some(&hash),
+            )
             .await
             .unwrap();
         let token = generate_token(&user.id, SECRET).unwrap();
-        (user.id, token)
+        SeedUser { id: user.id, token }
     }
 
-    /// Insert a bare calendar row directly (no items), returning its id and token.
-    async fn seed_calendar(pool: &PgPool, user_id: i32, name: &str) -> (i32, String) {
+    /// Insert a bare calendar row directly (no items), returning its id and subscription token.
+    async fn seed_calendar(pool: &sqlx::PgPool, user_id: i32, name: &str) -> (i32, String) {
         let row = sqlx::query(
             "INSERT INTO calendars (name, language, user_id, subscription_token) \
              VALUES ($1, 'english'::language, $2, encode(gen_random_bytes(32), 'hex')) \
@@ -639,8 +649,9 @@ mod integration_tests {
 
     // ─── PUT /calendar (validation / auth) ───────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn put_calendar_without_token_returns_401(pool: PgPool) {
+    #[tokio::test]
+    async fn put_calendar_without_token_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -661,9 +672,10 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn put_calendar_empty_name_returns_400(pool: PgPool) {
-        let (_, token) = seed_user(&pool, "alice", "alice@test.com").await;
+    #[tokio::test]
+    async fn put_calendar_empty_name_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -676,7 +688,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::put()
             .uri("/calendar")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .set_json(
                 serde_json::json!({ "id": 0, "name": "", "language": "english", "items": [] }),
             )
@@ -687,9 +699,10 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn put_calendar_name_too_long_returns_400(pool: PgPool) {
-        let (_, token) = seed_user(&pool, "bob", "bob@test.com").await;
+    #[tokio::test]
+    async fn put_calendar_name_too_long_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -703,7 +716,7 @@ mod integration_tests {
         let long_name = "a".repeat(101);
         let req = test::TestRequest::put()
             .uri("/calendar")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .set_json(serde_json::json!({ "id": 0, "name": long_name, "language": "english", "items": [] }))
             .to_request();
         assert_eq!(
@@ -714,11 +727,12 @@ mod integration_tests {
 
     // ─── GET /calendars ───────────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_calendars_returns_paginated_list(pool: PgPool) {
-        let (user_id, token) = seed_user(&pool, "carol", "carol@test.com").await;
-        seed_calendar(&pool, user_id, "Cal A").await;
-        seed_calendar(&pool, user_id, "Cal B").await;
+    #[tokio::test]
+    async fn get_calendars_returns_paginated_list() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        seed_calendar(&pool, user.id, "Cal A").await;
+        seed_calendar(&pool, user.id, "Cal B").await;
 
         let app = test::init_service(
             App::new()
@@ -731,7 +745,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/calendars?page=1&page_size=10")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
@@ -740,8 +754,9 @@ mod integration_tests {
         assert_eq!(body["data"].as_array().unwrap().len(), 2);
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_calendars_without_token_returns_401(pool: PgPool) {
+    #[tokio::test]
+    async fn get_calendars_without_token_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -758,12 +773,13 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_calendars_only_returns_own_calendars(pool: PgPool) {
-        let (user_id_a, token_a) = seed_user(&pool, "dave", "dave@test.com").await;
-        let (user_id_b, _) = seed_user(&pool, "eve", "eve@test.com").await;
-        seed_calendar(&pool, user_id_a, "Dave's Cal").await;
-        seed_calendar(&pool, user_id_b, "Eve's Cal").await;
+    #[tokio::test]
+    async fn get_calendars_only_returns_own_calendars() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_a = seed_user(&pool).await;
+        let user_b = seed_user(&pool).await;
+        seed_calendar(&pool, user_a.id, "Dave's Cal").await;
+        seed_calendar(&pool, user_b.id, "Eve's Cal").await;
 
         let app = test::init_service(
             App::new()
@@ -776,11 +792,11 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/calendars")
-            .insert_header(("Cookie", format!("auth_token={token_a}")))
+            .insert_header(("Cookie", format!("auth_token={}", user_a.token)))
             .to_request();
         let resp = test::call_service(&app, req).await;
         let body: Value = test::read_body_json(resp).await;
-        // Dave should only see his own calendar
+        // user_a should only see their own calendar
         assert_eq!(body["pagination"]["total"], 1);
         let names: Vec<&str> = body["data"]
             .as_array()
@@ -794,8 +810,9 @@ mod integration_tests {
 
     // ─── GET /calendars/{id} ─────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_calendar_without_token_returns_401(pool: PgPool) {
+    #[tokio::test]
+    async fn get_calendar_without_token_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -813,9 +830,10 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_calendar_not_found_returns_404(pool: PgPool) {
-        let (_, token) = seed_user(&pool, "frank", "frank@test.com").await;
+    #[tokio::test]
+    async fn get_calendar_not_found_returns_404() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -828,7 +846,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/calendars/999999")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .to_request();
         assert_eq!(
             test::call_service(&app, req).await.status(),
@@ -838,10 +856,11 @@ mod integration_tests {
 
     // ─── DELETE /calendars/{id} ───────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn delete_calendar_own_returns_200(pool: PgPool) {
-        let (user_id, token) = seed_user(&pool, "grace", "grace@test.com").await;
-        let (cal_id, _) = seed_calendar(&pool, user_id, "To Delete").await;
+    #[tokio::test]
+    async fn delete_calendar_own_returns_200() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let (cal_id, _) = seed_calendar(&pool, user.id, "To Delete").await;
 
         let app = test::init_service(
             App::new()
@@ -854,14 +873,15 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::delete()
             .uri(&format!("/calendars/{cal_id}"))
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn delete_calendar_non_existent_returns_404(pool: PgPool) {
-        let (_, token) = seed_user(&pool, "henry", "henry@test.com").await;
+    #[tokio::test]
+    async fn delete_calendar_non_existent_returns_404() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -873,7 +893,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::delete()
             .uri("/calendars/999999")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .to_request();
         assert_eq!(
             test::call_service(&app, req).await.status(),
@@ -881,8 +901,9 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn delete_calendar_without_token_returns_401(pool: PgPool) {
+    #[tokio::test]
+    async fn delete_calendar_without_token_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))

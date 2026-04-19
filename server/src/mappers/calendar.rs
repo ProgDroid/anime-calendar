@@ -30,9 +30,26 @@ impl CalendarMapper {
         })
     }
 
+    /// Construct a mapper from a bare pool — for integration tests only.
+    #[cfg(test)]
+    #[must_use]
+    pub const fn from_pool(pool: sqlx::PgPool) -> Self {
+        Self {
+            db: Database { pool },
+        }
+    }
+
     /// # Errors
     /// Returns an error if the query fails
     pub async fn get_calendar_by_id(&self, id: i32, user_id: i32) -> ServerResult<Calendar> {
+        Self::get_calendar_by_id_with(&mut *self.db.pool.acquire().await?, id, user_id).await
+    }
+
+    pub(crate) async fn get_calendar_by_id_with(
+        conn: &mut sqlx::PgConnection,
+        id: i32,
+        user_id: i32,
+    ) -> ServerResult<Calendar> {
         let calendar = sqlx::query!(
             "SELECT
                 id,
@@ -45,7 +62,7 @@ impl CalendarMapper {
             id,
             user_id
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(&mut *conn)
         .await
         .map_err(|e| match e {
             sqlx::Error::RowNotFound => Error::NotFound,
@@ -56,7 +73,7 @@ impl CalendarMapper {
             "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
             id
         )
-        .fetch_all(&self.db.pool)
+        .fetch_all(&mut *conn)
         .await?;
 
         Ok(Calendar {
@@ -74,6 +91,13 @@ impl CalendarMapper {
     /// # Errors
     /// Returns an error if the query fails or the token is not found
     pub async fn get_calendar_by_token(&self, token: &str) -> ServerResult<Calendar> {
+        Self::get_calendar_by_token_with(&mut *self.db.pool.acquire().await?, token).await
+    }
+
+    pub(crate) async fn get_calendar_by_token_with(
+        conn: &mut sqlx::PgConnection,
+        token: &str,
+    ) -> ServerResult<Calendar> {
         let calendar = sqlx::query!(
             "SELECT
                 id,
@@ -85,14 +109,14 @@ impl CalendarMapper {
                 updated_at FROM calendars WHERE subscription_token = $1 AND deleted_at IS NULL",
             token
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(&mut *conn)
         .await?;
 
         let item_ids: Vec<i32> = sqlx::query_scalar!(
             "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
             calendar.id
         )
-        .fetch_all(&self.db.pool)
+        .fetch_all(&mut *conn)
         .await?;
 
         Ok(Calendar {
@@ -120,11 +144,31 @@ impl CalendarMapper {
         page: usize,
         page_size: usize,
     ) -> ServerResult<(Vec<Calendar>, usize)> {
+        Self::get_calendars_by_user_paginated_with(
+            &mut *self.db.pool.acquire().await?,
+            user_id,
+            page,
+            page_size,
+        )
+        .await
+    }
+
+    #[allow(
+        clippy::cast_possible_wrap,
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss
+    )]
+    pub(crate) async fn get_calendars_by_user_paginated_with(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+        page: usize,
+        page_size: usize,
+    ) -> ServerResult<(Vec<Calendar>, usize)> {
         let total_count: i64 = match sqlx::query_scalar!(
             "SELECT COUNT(*) FROM calendars WHERE user_id = $1 AND deleted_at IS NULL",
             user_id
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(&mut *conn)
         .await?
         {
             Some(count) => count,
@@ -156,7 +200,7 @@ impl CalendarMapper {
             page_size as i64,
             ((page - 1) * page_size) as i64
         )
-        .fetch_all(&self.db.pool)
+        .fetch_all(&mut *conn)
         .await?;
 
         Ok((calendars, total_count as usize))
@@ -279,45 +323,147 @@ impl CalendarMapper {
     /// Returns `Error::NotFound` if the calendar does not exist, is already deleted,
     /// or does not belong to `user_id`.
     pub async fn delete_calendar(&self, id: i32, user_id: i32) -> ServerResult<String> {
+        Self::delete_calendar_with(&mut *self.db.pool.acquire().await?, id, user_id).await
+    }
+
+    pub(crate) async fn delete_calendar_with(
+        conn: &mut sqlx::PgConnection,
+        id: i32,
+        user_id: i32,
+    ) -> ServerResult<String> {
         let row = sqlx::query!(
             "UPDATE calendars SET deleted_at = NOW() WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL RETURNING subscription_token",
             id,
             user_id
         )
-        .fetch_one(&self.db.pool)
+        .fetch_one(conn)
         .await
         .map_err(|_| Error::NotFound)?;
 
         Ok(row.subscription_token)
     }
+}
 
-    /// Construct a mapper from a bare pool — for integration tests only.
-    #[cfg(test)]
-    #[must_use]
-    pub const fn from_pool(pool: sqlx::PgPool) -> Self {
-        Self {
-            db: Database { pool },
+// Test-only write variants that run on a caller-supplied connection.
+// These exist solely for rollback-based test isolation and are not part of the
+// production code path.
+#[cfg(test)]
+impl CalendarMapper {
+    pub(crate) async fn save_calendar_with(
+        conn: &mut sqlx::PgConnection,
+        calendar: Calendar,
+    ) -> ServerResult<Calendar> {
+        match calendar.id {
+            0 => Self::insert_calendar_with(conn, calendar).await,
+            _ => Self::update_calendar_with(conn, calendar).await,
         }
+    }
+
+    async fn insert_calendar_with(
+        conn: &mut sqlx::PgConnection,
+        calendar: Calendar,
+    ) -> ServerResult<Calendar> {
+        let token = Self::generate_subscription_token();
+        let inserted_calendar = sqlx::query!(
+            "INSERT INTO calendars (name, language, user_id, subscription_token) VALUES ($1, $2, $3, $4) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
+            calendar.name,
+            calendar.language as Language,
+            calendar.user_id,
+            token,
+        )
+        .fetch_one(&mut *conn)
+        .await?;
+
+        Self::update_calendar_items_with(conn, inserted_calendar.id, calendar.item_ids.clone())
+            .await?;
+
+        Ok(Calendar {
+            id: inserted_calendar.id,
+            name: inserted_calendar.name,
+            item_ids: calendar.item_ids,
+            language: inserted_calendar.language,
+            subscription_token: inserted_calendar.subscription_token,
+            user_id: inserted_calendar.user_id,
+            created_at: inserted_calendar.created_at,
+            updated_at: inserted_calendar.updated_at,
+        })
+    }
+
+    async fn update_calendar_with(
+        conn: &mut sqlx::PgConnection,
+        calendar: Calendar,
+    ) -> ServerResult<Calendar> {
+        let updated_calendar = sqlx::query!(
+            "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 AND deleted_at IS NULL RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
+            calendar.name,
+            calendar.language as Language,
+            calendar.id,
+            calendar.user_id,
+        )
+        .fetch_one(&mut *conn)
+        .await?;
+
+        Self::update_calendar_items_with(conn, updated_calendar.id, calendar.item_ids.clone())
+            .await?;
+
+        Ok(Calendar {
+            id: updated_calendar.id,
+            name: updated_calendar.name,
+            item_ids: calendar.item_ids,
+            language: updated_calendar.language,
+            subscription_token: updated_calendar.subscription_token,
+            user_id: updated_calendar.user_id,
+            created_at: updated_calendar.created_at,
+            updated_at: updated_calendar.updated_at,
+        })
+    }
+
+    async fn update_calendar_items_with(
+        conn: &mut sqlx::PgConnection,
+        calendar_id: i32,
+        item_ids: Vec<i32>,
+    ) -> ServerResult<()> {
+        sqlx::query!(
+            "DELETE FROM calendar_items WHERE calendar_id = $1",
+            calendar_id
+        )
+        .execute(&mut *conn)
+        .await?;
+
+        if !item_ids.is_empty() {
+            let inserts: Vec<(i32, i32)> = item_ids
+                .iter()
+                .map(|item_id| (calendar_id, *item_id))
+                .collect();
+
+            let mut query_builder: QueryBuilder<Postgres> =
+                QueryBuilder::new("INSERT INTO calendar_items (calendar_id, item_id) ");
+
+            query_builder.push_values(inserts, |mut b, insert| {
+                b.push_bind(insert.0).push_bind(insert.1);
+            });
+
+            query_builder.push(" ON CONFLICT (calendar_id, item_id) DO NOTHING");
+
+            query_builder.build().execute(&mut *conn).await?;
+        }
+
+        Ok(())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::PgPool;
 
-    fn mapper(pool: PgPool) -> CalendarMapper {
-        CalendarMapper {
-            db: Database { pool },
-        }
-    }
-
-    /// Insert a throwaway user; each test gets its own DB so no uniqueness concerns.
-    async fn create_test_user(pool: &PgPool) -> i32 {
+    async fn create_test_user(conn: &mut sqlx::PgConnection) -> i32 {
+        let n: u64 = rand::random();
         sqlx::query_scalar(
-            "INSERT INTO users (username, email) VALUES ('caltest', 'caltest@example.com') RETURNING id"
+            "INSERT INTO users (username, email) VALUES ($1, $2) RETURNING id",
         )
-        .fetch_one(pool)
+        .bind(format!("caltest_{n}"))
+        .bind(format!("caltest_{n}@example.com"))
+        .fetch_one(conn)
         .await
         .unwrap()
     }
@@ -335,52 +481,73 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn insert_calendar_returns_calendar_with_43_char_token(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        let cal = m.insert_calendar(new_calendar(user_id)).await.unwrap();
+    #[tokio::test]
+    async fn insert_calendar_returns_calendar_with_43_char_token() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        let cal = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+            .await
+            .unwrap();
         assert!(cal.id > 0);
         assert_eq!(cal.subscription_token.len(), 43);
         assert_eq!(cal.name, "My Calendar");
         assert_eq!(cal.user_id, user_id);
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_calendar_by_id_finds_inserted(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        let inserted = m.insert_calendar(new_calendar(user_id)).await.unwrap();
-        let fetched = m.get_calendar_by_id(inserted.id, user_id).await.unwrap();
-        assert_eq!(fetched.id, inserted.id);
-        assert_eq!(fetched.name, "My Calendar");
-    }
-
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_calendar_by_id_wrong_user_returns_error(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        let inserted = m.insert_calendar(new_calendar(user_id)).await.unwrap();
-        assert!(m.get_calendar_by_id(inserted.id, i32::MAX).await.is_err());
-    }
-
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_calendar_by_token_finds_inserted(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        let inserted = m.insert_calendar(new_calendar(user_id)).await.unwrap();
-        let fetched = m
-            .get_calendar_by_token(&inserted.subscription_token)
+    #[tokio::test]
+    async fn get_calendar_by_id_finds_inserted() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
             .await
             .unwrap();
+        let fetched =
+            CalendarMapper::get_calendar_by_id_with(&mut *tx, inserted.id, user_id)
+                .await
+                .unwrap();
         assert_eq!(fetched.id, inserted.id);
+        assert_eq!(fetched.name, "My Calendar");
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn update_calendar_changes_name_and_language(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        let inserted = m.insert_calendar(new_calendar(user_id)).await.unwrap();
+    #[tokio::test]
+    async fn get_calendar_by_id_wrong_user_returns_error() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+            .await
+            .unwrap();
+        assert!(
+            CalendarMapper::get_calendar_by_id_with(&mut *tx, inserted.id, i32::MAX)
+                .await
+                .is_err()
+        );
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_calendar_by_token_finds_inserted() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+            .await
+            .unwrap();
+        let fetched =
+            CalendarMapper::get_calendar_by_token_with(&mut *tx, &inserted.subscription_token)
+                .await
+                .unwrap();
+        assert_eq!(fetched.id, inserted.id);
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn update_calendar_changes_name_and_language() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+            .await
+            .unwrap();
         let to_update = Calendar {
             id: inserted.id,
             name: "Renamed".to_string(),
@@ -388,108 +555,152 @@ mod tests {
             item_ids: vec![],
             ..inserted.clone()
         };
-        let updated = m.update_calendar(to_update).await.unwrap();
+        let updated = CalendarMapper::update_calendar_with(&mut *tx, to_update)
+            .await
+            .unwrap();
         assert_eq!(updated.name, "Renamed");
         assert!(matches!(updated.language, Language::Native));
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn save_calendar_with_item_ids_round_trips(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
+    #[tokio::test]
+    async fn save_calendar_with_item_ids_round_trips() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
         let cal = Calendar {
             item_ids: vec![101, 202, 303],
             ..new_calendar(user_id)
         };
-        let saved = m.save_calendar(cal).await.unwrap();
-        let fetched = m.get_calendar_by_id(saved.id, user_id).await.unwrap();
+        let saved = CalendarMapper::save_calendar_with(&mut *tx, cal).await.unwrap();
+        let fetched =
+            CalendarMapper::get_calendar_by_id_with(&mut *tx, saved.id, user_id)
+                .await
+                .unwrap();
         let mut ids = fetched.item_ids;
         ids.sort_unstable();
         assert_eq!(ids, vec![101, 202, 303]);
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn delete_calendar_soft_deletes_so_lookup_fails(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        let inserted = m.insert_calendar(new_calendar(user_id)).await.unwrap();
-        m.delete_calendar(inserted.id, user_id).await.unwrap();
-        assert!(m.get_calendar_by_id(inserted.id, user_id).await.is_err());
-        assert!(m
-            .get_calendar_by_token(&inserted.subscription_token)
+    #[tokio::test]
+    async fn delete_calendar_soft_deletes_so_lookup_fails() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
             .await
-            .is_err());
+            .unwrap();
+        CalendarMapper::delete_calendar_with(&mut *tx, inserted.id, user_id)
+            .await
+            .unwrap();
+        assert!(
+            CalendarMapper::get_calendar_by_id_with(&mut *tx, inserted.id, user_id)
+                .await
+                .is_err()
+        );
+        assert!(
+            CalendarMapper::get_calendar_by_token_with(&mut *tx, &inserted.subscription_token)
+                .await
+                .is_err()
+        );
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn delete_calendar_returns_subscription_token(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        let inserted = m.insert_calendar(new_calendar(user_id)).await.unwrap();
-        let token = m.delete_calendar(inserted.id, user_id).await.unwrap();
+    #[tokio::test]
+    async fn delete_calendar_returns_subscription_token() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+            .await
+            .unwrap();
+        let token =
+            CalendarMapper::delete_calendar_with(&mut *tx, inserted.id, user_id)
+                .await
+                .unwrap();
         assert_eq!(token, inserted.subscription_token);
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn delete_calendar_preserves_calendar_items_as_audit_trail(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool.clone());
+    #[tokio::test]
+    async fn delete_calendar_preserves_calendar_items_as_audit_trail() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
         let cal = Calendar {
             item_ids: vec![42, 43],
             ..new_calendar(user_id)
         };
-        let inserted = m.save_calendar(cal).await.unwrap();
-        m.delete_calendar(inserted.id, user_id).await.unwrap();
+        let inserted = CalendarMapper::save_calendar_with(&mut *tx, cal).await.unwrap();
+        CalendarMapper::delete_calendar_with(&mut *tx, inserted.id, user_id)
+            .await
+            .unwrap();
         let count: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM calendar_items WHERE calendar_id = $1")
                 .bind(inserted.id)
-                .fetch_one(&pool)
+                .fetch_one(&mut *tx)
                 .await
                 .unwrap();
         assert_eq!(
             count, 2,
             "calendar_items should be preserved after soft delete"
         );
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn delete_calendar_wrong_user_returns_not_found(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        let inserted = m.insert_calendar(new_calendar(user_id)).await.unwrap();
-        assert!(m.delete_calendar(inserted.id, i32::MAX).await.is_err());
+    #[tokio::test]
+    async fn delete_calendar_wrong_user_returns_not_found() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+            .await
+            .unwrap();
+        assert!(
+            CalendarMapper::delete_calendar_with(&mut *tx, inserted.id, i32::MAX)
+                .await
+                .is_err()
+        );
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_calendars_paginated_returns_all_active(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        m.insert_calendar(new_calendar(user_id)).await.unwrap();
-        m.insert_calendar(Calendar {
-            name: "Second".to_string(),
-            ..new_calendar(user_id)
-        })
+    #[tokio::test]
+    async fn get_calendars_paginated_returns_all_active() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
+            .await
+            .unwrap();
+        CalendarMapper::insert_calendar_with(
+            &mut *tx,
+            Calendar {
+                name: "Second".to_string(),
+                ..new_calendar(user_id)
+            },
+        )
         .await
         .unwrap();
-        let (cals, total) = m
-            .get_calendars_by_user_paginated(user_id, 1, 10)
-            .await
-            .unwrap();
+        let (cals, total) =
+            CalendarMapper::get_calendars_by_user_paginated_with(&mut *tx, user_id, 1, 10)
+                .await
+                .unwrap();
         assert_eq!(total, 2);
         assert_eq!(cals.len(), 2);
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_calendars_paginated_excludes_deleted(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        let inserted = m.insert_calendar(new_calendar(user_id)).await.unwrap();
-        m.delete_calendar(inserted.id, user_id).await.unwrap();
-        let (cals, total) = m
-            .get_calendars_by_user_paginated(user_id, 1, 10)
+    #[tokio::test]
+    async fn get_calendars_paginated_excludes_deleted() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut *tx, new_calendar(user_id))
             .await
             .unwrap();
+        CalendarMapper::delete_calendar_with(&mut *tx, inserted.id, user_id)
+            .await
+            .unwrap();
+        let (cals, total) =
+            CalendarMapper::get_calendars_by_user_paginated_with(&mut *tx, user_id, 1, 10)
+                .await
+                .unwrap();
         assert_eq!(total, 0);
         assert!(cals.is_empty());
+        tx.rollback().await.unwrap();
     }
 }

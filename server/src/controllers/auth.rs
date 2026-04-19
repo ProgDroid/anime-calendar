@@ -391,7 +391,6 @@ mod integration_tests {
     use actix_web::{http::StatusCode, test, web, App};
     use secrecy::SecretString;
     use serde_json::Value;
-    use sqlx::PgPool;
 
     const SECRET: &str = "test-jwt-secret-at-least-32-bytes";
     const STRONG_PW: &str = "SecurePass12!@";
@@ -404,23 +403,33 @@ mod integration_tests {
         web::Data::new(CookieSettings { secure: false })
     }
 
-    /// Seed a password-based user and return its id.
-    async fn seed_user(pool: &PgPool, username: &str, email: &str) -> i32 {
+    struct SeedUser {
+        id: i32,
+        username: String,
+        email: String,
+    }
+
+    /// Seed a verified password-based user with random username/email.
+    async fn seed_user(pool: &sqlx::PgPool) -> SeedUser {
+        let n: u64 = rand::random();
+        let username = format!("authtest_{n}");
+        let email = format!("authtest_{n}@test.com");
         let hash = hash_password(STRONG_PW).unwrap();
         let mapper = UserMapper::from_pool(pool.clone());
         let user = mapper
-            .create_user(username, email, Some(&hash))
+            .create_user(&username, &email, Some(&hash))
             .await
             .unwrap();
         mapper.mark_email_verified(user.id).await.unwrap();
-        user.id
+        SeedUser { id: user.id, username, email }
     }
 
     // ─── POST /login ──────────────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn login_valid_credentials_sets_cookie_and_returns_username(pool: PgPool) {
-        seed_user(&pool, "alice", "alice@test.com").await;
+    #[tokio::test]
+    async fn login_valid_credentials_sets_cookie_and_returns_username() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -435,7 +444,7 @@ mod integration_tests {
 
         let req = test::TestRequest::post()
             .uri("/login")
-            .set_json(serde_json::json!({ "email": "alice@test.com", "password": STRONG_PW }))
+            .set_json(serde_json::json!({ "email": user.email, "password": STRONG_PW }))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
@@ -451,13 +460,14 @@ mod integration_tests {
         assert!(set_cookie.contains("HttpOnly"), "HttpOnly flag missing");
 
         let body: Value = test::read_body_json(resp).await;
-        assert_eq!(body["username"], "alice");
+        assert_eq!(body["username"], user.username);
         assert!(body.get("token").is_none(), "token should not be in body");
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn login_wrong_password_returns_401(pool: PgPool) {
-        seed_user(&pool, "bob", "bob@test.com").await;
+    #[tokio::test]
+    async fn login_wrong_password_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -469,7 +479,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/login")
-            .set_json(serde_json::json!({ "email": "bob@test.com", "password": "WrongPass99!" }))
+            .set_json(serde_json::json!({ "email": user.email, "password": "WrongPass99!" }))
             .to_request();
         assert_eq!(
             test::call_service(&app, req).await.status(),
@@ -477,9 +487,10 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn login_unknown_email_returns_401_not_404(pool: PgPool) {
+    #[tokio::test]
+    async fn login_unknown_email_returns_401_not_404() {
         // User enumeration prevention: unknown user must return 401, not 404.
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -499,11 +510,14 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn login_oauth_user_without_password_returns_401(pool: PgPool) {
+    #[tokio::test]
+    async fn login_oauth_user_without_password_returns_401() {
         // OAuth users have no password_hash; password login must be uniformly refused.
+        let pool = crate::test_helpers::test_pool().await;
+        let n: u64 = rand::random();
+        let email = format!("oauth_{n}@test.com");
         UserMapper::from_pool(pool.clone())
-            .create_user("oauth_user", "oauth@test.com", None)
+            .create_user(&format!("oauthusr_{n}"), &email, None)
             .await
             .unwrap();
         let app = test::init_service(
@@ -517,7 +531,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/login")
-            .set_json(serde_json::json!({ "email": "oauth@test.com", "password": STRONG_PW }))
+            .set_json(serde_json::json!({ "email": email, "password": STRONG_PW }))
             .to_request();
         assert_eq!(
             test::call_service(&app, req).await.status(),
@@ -525,15 +539,17 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn login_unverified_user_returns_403(pool: PgPool) {
+    #[tokio::test]
+    async fn login_unverified_user_returns_403() {
         // Create user WITHOUT calling mark_email_verified
+        let pool = crate::test_helpers::test_pool().await;
+        let n: u64 = rand::random();
+        let email = format!("unverified_{n}@test.com");
         let hash = hash_password(STRONG_PW).unwrap();
         UserMapper::from_pool(pool.clone())
-            .create_user("unverified", "unverified@test.com", Some(&hash))
+            .create_user(&format!("unverified_{n}"), &email, Some(&hash))
             .await
             .unwrap();
-
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -543,13 +559,9 @@ mod integration_tests {
                 .service(login),
         )
         .await;
-
         let req = test::TestRequest::post()
             .uri("/login")
-            .set_json(serde_json::json!({
-                "email": "unverified@test.com",
-                "password": STRONG_PW
-            }))
+            .set_json(serde_json::json!({ "email": email, "password": STRONG_PW }))
             .to_request();
         assert_eq!(
             test::call_service(&app, req).await.status(),
@@ -559,8 +571,10 @@ mod integration_tests {
 
     // ─── POST /register ───────────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn register_new_user_returns_200_with_message_and_no_cookie(pool: PgPool) {
+    #[tokio::test]
+    async fn register_new_user_returns_200_with_message_and_no_cookie() {
+        let pool = crate::test_helpers::test_pool().await;
+        let n: u64 = rand::random();
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -578,8 +592,8 @@ mod integration_tests {
         let req = test::TestRequest::post()
             .uri("/register")
             .set_json(serde_json::json!({
-                "username": "carol",
-                "email": "carol@test.com",
+                "username": format!("newuser_{n}"),
+                "email": format!("newuser_{n}@test.com"),
                 "password": STRONG_PW
             }))
             .to_request();
@@ -605,9 +619,10 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn register_duplicate_email_returns_400(pool: PgPool) {
-        seed_user(&pool, "dave", "dave@test.com").await;
+    #[tokio::test]
+    async fn register_duplicate_email_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -629,8 +644,8 @@ mod integration_tests {
         let req = test::TestRequest::post()
             .uri("/register")
             .set_json(serde_json::json!({
-                "username": "dave2",
-                "email": "dave@test.com",
+                "username": "dupcheck",
+                "email": user.email,
                 "password": STRONG_PW
             }))
             .to_request();
@@ -640,8 +655,10 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn register_weak_password_returns_400(pool: PgPool) {
+    #[tokio::test]
+    async fn register_weak_password_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let n: u64 = rand::random();
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -663,8 +680,8 @@ mod integration_tests {
         let req = test::TestRequest::post()
             .uri("/register")
             .set_json(serde_json::json!({
-                "username": "eve",
-                "email": "eve@test.com",
+                "username": format!("weakpw_{n}"),
+                "email": format!("weakpw_{n}@test.com"),
                 "password": "weakpassword"
             }))
             .to_request();
@@ -674,8 +691,10 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn register_invalid_email_returns_400(pool: PgPool) {
+    #[tokio::test]
+    async fn register_invalid_email_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let n: u64 = rand::random();
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -697,7 +716,7 @@ mod integration_tests {
         let req = test::TestRequest::post()
             .uri("/register")
             .set_json(serde_json::json!({
-                "username": "frank",
+                "username": format!("badmail_{n}"),
                 "email": "not-an-email",
                 "password": STRONG_PW
             }))
@@ -708,8 +727,10 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn register_username_too_long_returns_400(pool: PgPool) {
+    #[tokio::test]
+    async fn register_username_too_long_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let n: u64 = rand::random();
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -733,7 +754,7 @@ mod integration_tests {
             .uri("/register")
             .set_json(serde_json::json!({
                 "username": long_name,
-                "email": "toolong@test.com",
+                "email": format!("toolong_{n}@test.com"),
                 "password": STRONG_PW
             }))
             .to_request();
@@ -745,9 +766,10 @@ mod integration_tests {
 
     // ─── GET /user ────────────────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_current_user_with_valid_jwt_returns_username(pool: PgPool) {
-        let user_id = seed_user(&pool, "grace", "grace@test.com").await;
+    #[tokio::test]
+    async fn get_current_user_with_valid_jwt_returns_username() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
@@ -755,7 +777,7 @@ mod integration_tests {
                 .service(get_current_user),
         )
         .await;
-        let token = generate_token(&user_id, SECRET).unwrap();
+        let token = generate_token(&user.id, SECRET).unwrap();
         let req = test::TestRequest::get()
             .uri("/user")
             .insert_header(("Cookie", format!("auth_token={token}")))
@@ -763,12 +785,13 @@ mod integration_tests {
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
         let body: Value = test::read_body_json(resp).await;
-        assert_eq!(body["username"], "grace");
+        assert_eq!(body["username"], user.username);
         assert!(body.get("token").is_none(), "token should not be in body");
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_current_user_without_cookie_returns_401(pool: PgPool) {
+    #[tokio::test]
+    async fn get_current_user_without_cookie_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
@@ -785,9 +808,10 @@ mod integration_tests {
 
     // ─── POST /auth/logout ────────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn logout_clears_auth_cookie(pool: PgPool) {
-        let user_id = seed_user(&pool, "hank", "hank@test.com").await;
+    #[tokio::test]
+    async fn logout_clears_auth_cookie() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -799,7 +823,7 @@ mod integration_tests {
         )
         .await;
 
-        let token = generate_token(&user_id, SECRET).unwrap();
+        let token = generate_token(&user.id, SECRET).unwrap();
         let req = test::TestRequest::post()
             .uri("/auth/logout")
             .insert_header(("Cookie", format!("auth_token={token}")))
@@ -820,8 +844,9 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn logout_without_cookie_returns_401(pool: PgPool) {
+    #[tokio::test]
+    async fn logout_without_cookie_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))

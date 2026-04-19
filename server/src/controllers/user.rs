@@ -325,7 +325,6 @@ mod integration_tests {
     use actix_web::{http::StatusCode, test, web, App};
     use secrecy::SecretString;
     use serde_json::Value;
-    use sqlx::PgPool;
 
     const SECRET: &str = "test-jwt-secret-at-least-32-bytes";
     const STRONG_PW: &str = "SecurePass12!@";
@@ -335,30 +334,44 @@ mod integration_tests {
         web::Data::new(JwtSecret::new(SecretString::from(SECRET)))
     }
 
-    async fn seed_user(pool: &PgPool, username: &str, email: &str) -> (i32, String) {
-        let hash = hash_password(STRONG_PW).unwrap();
-        let user = UserMapper::from_pool(pool.clone())
-            .create_user(username, email, Some(&hash))
-            .await
-            .unwrap();
-        let token = generate_token(&user.id, SECRET).unwrap();
-        (user.id, token)
+    struct SeedUser {
+        id: i32,
+        username: String,
+        email: String,
+        token: String,
     }
 
-    async fn seed_oauth_user(pool: &PgPool, username: &str, email: &str) -> (i32, String) {
+    async fn seed_user(pool: &sqlx::PgPool) -> SeedUser {
+        let n: u64 = rand::random();
+        let username = format!("usertest_{n}");
+        let email = format!("usertest_{n}@test.com");
+        let hash = hash_password(STRONG_PW).unwrap();
         let user = UserMapper::from_pool(pool.clone())
-            .create_user(username, email, None)
+            .create_user(&username, &email, Some(&hash))
             .await
             .unwrap();
         let token = generate_token(&user.id, SECRET).unwrap();
-        (user.id, token)
+        SeedUser { id: user.id, username, email, token }
+    }
+
+    async fn seed_oauth_user(pool: &sqlx::PgPool) -> SeedUser {
+        let n: u64 = rand::random();
+        let username = format!("oauthusr_{n}");
+        let email = format!("oauthusr_{n}@test.com");
+        let user = UserMapper::from_pool(pool.clone())
+            .create_user(&username, &email, None)
+            .await
+            .unwrap();
+        let token = generate_token(&user.id, SECRET).unwrap();
+        SeedUser { id: user.id, username, email, token }
     }
 
     // ─── GET /user/details ───────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_user_details_password_user_returns_username_and_email(pool: PgPool) {
-        let (_, token) = seed_user(&pool, "alice", "alice@test.com").await;
+    #[tokio::test]
+    async fn get_user_details_password_user_returns_username_and_email() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
@@ -368,19 +381,20 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/user/details")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
         let body: Value = test::read_body_json(resp).await;
-        assert_eq!(body["username"], "alice");
-        assert_eq!(body["email"], "alice@test.com");
+        assert_eq!(body["username"], user.username);
+        assert_eq!(body["email"], user.email);
         assert_eq!(body["is_oauth"], false);
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_user_details_oauth_user_returns_empty_username_and_is_oauth_true(pool: PgPool) {
-        let (_, token) = seed_oauth_user(&pool, "bob_oauth", "bob@test.com").await;
+    #[tokio::test]
+    async fn get_user_details_oauth_user_returns_empty_username_and_is_oauth_true() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_oauth_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
@@ -390,7 +404,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/user/details")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
@@ -399,8 +413,9 @@ mod integration_tests {
         assert_eq!(body["is_oauth"], true);
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_user_details_without_token_returns_401(pool: PgPool) {
+    #[tokio::test]
+    async fn get_user_details_without_token_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool)))
@@ -414,9 +429,13 @@ mod integration_tests {
 
     // ─── PUT /user ───────────────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn update_user_changes_username_and_email(pool: PgPool) {
-        let (_, token) = seed_user(&pool, "carol", "carol@test.com").await;
+    #[tokio::test]
+    async fn update_user_changes_username_and_email() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let m: u64 = rand::random();
+        let new_username = format!("updated_{m}");
+        let new_email = format!("updated_{m}@test.com");
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
@@ -428,20 +447,21 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::put()
             .uri("/user")
-            .insert_header(("Cookie", format!("auth_token={token}")))
-            .set_json(serde_json::json!({ "username": "carol2", "email": "carol2@test.com" }))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({ "username": new_username, "email": new_email }))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
         let body: Value = test::read_body_json(resp).await;
-        assert_eq!(body["username"], "carol2");
-        assert_eq!(body["email"], "carol2@test.com");
+        assert_eq!(body["username"], new_username);
+        assert_eq!(body["email"], new_email);
         assert_eq!(body["is_oauth"], false);
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn update_user_username_too_long_returns_400(pool: PgPool) {
-        let (_, token) = seed_user(&pool, "dave", "dave@test.com").await;
+    #[tokio::test]
+    async fn update_user_username_too_long_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
@@ -454,17 +474,18 @@ mod integration_tests {
         let long_name = "x".repeat(51);
         let req = test::TestRequest::put()
             .uri("/user")
-            .insert_header(("Cookie", format!("auth_token={token}")))
-            .set_json(serde_json::json!({ "username": long_name, "email": "dave@test.com" }))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({ "username": long_name, "email": user.email }))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
     }
 
     // ─── POST /user/password ─────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn update_password_with_correct_current_returns_200(pool: PgPool) {
-        let (_, token) = seed_user(&pool, "eve", "eve@test.com").await;
+    #[tokio::test]
+    async fn update_password_with_correct_current_returns_200() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
@@ -476,7 +497,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/user/password")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .set_json(serde_json::json!({
                 "current_password": STRONG_PW,
                 "new_password": NEW_PW
@@ -485,9 +506,10 @@ mod integration_tests {
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn update_password_wrong_current_returns_401(pool: PgPool) {
-        let (_, token) = seed_user(&pool, "frank", "frank@test.com").await;
+    #[tokio::test]
+    async fn update_password_wrong_current_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
@@ -499,7 +521,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/user/password")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .set_json(serde_json::json!({
                 "current_password": "WrongPass99!",
                 "new_password": NEW_PW
@@ -508,9 +530,10 @@ mod integration_tests {
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::UNAUTHORIZED);
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn update_password_same_as_current_returns_400(pool: PgPool) {
-        let (_, token) = seed_user(&pool, "grace", "grace@test.com").await;
+    #[tokio::test]
+    async fn update_password_same_as_current_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
@@ -522,7 +545,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/user/password")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .set_json(serde_json::json!({
                 "current_password": STRONG_PW,
                 "new_password": STRONG_PW
@@ -531,9 +554,10 @@ mod integration_tests {
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::BAD_REQUEST);
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn update_password_oauth_user_returns_400(pool: PgPool) {
-        let (_, token) = seed_oauth_user(&pool, "henry_oauth", "henry@test.com").await;
+    #[tokio::test]
+    async fn update_password_oauth_user_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_oauth_user(&pool).await;
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
@@ -545,7 +569,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::post()
             .uri("/user/password")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .set_json(serde_json::json!({
                 "current_password": "anything",
                 "new_password": NEW_PW
@@ -556,9 +580,10 @@ mod integration_tests {
 
     // ─── DELETE /user/{id} ───────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn delete_user_own_account_returns_204(pool: PgPool) {
-        let (user_id, token) = seed_user(&pool, "ida", "ida@test.com").await;
+    #[tokio::test]
+    async fn delete_user_own_account_returns_204() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
@@ -569,16 +594,17 @@ mod integration_tests {
         )
         .await;
         let req = test::TestRequest::delete()
-            .uri(&format!("/user/{user_id}"))
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .uri(&format!("/user/{}", user.id))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::NO_CONTENT);
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn delete_user_another_account_returns_403(pool: PgPool) {
-        let (_, token_a) = seed_user(&pool, "jack", "jack@test.com").await;
-        let (id_b, _) = seed_user(&pool, "kate", "kate@test.com").await;
+    #[tokio::test]
+    async fn delete_user_another_account_returns_403() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_a = seed_user(&pool).await;
+        let user_b = seed_user(&pool).await;
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
@@ -588,20 +614,20 @@ mod integration_tests {
                 .service(delete_user),
         )
         .await;
-        // jack (token_a) tries to delete kate (id_b)
+        // user_a tries to delete user_b
         let req = test::TestRequest::delete()
-            .uri(&format!("/user/{id_b}"))
-            .insert_header(("Cookie", format!("auth_token={token_a}")))
+            .uri(&format!("/user/{}", user_b.id))
+            .insert_header(("Cookie", format!("auth_token={}", user_a.token)))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::FORBIDDEN);
     }
 
     // ─── GET /user/settings ──────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_user_settings_returns_defaults_when_none_saved(pool: PgPool) {
-        let (user_id, _) = seed_user(&pool, "leo", "leo@test.com").await;
-        let token = generate_token(&user_id, SECRET).unwrap();
+    #[tokio::test]
+    async fn get_user_settings_returns_defaults_when_none_saved() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserSettingsMapper::from_pool(pool)))
@@ -611,7 +637,7 @@ mod integration_tests {
         .await;
         let req = test::TestRequest::get()
             .uri("/user/settings")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
@@ -623,10 +649,10 @@ mod integration_tests {
 
     // ─── PUT /user/settings ──────────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn update_user_settings_persists_new_values(pool: PgPool) {
-        let (user_id, _) = seed_user(&pool, "mia", "mia@test.com").await;
-        let token = generate_token(&user_id, SECRET).unwrap();
+    #[tokio::test]
+    async fn update_user_settings_persists_new_values() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let cache = web::Data::new(Cache::for_tests().await);
         let mapper = web::Data::new(UserSettingsMapper::from_pool(pool.clone()));
         let app = test::init_service(
@@ -643,7 +669,7 @@ mod integration_tests {
         // title_language_preference uses PascalCase (entity::calendar::Language has no serde rename)
         let put_req = test::TestRequest::put()
             .uri("/user/settings")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .set_json(serde_json::json!({
                 "theme_preference": "light",
                 "language_preference": "pt",
@@ -656,7 +682,7 @@ mod integration_tests {
         // Read back and verify
         let get_req = test::TestRequest::get()
             .uri("/user/settings")
-            .insert_header(("Cookie", format!("auth_token={token}")))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .to_request();
         let resp = test::call_service(&app, get_req).await;
         assert_eq!(resp.status(), StatusCode::OK);

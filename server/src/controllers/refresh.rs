@@ -65,7 +65,6 @@ mod tests {
     use crate::controllers::auth::hash_refresh_token;
     use actix_web::{http::StatusCode, test, web, App};
     use secrecy::SecretString;
-    use sqlx::PgPool;
 
     const SECRET: &str = "test-jwt-secret-at-least-32-bytes";
 
@@ -77,27 +76,31 @@ mod tests {
         web::Data::new(CookieSettings { secure: false })
     }
 
-    async fn seed_user_with_refresh_token(pool: &PgPool) -> (i32, String) {
-        let user_id: i32 = sqlx::query_scalar!(
+    async fn seed_user_with_refresh_token(pool: &sqlx::PgPool) -> (i32, String) {
+        let n: u64 = rand::random();
+        let user_id: i32 = sqlx::query_scalar(
             "INSERT INTO users (username, email, password_hash) \
-             VALUES ('refresher', 'refresher@test.com', 'hash') RETURNING id"
+             VALUES ($1, $2, 'hash') RETURNING id",
         )
+        .bind(format!("refresher_{n}"))
+        .bind(format!("refresher_{n}@test.com"))
         .fetch_one(pool)
         .await
         .unwrap();
 
-        let raw = "initial_raw_refresh_token_abc";
-        let h = hash_refresh_token(raw);
+        let raw = format!("raw_refresh_{n}");
+        let h = hash_refresh_token(&raw);
         RefreshTokenMapper::from_pool(pool.clone())
             .replace_token(user_id, &h)
             .await
             .unwrap();
 
-        (user_id, raw.to_owned())
+        (user_id, raw)
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn valid_refresh_token_sets_new_cookies(pool: PgPool) {
+    #[tokio::test]
+    async fn valid_refresh_token_sets_new_cookies() {
+        let pool = crate::test_helpers::test_pool().await;
         let (_user_id, raw) = seed_user_with_refresh_token(&pool).await;
 
         let app = test::init_service(
@@ -128,8 +131,9 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn missing_refresh_token_returns_401(pool: PgPool) {
+    #[tokio::test]
+    async fn missing_refresh_token_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
@@ -148,16 +152,18 @@ mod tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn used_refresh_token_returns_401(pool: PgPool) {
+    #[tokio::test]
+    async fn used_refresh_token_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
         let (_user_id, raw) = seed_user_with_refresh_token(&pool).await;
         let mapper = RefreshTokenMapper::from_pool(pool.clone());
 
         // Use the token once via find_valid_token + rotate
         let h = hash_refresh_token(&raw);
         let row = mapper.find_valid_token(&h).await.unwrap();
+        let n: u64 = rand::random();
         mapper
-            .rotate_token(row.id, row.user_id, &hash_refresh_token("new_token"))
+            .rotate_token(row.id, row.user_id, &hash_refresh_token(&format!("new_token_{n}")))
             .await
             .unwrap();
 

@@ -142,7 +142,6 @@ mod integration_tests {
         services::{auth::hash_password, email::EmailService},
     };
     use actix_web::{http::StatusCode, test, web, App};
-    use sqlx::PgPool;
 
     const STRONG_PW: &str = "SecurePass12!@";
 
@@ -154,21 +153,33 @@ mod integration_tests {
         web::Data::new(AppBaseUrl::new("http://localhost:5173".to_string()))
     }
 
-    async fn seed_user(pool: &PgPool, email: &str) -> i32 {
+    struct SeedUser {
+        id: i32,
+        email: String,
+    }
+
+    async fn seed_user(pool: &sqlx::PgPool) -> SeedUser {
+        let n: u64 = rand::random();
+        let email = format!("pwreset_{n}@test.com");
         let mapper = UserMapper::from_pool(pool.clone());
         let user = mapper
-            .create_user("tester", email, Some(&hash_password(STRONG_PW).unwrap()))
+            .create_user(
+                &format!("pwreset_{n}"),
+                &email,
+                Some(&hash_password(STRONG_PW).unwrap()),
+            )
             .await
             .unwrap();
         mapper.mark_email_verified(user.id).await.unwrap();
-        user.id
+        SeedUser { id: user.id, email }
     }
 
     // ─── POST /auth/forgot-password ──────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn forgot_password_known_email_returns_200(pool: PgPool) {
-        let user_id = seed_user(&pool, "alice@test.com").await;
+    #[tokio::test]
+    async fn forgot_password_known_email_returns_200() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -181,22 +192,23 @@ mod integration_tests {
 
         let req = test::TestRequest::post()
             .uri("/auth/forgot-password")
-            .set_json(serde_json::json!({ "email": "alice@test.com" }))
+            .set_json(serde_json::json!({ "email": user.email }))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
 
         // Verify a token row was actually inserted for this user (not just 200 returned).
         let count: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM password_reset_tokens WHERE user_id = $1")
-                .bind(user_id)
+                .bind(user.id)
                 .fetch_one(&pool)
                 .await
                 .unwrap();
         assert_eq!(count, 1, "expected one token row for the seeded user");
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn forgot_password_unknown_email_also_returns_200(pool: PgPool) {
+    #[tokio::test]
+    async fn forgot_password_unknown_email_also_returns_200() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -214,10 +226,16 @@ mod integration_tests {
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn forgot_password_oauth_user_returns_200_without_creating_token(pool: PgPool) {
+    #[tokio::test]
+    async fn forgot_password_oauth_user_returns_200_without_creating_token() {
+        let pool = crate::test_helpers::test_pool().await;
+        let n: u64 = rand::random();
         UserMapper::from_pool(pool.clone())
-            .create_user("oauth", "oauth@test.com", None)
+            .create_user(
+                &format!("oauthpw_{n}"),
+                &format!("oauthpw_{n}@test.com"),
+                None,
+            )
             .await
             .unwrap();
 
@@ -234,7 +252,7 @@ mod integration_tests {
 
         let req = test::TestRequest::post()
             .uri("/auth/forgot-password")
-            .set_json(serde_json::json!({ "email": "oauth@test.com" }))
+            .set_json(serde_json::json!({ "email": format!("oauthpw_{n}@test.com") }))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
         assert!(token_mapper.find_valid_token("anything").await.is_err());
@@ -242,14 +260,16 @@ mod integration_tests {
 
     // ─── POST /auth/reset-password ───────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn reset_password_valid_token_returns_200(pool: PgPool) {
-        let user_id = seed_user(&pool, "bob@test.com").await;
+    #[tokio::test]
+    async fn reset_password_valid_token_returns_200() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let token_mapper = PasswordResetMapper::from_pool(pool.clone());
 
-        let raw = "a".repeat(64);
+        let n: u64 = rand::random();
+        let raw = format!("tok_{n}");
         let hash = hash_token(&raw);
-        token_mapper.create_token(user_id, &hash).await.unwrap();
+        token_mapper.create_token(user.id, &hash).await.unwrap();
 
         let app = test::init_service(
             App::new()
@@ -268,8 +288,9 @@ mod integration_tests {
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn reset_password_invalid_token_returns_400(pool: PgPool) {
+    #[tokio::test]
+    async fn reset_password_invalid_token_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(PasswordResetMapper::from_pool(pool)))
@@ -290,17 +311,19 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn reset_password_used_token_returns_400(pool: PgPool) {
-        let user_id = seed_user(&pool, "carol@test.com").await;
+    #[tokio::test]
+    async fn reset_password_used_token_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
         let token_mapper = PasswordResetMapper::from_pool(pool.clone());
 
-        let raw = "b".repeat(64);
+        let n: u64 = rand::random();
+        let raw = format!("tok_{n}");
         let hash = hash_token(&raw);
-        token_mapper.create_token(user_id, &hash).await.unwrap();
+        token_mapper.create_token(user.id, &hash).await.unwrap();
         let token = token_mapper.find_valid_token(&hash).await.unwrap();
         token_mapper
-            .complete_reset(token.id, user_id, &hash_password("TempPass12!@").unwrap())
+            .complete_reset(token.id, user.id, &hash_password("TempPass12!@").unwrap())
             .await
             .unwrap();
 
@@ -324,8 +347,9 @@ mod integration_tests {
         );
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn reset_password_weak_new_password_returns_400(pool: PgPool) {
+    #[tokio::test]
+    async fn reset_password_weak_new_password_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(PasswordResetMapper::from_pool(pool)))

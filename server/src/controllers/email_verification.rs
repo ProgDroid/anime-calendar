@@ -147,7 +147,6 @@ mod integration_tests {
     };
     use actix_web::{http::StatusCode, test, web, App};
     use secrecy::SecretString;
-    use sqlx::PgPool;
 
     const STRONG_PW: &str = "SecurePass12!@";
     const SECRET: &str = "test-jwt-secret-at-least-32-bytes";
@@ -165,28 +164,37 @@ mod integration_tests {
         web::Data::new(AppBaseUrl::new("http://localhost:5173".to_string()))
     }
 
-    async fn seed_unverified_user(pool: &PgPool) -> (i32, String) {
+    struct SeedUser {
+        id: i32,
+        email: String,
+    }
+
+    async fn seed_unverified_user(pool: &sqlx::PgPool) -> SeedUser {
+        let n: u64 = rand::random();
+        let email = format!("verify_{n}@test.com");
         let mapper = UserMapper::from_pool(pool.clone());
         let user = mapper
             .create_user(
-                "verifyme",
-                "verify@test.com",
+                &format!("verifyme_{n}"),
+                &email,
                 Some(&hash_password(STRONG_PW).unwrap()),
             )
             .await
             .unwrap();
-        (user.id, user.email)
+        SeedUser { id: user.id, email }
     }
 
     // ─── POST /auth/verify-email ─────────────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn verify_email_valid_token_issues_cookie_and_marks_verified(pool: PgPool) {
-        let (user_id, _email) = seed_unverified_user(&pool).await;
+    #[tokio::test]
+    async fn verify_email_valid_token_issues_cookie_and_marks_verified() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_unverified_user(&pool).await;
         let ev_mapper = EmailVerificationMapper::from_pool(pool.clone());
-        let raw = "validtoken123";
+        let n: u64 = rand::random();
+        let raw = format!("validtok_{n}");
         ev_mapper
-            .replace_token(user_id, &hash_token(raw))
+            .replace_token(user.id, &hash_token(&raw))
             .await
             .unwrap();
 
@@ -217,15 +225,16 @@ mod integration_tests {
 
         let verified_at: Option<chrono::NaiveDateTime> =
             sqlx::query_scalar("SELECT email_verified_at FROM users WHERE id = $1")
-                .bind(user_id)
+                .bind(user.id)
                 .fetch_one(&pool)
                 .await
                 .unwrap();
         assert!(verified_at.is_some(), "user must be verified in DB");
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn verify_email_invalid_token_returns_400(pool: PgPool) {
+    #[tokio::test]
+    async fn verify_email_invalid_token_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
         let ev_mapper = EmailVerificationMapper::from_pool(pool.clone());
         let app = test::init_service(
             App::new()
@@ -249,9 +258,10 @@ mod integration_tests {
 
     // ─── POST /auth/resend-verification ─────────────────────────────────────
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn resend_verification_known_unverified_email_returns_200(pool: PgPool) {
-        let (user_id, _) = seed_unverified_user(&pool).await;
+    #[tokio::test]
+    async fn resend_verification_known_unverified_email_returns_200() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_unverified_user(&pool).await;
         let ev_mapper = EmailVerificationMapper::from_pool(pool.clone());
         let app = test::init_service(
             App::new()
@@ -265,22 +275,23 @@ mod integration_tests {
 
         let req = test::TestRequest::post()
             .uri("/auth/resend-verification")
-            .set_json(serde_json::json!({ "email": "verify@test.com" }))
+            .set_json(serde_json::json!({ "email": user.email }))
             .to_request();
         assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
 
         // Token row should exist after resend
         let count: i64 =
             sqlx::query_scalar("SELECT COUNT(*) FROM email_verification_tokens WHERE user_id = $1")
-                .bind(user_id)
+                .bind(user.id)
                 .fetch_one(&pool)
                 .await
                 .unwrap();
         assert_eq!(count, 1, "one token row must exist after resend");
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn resend_verification_unknown_email_also_returns_200(pool: PgPool) {
+    #[tokio::test]
+    async fn resend_verification_unknown_email_also_returns_200() {
+        let pool = crate::test_helpers::test_pool().await;
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))

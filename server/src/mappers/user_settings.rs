@@ -22,16 +22,31 @@ impl UserSettingsMapper {
         })
     }
 
+    /// Construct a mapper from a bare pool — for integration tests only.
+    #[cfg(test)]
+    #[must_use]
+    pub const fn from_pool(pool: sqlx::PgPool) -> Self {
+        Self {
+            db: Database { pool },
+        }
+    }
+
     /// # Errors
     /// Returns an error if the query fails
     pub async fn get_user_settings(&self, user_id: i32) -> ServerResult<UserSettings> {
-        // First try to get user settings from database
+        Self::get_user_settings_with(&mut *self.db.pool.acquire().await?, user_id).await
+    }
+
+    pub(crate) async fn get_user_settings_with(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+    ) -> ServerResult<UserSettings> {
         let settings: Option<UserSettings> = sqlx::query_as!(
             UserSettings,
             "SELECT user_id, theme_preference as \"theme_preference: Theme\", language_preference as \"language_preference: SiteLanguage\", title_language_preference as \"title_language_preference: Language\", timezone, created_at, updated_at FROM user_settings WHERE user_id = $1",
             user_id
         )
-        .fetch_optional(&self.db.pool)
+        .fetch_optional(conn)
         .await?;
 
         Ok(settings.unwrap_or_default())
@@ -44,6 +59,15 @@ impl UserSettingsMapper {
         user_id: i32,
         settings: &UserSettings,
     ) -> ServerResult<()> {
+        Self::update_user_settings_with(&mut *self.db.pool.acquire().await?, user_id, settings)
+            .await
+    }
+
+    pub(crate) async fn update_user_settings_with(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+        settings: &UserSettings,
+    ) -> ServerResult<()> {
         sqlx::query!(
                 "INSERT INTO user_settings (user_id, theme_preference, language_preference, title_language_preference, timezone) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id) DO UPDATE SET theme_preference = EXCLUDED.theme_preference, language_preference = EXCLUDED.language_preference, title_language_preference = EXCLUDED.title_language_preference, timezone = EXCLUDED.timezone",
                 user_id,
@@ -52,7 +76,7 @@ impl UserSettingsMapper {
                 settings.title_language_preference as Language,
                 settings.timezone,
             )
-            .execute(&self.db.pool)
+            .execute(conn)
             .await?;
 
         Ok(())
@@ -61,39 +85,33 @@ impl UserSettingsMapper {
     /// # Errors
     /// Returns an error if the query fails
     pub async fn delete_user_settings(&self, user_id: i32) -> ServerResult<()> {
+        Self::delete_user_settings_with(&mut *self.db.pool.acquire().await?, user_id).await
+    }
+
+    pub(crate) async fn delete_user_settings_with(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+    ) -> ServerResult<()> {
         sqlx::query!("DELETE FROM user_settings WHERE user_id = $1", user_id)
-            .execute(&self.db.pool)
+            .execute(conn)
             .await?;
 
         Ok(())
-    }
-
-    /// Construct a mapper from a bare pool — for integration tests only.
-    #[cfg(test)]
-    #[must_use]
-    pub const fn from_pool(pool: sqlx::PgPool) -> Self {
-        Self {
-            db: Database { pool },
-        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::PgPool;
 
-    fn mapper(pool: PgPool) -> UserSettingsMapper {
-        UserSettingsMapper {
-            db: Database { pool },
-        }
-    }
-
-    async fn create_test_user(pool: &PgPool) -> i32 {
+    async fn create_test_user(conn: &mut sqlx::PgConnection) -> i32 {
+        let n: u64 = rand::random();
         sqlx::query_scalar(
-            "INSERT INTO users (username, email) VALUES ('settingsuser', 'settings@example.com') RETURNING id"
+            "INSERT INTO users (username, email) VALUES ($1, $2) RETURNING id",
         )
-        .fetch_one(pool)
+        .bind(format!("settingsuser_{n}"))
+        .bind(format!("settings_{n}@example.com"))
+        .fetch_one(conn)
         .await
         .unwrap()
     }
@@ -110,33 +128,39 @@ mod tests {
         }
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn get_settings_returns_default_when_no_row(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        let settings = m.get_user_settings(user_id).await.unwrap();
-        assert!(matches!(settings.theme_preference, Theme::Dark));
-        assert!(matches!(settings.language_preference, SiteLanguage::En));
-    }
-
-    #[sqlx::test(migrations = "../migrations")]
-    async fn update_settings_inserts_and_fetch_round_trips(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        m.update_user_settings(user_id, &custom_settings(user_id))
+    #[tokio::test]
+    async fn get_settings_returns_default_when_no_row() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        let settings = UserSettingsMapper::get_user_settings_with(&mut *tx, user_id)
             .await
             .unwrap();
-        let fetched = m.get_user_settings(user_id).await.unwrap();
+        assert!(matches!(settings.theme_preference, Theme::Dark));
+        assert!(matches!(settings.language_preference, SiteLanguage::En));
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn update_settings_inserts_and_fetch_round_trips() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        UserSettingsMapper::update_user_settings_with(&mut *tx, user_id, &custom_settings(user_id))
+            .await
+            .unwrap();
+        let fetched = UserSettingsMapper::get_user_settings_with(&mut *tx, user_id)
+            .await
+            .unwrap();
         assert!(matches!(fetched.theme_preference, Theme::Light));
         assert!(matches!(fetched.language_preference, SiteLanguage::Pt));
         assert_eq!(fetched.timezone, "Europe/Lisbon");
+        tx.rollback().await.unwrap();
     }
 
-    #[sqlx::test(migrations = "../migrations")]
-    async fn update_settings_upserts_on_conflict(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        m.update_user_settings(user_id, &custom_settings(user_id))
+    #[tokio::test]
+    async fn update_settings_upserts_on_conflict() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        UserSettingsMapper::update_user_settings_with(&mut *tx, user_id, &custom_settings(user_id))
             .await
             .unwrap();
         let updated = UserSettings {
@@ -145,22 +169,32 @@ mod tests {
             timezone: "UTC".to_string(),
             ..custom_settings(user_id)
         };
-        m.update_user_settings(user_id, &updated).await.unwrap();
-        let fetched = m.get_user_settings(user_id).await.unwrap();
-        assert!(matches!(fetched.theme_preference, Theme::Dark));
-        assert_eq!(fetched.timezone, "UTC");
-    }
-
-    #[sqlx::test(migrations = "../migrations")]
-    async fn delete_settings_removes_row_so_default_is_returned(pool: PgPool) {
-        let user_id = create_test_user(&pool).await;
-        let m = mapper(pool);
-        m.update_user_settings(user_id, &custom_settings(user_id))
+        UserSettingsMapper::update_user_settings_with(&mut *tx, user_id, &updated)
             .await
             .unwrap();
-        m.delete_user_settings(user_id).await.unwrap();
-        let settings = m.get_user_settings(user_id).await.unwrap();
+        let fetched = UserSettingsMapper::get_user_settings_with(&mut *tx, user_id)
+            .await
+            .unwrap();
+        assert!(matches!(fetched.theme_preference, Theme::Dark));
+        assert_eq!(fetched.timezone, "UTC");
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_settings_removes_row_so_default_is_returned() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut *tx).await;
+        UserSettingsMapper::update_user_settings_with(&mut *tx, user_id, &custom_settings(user_id))
+            .await
+            .unwrap();
+        UserSettingsMapper::delete_user_settings_with(&mut *tx, user_id)
+            .await
+            .unwrap();
+        let settings = UserSettingsMapper::get_user_settings_with(&mut *tx, user_id)
+            .await
+            .unwrap();
         assert!(matches!(settings.theme_preference, Theme::Dark));
         assert_eq!(settings.user_id, 0);
+        tx.rollback().await.unwrap();
     }
 }
