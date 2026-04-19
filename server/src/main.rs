@@ -10,8 +10,6 @@ pub mod server;
 pub mod services;
 #[cfg(test)]
 pub mod test_helpers;
-pub mod utils;
-
 use crate::{
     cache::Cache,
     config::{database::Database as DatabaseConfig, server::Server as ServerConfig},

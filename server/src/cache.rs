@@ -1,7 +1,5 @@
 use redis::{aio::MultiplexedConnection, Client, RedisResult};
 use serde::{de::DeserializeOwned, Serialize};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 /// Cache TTL for item lookups and single-resource responses (1 hour).
 pub const CACHE_TTL_ITEM: u64 = 3600;
@@ -13,7 +11,6 @@ pub const CACHE_TTL_CALENDAR: u64 = 7200;
 #[derive(Clone)]
 pub struct Cache {
     connection: MultiplexedConnection,
-    metrics: Arc<Mutex<CacheMetrics>>,
 }
 
 impl Cache {
@@ -46,10 +43,7 @@ impl Cache {
         let client = Client::open(url)?;
         let connection = client.get_multiplexed_async_connection().await?;
 
-        Ok(Self {
-            connection,
-            metrics: Arc::new(Mutex::new(CacheMetrics::default())),
-        })
+        Ok(Self { connection })
     }
 
     /// # Errors
@@ -64,17 +58,9 @@ impl Cache {
             .query_async(&mut conn)
             .await?;
 
-        if let Some(v) = value {
-            self.metrics.lock().await.increment_hit();
-            if let Ok(parsed) = serde_json::from_str(&v) {
-                Ok(Some(parsed))
-            } else {
-                self.metrics.lock().await.increment_miss();
-                Ok(None) // Return None if deserialization fails
-            }
-        } else {
-            self.metrics.lock().await.increment_miss();
-            Ok(None)
+        match value {
+            Some(v) => Ok(serde_json::from_str(&v).ok()),
+            None => Ok(None),
         }
     }
 
@@ -156,7 +142,6 @@ impl Cache {
         Ok(())
     }
 
-    // Middleware-style caching function with metrics
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn cached_response<T, F, Fut>(
@@ -182,16 +167,6 @@ impl Cache {
         self.set(cache_key, &result, ttl_seconds).await?;
 
         Ok(result)
-    }
-
-    // Get cache metrics
-    pub async fn get_metrics(&self) -> CacheMetrics {
-        self.metrics.lock().await.clone()
-    }
-
-    // Reset cache metrics
-    pub async fn reset_metrics(&self) {
-        *self.metrics.lock().await = CacheMetrics::default();
     }
 
     // Invalidate cache for a specific key
@@ -277,25 +252,6 @@ impl Cache {
         self.invalidate_pattern(&pattern).await
     }
 
-    // Monitor cache performance
-    /// # Errors
-    /// Fails if Redis query fails.
-    pub async fn monitor_performance(
-        &self,
-    ) -> Result<CachePerformanceMetrics, Box<dyn std::error::Error>> {
-        let metrics = self.get_metrics().await;
-        let keys = self.get_keys("*").await?;
-
-        let performance = CachePerformanceMetrics {
-            hit_rate: metrics.cache_hit_rate,
-            total_requests: metrics.total_requests,
-            cache_size: keys.len(),
-            hits: metrics.hits,
-            misses: metrics.misses,
-        };
-
-        Ok(performance)
-    }
 }
 
 #[must_use]
@@ -357,55 +313,6 @@ pub fn generate_user_paged_calendars_key(user_id: i32) -> String {
     format!("{user_id}:calendars:page:*")
 }
 
-// Cache metrics structure with atomic counters for thread safety
-#[derive(Debug, Clone, Serialize)]
-pub struct CacheMetrics {
-    pub hits: u64,
-    pub misses: u64,
-    pub evictions: u64,
-    pub total_requests: u64,
-    pub cache_hit_rate: f64,
-}
-
-impl Default for CacheMetrics {
-    fn default() -> Self {
-        Self {
-            hits: 0,
-            misses: 0,
-            evictions: 0,
-            total_requests: 0,
-            cache_hit_rate: 0.0,
-        }
-    }
-}
-
-impl CacheMetrics {
-    pub fn increment_hit(&mut self) {
-        self.hits += 1;
-        self.total_requests += 1;
-        self.calculate_hit_rate();
-    }
-
-    pub fn increment_miss(&mut self) {
-        self.misses += 1;
-        self.total_requests += 1;
-        self.calculate_hit_rate();
-    }
-
-    pub const fn increment_eviction(&mut self) {
-        self.evictions += 1;
-    }
-
-    #[allow(clippy::cast_precision_loss)]
-    fn calculate_hit_rate(&mut self) {
-        if self.total_requests > 0 {
-            self.cache_hit_rate = (self.hits as f64 / self.total_requests as f64) * 100.0;
-        } else {
-            self.cache_hit_rate = 0.0;
-        }
-    }
-}
-
 // Middleware trait for caching
 pub trait Cacheable {
     fn cache_key(&self) -> String;
@@ -444,16 +351,6 @@ impl CacheConfig {
             enabled: false,
         }
     }
-}
-
-// Cache performance metrics structure
-#[derive(Debug, Clone)]
-pub struct CachePerformanceMetrics {
-    pub hit_rate: f64,
-    pub total_requests: u64,
-    pub cache_size: usize,
-    pub hits: u64,
-    pub misses: u64,
 }
 
 #[cfg(test)]
@@ -537,65 +434,6 @@ mod tests {
         tokio::time::sleep(tokio::time::Duration::from_secs(2)).await;
         let result: Option<String> = cache.get(&key).await.unwrap();
         assert!(result.is_none(), "key should have expired after 1 s TTL");
-    }
-
-    // ── Metrics ────────────────────────────────────────────────────────────
-
-    #[tokio::test]
-    async fn get_on_missing_key_increments_miss_counter() {
-        let cache = Cache::for_tests().await;
-        let key = k("metrics_miss", "v");
-        cache.delete(&key).await.unwrap();
-        // fresh instance starts with zeroed metrics
-        let _: Option<u8> = cache.get(&key).await.unwrap();
-        let m = cache.get_metrics().await;
-        assert_eq!(m.misses, 1);
-        assert_eq!(m.hits, 0);
-        assert_eq!(m.total_requests, 1);
-    }
-
-    #[tokio::test]
-    async fn get_on_existing_key_increments_hit_counter() {
-        let cache = Cache::for_tests().await;
-        let key = k("metrics_hit", "v");
-        cache.set(&key, &1_u8, 300).await.unwrap();
-        let _: Option<u8> = cache.get(&key).await.unwrap();
-        let m = cache.get_metrics().await;
-        cache.delete(&key).await.unwrap();
-        assert_eq!(m.hits, 1);
-        assert_eq!(m.misses, 0);
-        assert_eq!(m.total_requests, 1);
-    }
-
-    #[tokio::test]
-    async fn hit_rate_is_calculated_correctly() {
-        let cache = Cache::for_tests().await;
-        let key = k("metrics_rate", "v");
-        cache.set(&key, &1_u8, 300).await.unwrap();
-        let _: Option<u8> = cache.get(&key).await.unwrap(); // hit
-        cache.delete(&key).await.unwrap();
-        let _: Option<u8> = cache.get(&key).await.unwrap(); // miss
-        let m = cache.get_metrics().await;
-        assert_eq!(m.hits, 1);
-        assert_eq!(m.misses, 1);
-        assert!((m.cache_hit_rate - 50.0_f64).abs() < 0.001);
-    }
-
-    #[tokio::test]
-    #[allow(clippy::float_cmp)]
-    async fn reset_metrics_clears_all_counters() {
-        let cache = Cache::for_tests().await;
-        let key = k("metrics_reset", "v");
-        cache.set(&key, &1_u8, 300).await.unwrap();
-        let _: Option<u8> = cache.get(&key).await.unwrap(); // hit
-        cache.delete(&key).await.unwrap();
-        let _: Option<u8> = cache.get(&key).await.unwrap(); // miss
-        cache.reset_metrics().await;
-        let m = cache.get_metrics().await;
-        assert_eq!(m.hits, 0);
-        assert_eq!(m.misses, 0);
-        assert_eq!(m.total_requests, 0);
-        assert_eq!(m.cache_hit_rate, 0.0);
     }
 
     // ── Invalidation ────────────────────────────────────────────────────────
