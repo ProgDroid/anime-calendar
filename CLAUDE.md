@@ -98,6 +98,18 @@ Copy `config.toml.dist` → `config.toml` and `database.toml.dist` → `database
 ### sqlx offline queries
 sqlx verifies queries at compile time, which requires a live DB or a pre-generated cache.
 
+### CI/CD
+
+For security reasons, third-party GitHub Actions should be pinned to specific commit hashes, e.g.:
+```yaml
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # <-- commit hash
+```
+
 **Preferred: generate the offline cache** (commit `.sqlx/` so CI and teammates don't need a DB):
 ```bash
 DATABASE_URL=postgresql://user:pass@host:port/dbname cargo sqlx prepare --workspace
