@@ -192,7 +192,15 @@ Core features are complete:
 - 404 page + catch-all route
 - Router guard skips `fetchSettings` for public routes
 - `fetchSettings` concurrent-call deduplication in Pinia store
+- More backend tests (controllers + services)
+- DB indexes: `calendars.user_id`, `calendars.subscription_token`, `calendar_items.calendar_id`
+- JWT in localStorage → httpOnly cookies
+- TypeScript `strict: true`
+- Docker / CI-CD pipeline
 
 ## Known TODOs (from source)
 - Episode-specific times (not just all-day calendar entries)
 - Load testing
+- `npm run build` fixes
+- `npm run test:unit -- --run` warnings
+- `npm run lint` fixes
