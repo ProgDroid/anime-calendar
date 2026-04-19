@@ -16,6 +16,7 @@ Anime Calendar is a web application for tracking anime series and episodes acros
 - **Passwords**: argon2
 - **Calendar export**: `icalendar` 0.17
 - **Config**: `config` crate reading `config.toml` (server/Redis/JWT/OAuth) and `database.toml` (PostgreSQL)
+- **Metrics**: `metrics` 0.24.3 façade + `metrics-exporter-prometheus` 0.18.1 — `/metrics` endpoint scraped by Prometheus
 
 ### Frontend
 - **Framework**: Vue 3.5 + TypeScript 5.9
@@ -164,7 +165,8 @@ Core features are complete:
 - Calendar subscription tokens — unique per-calendar URL for iCal feed subscriptions (copy link, Google Calendar import)
 - Anilist item search and fetch
 - Redis caching (calendars, items, search, user settings, paginated lists) with TTL + invalidation
-- Cache metrics/monitoring endpoints
+- Prometheus metrics (`/metrics` endpoint) — HTTP, cache, DB, auth counters + histograms
+- Monitoring stack: Prometheus + Grafana + redis_exporter in `ops/` (see `ops/README.md`)
 - User profile management + settings
 - i18n (English + Portuguese), keys normalized to `auth.*`, `calendar.*`, `calendars.*`, `userDetails.*`, `userSettings.*`, `errors.*`
 - Responsive frontend (DaisyUI + Tailwind)
