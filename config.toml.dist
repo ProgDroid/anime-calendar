@@ -21,3 +21,11 @@ port = 587
 username = ""
 password = ""
 from_address = "noreply@example.com"
+
+[server.metrics]
+# Expose Prometheus metrics on an HTTP listener. Bind to loopback so the
+# endpoint is only reachable from other processes on the same host (or
+# from Docker via host.docker.internal).
+enabled = true
+host = "127.0.0.1"
+port = 9090

@@ -21,6 +21,8 @@ pub struct Server {
     pub app_base_url: String,
     #[serde(default)]
     pub smtp: SmtpConfig,
+    #[serde(default)]
+    pub metrics: MetricsConfig,
 }
 
 #[must_use]
@@ -54,6 +56,7 @@ impl Default for Server {
             cookie_secure: false,
             app_base_url: default_app_base_url(),
             smtp: SmtpConfig::default(),
+            metrics: MetricsConfig::default(),
         }
     }
 }
@@ -85,6 +88,49 @@ pub struct SmtpConfig {
 
 const fn default_smtp_port() -> u16 {
     587
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+pub struct MetricsConfig {
+    #[serde(default = "default_metrics_enabled")]
+    pub enabled: bool,
+    #[serde(default = "default_metrics_host")]
+    pub host: String,
+    #[serde(default = "default_metrics_port")]
+    pub port: u16,
+}
+
+const fn default_metrics_enabled() -> bool {
+    true
+}
+fn default_metrics_host() -> String {
+    "127.0.0.1".to_owned()
+}
+const fn default_metrics_port() -> u16 {
+    9090
+}
+
+impl Default for MetricsConfig {
+    fn default() -> Self {
+        Self {
+            enabled: default_metrics_enabled(),
+            host: default_metrics_host(),
+            port: default_metrics_port(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metrics_config_defaults_to_loopback_9090_enabled() {
+        let cfg = MetricsConfig::default();
+        assert!(cfg.enabled);
+        assert_eq!(cfg.host, "127.0.0.1");
+        assert_eq!(cfg.port, 9090);
+    }
 }
 
 /// Newtype wrapper for the frontend base URL — injected as `web::Data<AppBaseUrl>`.
