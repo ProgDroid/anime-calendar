@@ -22,6 +22,7 @@ describe('applySettings', () => {
       theme_preference: 'light',
       language_preference: 'en',
       title_language_preference: 'English',
+      accent_preference: 'coral',
       timezone: 'UTC'
     })
     expect(document.documentElement.getAttribute('data-theme')).toBe('light')
@@ -32,6 +33,7 @@ describe('applySettings', () => {
       theme_preference: 'dark',
       language_preference: 'en',
       title_language_preference: 'English',
+      accent_preference: 'coral',
       timezone: 'UTC'
     })
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
@@ -43,6 +45,7 @@ describe('applySettings', () => {
       theme_preference: 'dark',
       language_preference: 'pt',
       title_language_preference: 'English',
+      accent_preference: 'coral',
       timezone: 'UTC'
     })
     expect(i18n.global.locale.value).toBe('pt')
@@ -54,6 +57,7 @@ describe('applySettings', () => {
       theme_preference: 'dark',
       language_preference: 'en',
       title_language_preference: 'English',
+      accent_preference: 'coral',
       timezone: 'UTC'
     })
     expect(document.documentElement.getAttribute('data-theme')).toBe('dark')

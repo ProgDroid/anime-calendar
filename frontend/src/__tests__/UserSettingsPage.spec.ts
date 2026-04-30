@@ -24,6 +24,7 @@ const mockSettings = {
   theme_preference: 'dark' as const,
   language_preference: 'en' as const,
   title_language_preference: 'English' as const,
+  accent_preference: 'coral' as const,
   timezone: 'UTC'
 }
 
