@@ -64,24 +64,29 @@ const toggleMode = () => {
         </div>
 
         <form data-testid="login-form" class="flex flex-col gap-4" @submit="handleSubmit">
-          <div v-if="isRegistering" data-testid="login-username-wrap">
-            <UiInput
-              id="username"
-              v-model="username"
-              type="text"
-              :label="t('auth.register.name')"
-              :placeholder="t('auth.register.usernamePlaceholder')"
-              data-testid="login-username"
-            />
-          </div>
+          <UiInput
+            v-if="isRegistering"
+            id="username"
+            v-model="username"
+            type="text"
+            name="username"
+            :label="t('auth.register.name')"
+            :placeholder="t('auth.register.usernamePlaceholder')"
+            autocomplete="username"
+            required
+            :maxlength="50"
+            data-testid="login-username"
+          />
 
           <UiInput
             id="email"
             v-model="email"
             type="email"
+            name="email"
             :label="t('auth.login.email')"
             :placeholder="t('auth.login.emailPlaceholder')"
             autocomplete="email"
+            required
             data-testid="login-email"
           />
 
@@ -89,9 +94,12 @@ const toggleMode = () => {
             id="password"
             v-model="password"
             type="password"
+            name="password"
             :label="t('auth.login.password')"
             :placeholder="t('auth.login.passwordPlaceholder')"
             autocomplete="current-password"
+            required
+            :maxlength="128"
             data-testid="login-password"
           />
 
