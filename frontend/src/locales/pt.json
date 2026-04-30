@@ -29,15 +29,18 @@
     },
     "register": {
       "title": "Registar",
+      "tagline": "Crie a sua conta para começar a acompanhar cada temporada.",
       "name": "Nome",
       "email": "Email",
       "password": "Senha",
       "confirmPassword": "Confirmar Senha",
+      "confirmPasswordPlaceholder": "Repita sua senha",
       "submit": "Registar",
       "noAccount": "Não tem uma conta?",
       "alreadyHaveAccount": "Já tem uma conta?",
       "usernamePlaceholder": "Digite seu nome de usuário",
-      "registering": "Registando..."
+      "registering": "Registando...",
+      "passwordMismatch": "As senhas não coincidem."
     },
     "forgotPassword": {
       "title": "Esqueci a senha",

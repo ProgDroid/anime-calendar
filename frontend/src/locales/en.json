@@ -29,15 +29,18 @@
     },
     "register": {
       "title": "Register",
+      "tagline": "Create your account to start tracking every season.",
       "name": "Name",
       "email": "Email",
       "password": "Password",
       "confirmPassword": "Confirm Password",
+      "confirmPasswordPlaceholder": "Repeat your password",
       "submit": "Register",
       "noAccount": "Don't have an account?",
       "alreadyHaveAccount": "Already have an account?",
       "usernamePlaceholder": "Enter your username",
-      "registering": "Registering..."
+      "registering": "Registering...",
+      "passwordMismatch": "Passwords do not match."
     },
     "forgotPassword": {
       "title": "Forgot password",
