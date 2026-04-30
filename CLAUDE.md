@@ -21,7 +21,9 @@ Anime Calendar is a web application for tracking anime series and episodes acros
 ### Frontend
 - **Framework**: Vue 3.5 + TypeScript 5.9
 - **Build**: rolldown-vite (Rust-based Vite fork) with `@vitejs/plugin-vue`
-- **Styling**: Tailwind CSS v4 (`@tailwindcss/vite` plugin) + DaisyUI v5
+- **Styling**: Tailwind CSS v4 (`@tailwindcss/vite` plugin) + DaisyUI v5 (legacy, removal planned in Track 2 of redesign)
+- **Design tokens**: OKLCH-based, defined in `frontend/src/assets/tokens.css`, re-exported as Tailwind utilities via the `@theme` block in `main.css`. Theme via `[data-theme="light|dark"]` on `<html>`; accent via `[data-accent="coral|iris|matcha|sakura|citron"]` (only swaps `--accent-h1`/`--accent-h2`). A pre-paint inline script in `index.html` reads `localStorage` and sets these attrs synchronously to avoid flash. Self-hosted fonts (Geist, Geist Mono, Instrument Serif) under `frontend/public/fonts/`.
+- **UI primitives**: `frontend/src/components/ui/` houses `Ui*` primitives (Button, Input, Segmented, Chip, Modal, Toast, Avatar, BannerFade) built with `tailwind-variants`. `frontend/src/components/ui/icons/` houses one SFC per icon, ported verbatim from `design_handoff_anime_calendar/foundations.jsx` — do not substitute Lucide / Heroicons / Material.
 - **State**: Pinia 3
 - **Routing**: vue-router 4 (all routes lazy-loaded)
 - **i18n**: vue-i18n 11 — English and Portuguese (`frontend/src/locales/{en,pt}.json`)
@@ -31,9 +33,15 @@ Anime Calendar is a web application for tracking anime series and episodes acros
 
 ## Project Structure
 
-Cargo workspace: `server` (HTTP + business logic), `anilist` (API client), `common` (shared types). Backend follows a controllers → services → mappers (repository) layering. Frontend is a Vue SPA under `frontend/src/` with `components/`, `stores/`, `services/`, `router/`, and `locales/`.
+Cargo workspace: `server` (HTTP + business logic), `anilist` (API client), `common` (shared types). Backend follows a controllers → services → mappers (repository) layering. Frontend is a Vue SPA under `frontend/src/` with `components/`, `stores/`, `services/`, `router/`, `composables/`, and `locales/`.
 
-Non-obvious layout: `server/src/entity/` holds domain structs; `server/src/mappers/` owns DB pool clones and acts as the repository layer; `components/calendar/` holds CalendarPage sub-components; `components/shared/` holds reusable UI.
+Non-obvious layout:
+- `server/src/entity/` holds domain structs; `server/src/mappers/` owns DB pool clones and acts as the repository layer.
+- `frontend/src/components/calendar/` holds CalendarPage sub-components; `components/shared/` holds reusable UI.
+- `frontend/src/components/ui/` holds the design-system primitives (Track 1 of the redesign); `components/ui/icons/` holds icon SFCs. **Prefer these over DaisyUI classes when writing new UI.**
+- `frontend/src/composables/useTheme.ts` owns theme + accent runtime state (singleton refs); `userSettingsStore` is the source of truth and reconciles via the existing settings-fetch flow on auth.
+
+Design redesign: a 4-track plan from `design_handoff_anime_calendar/` is in flight. Track 1 (Foundations) is done; Tracks 2 (existing surfaces re-skin), 4 (upgrade flow), 3 (mobile companion) are pending. Sequencing: 2 → 4 → 3. Master breakdown at `docs/superpowers/specs/2026-04-30-design-redesign-master-breakdown.md`. Per-track specs and plans live alongside.
 
 ## Build & Run
 
@@ -83,6 +91,9 @@ Pin all third-party GitHub Actions to commit hashes, not tags:
 - All user-facing strings use `$t()` / `t()` — never hardcode text in components
 - When adding translatable text, add the key to **both** `en.json` and `pt.json`
 - Translation key naming: hierarchical, e.g. `auth.login.title` — top-level namespaces: `app`, `auth`, `calendar`, `calendars`, `userDetails`, `userSettings`, `errors`
+- Design-system primitives in `components/ui/` use `tailwind-variants` (`tv()`) for variant→class mapping at the top of each component file. Use OKLCH tokens (`bg-bg-1`, `text-fg-2`, `bg-accent-1`, etc.) over DaisyUI semantic colors when writing new UI.
+- The `<UiBannerFade>` mask string is locked verbatim by a vitest contract test — do not edit it without updating the lock test and confirming the change is intentional.
+- "Server-wins" reconcile call sites must guard on auth state when the upstream fetcher fabricates defaults for unauth users (see `useTheme` reconcile in `main.ts`). Otherwise the unauth defaults will silently clobber `localStorage`.
 - Auth guard lives in `router/index.ts` `beforeEach` — settings fetched on non-public navigations only
 - Public routes must declare `meta: { public: true }`; `fetchSettings` is skipped for them
 - Pinia stores: `auth.ts` for auth state, `userSettingsStore.ts` for user preferences
