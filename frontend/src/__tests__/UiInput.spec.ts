@@ -23,4 +23,42 @@ describe('UiInput', () => {
     expect(w.text()).toContain('Required')
     expect(w.find('input').classes().some(c => c.includes('danger'))).toBe(true)
   })
+
+  it('id prop forwards to inner input and label for', () => {
+    const w = mount(UiInput, { props: { modelValue: '', label: 'Email', id: 'email' } })
+    expect(w.find('input').attributes('id')).toBe('email')
+    expect(w.find('label').attributes('for')).toBe('email')
+  })
+
+  it('falls back to useId-generated id when id prop omitted', () => {
+    const w = mount(UiInput, { props: { modelValue: '', label: 'Email' } })
+    const inputId = w.find('input').attributes('id')
+    expect(inputId).toBeTruthy()
+    expect(w.find('label').attributes('for')).toBe(inputId)
+  })
+
+  it('required prop puts required attribute on inner input', () => {
+    const w = mount(UiInput, { props: { modelValue: '', required: true } })
+    expect(w.find('input').attributes('required')).toBeDefined()
+  })
+
+  it('omits required attribute by default', () => {
+    const w = mount(UiInput, { props: { modelValue: '' } })
+    expect(w.find('input').attributes('required')).toBeUndefined()
+  })
+
+  it('maxlength prop puts maxlength attribute on inner input', () => {
+    const w = mount(UiInput, { props: { modelValue: '', maxlength: 50 } })
+    expect(w.find('input').attributes('maxlength')).toBe('50')
+  })
+
+  it('name prop puts name attribute on inner input', () => {
+    const w = mount(UiInput, { props: { modelValue: '', name: 'username' } })
+    expect(w.find('input').attributes('name')).toBe('username')
+  })
+
+  it('autocomplete prop forwards to inner input', () => {
+    const w = mount(UiInput, { props: { modelValue: '', autocomplete: 'current-password' } })
+    expect(w.find('input').attributes('autocomplete')).toBe('current-password')
+  })
 })
