@@ -200,6 +200,10 @@
   },
   "errors": {
     "generic": "Ocorreu um erro. Tente novamente.",
-    "notFound": "Página não encontrada"
+    "notFound": {
+      "title": "Página não encontrada",
+      "body": "A página que procura não existe ou foi movida.",
+      "cta": "Voltar ao início"
+    }
   }
 }
