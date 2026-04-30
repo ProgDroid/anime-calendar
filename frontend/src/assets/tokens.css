@@ -1,0 +1,194 @@
+/* ===========================================================
+   Anime Calendar — Design Tokens
+   Ported verbatim from design_handoff_anime_calendar/colors_and_type.css
+   and design_handoff_anime_calendar/app.css.
+   Fonts are self-hosted under /public/fonts (see @font-face below);
+   the upstream Google Fonts @import is intentionally removed.
+   =========================================================== */
+
+:root {
+  /* --- Live accent hues (toggle via JS) --- */
+  --accent-h1: 28;   /* coral default; iris=285, matcha=145, sakura=350, citron=80 */
+  --accent-h2: 285;  /* secondary hue */
+
+  /* --- Type families --- */
+  --font-sans:  'Geist', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-mono:  'Geist Mono', ui-monospace, monospace;
+  --font-serif: 'Instrument Serif', ui-serif, Georgia, serif;
+
+  /* --- Type scale (semantic) --- */
+  --type-display: 56px / 1.04 var(--font-serif);
+  --type-h1:      600 34px / 1.12 var(--font-sans);
+  --type-h2:      600 24px / 1.20 var(--font-sans);
+  --type-h3:      600 18px / 1.30 var(--font-sans);
+  --type-body-lg: 400 16px / 1.55 var(--font-sans);
+  --type-body:    400 14px / 1.55 var(--font-sans);
+  --type-small:   400 12.5px / 1.45 var(--font-sans);
+  --type-micro:   500 11px / 1.4 var(--font-sans);  /* uppercase, tracked */
+  --type-mono:    400 12.5px / 1.45 var(--font-mono);
+
+  /* --- Radii --- */
+  --r-xs: 4px; --r-sm: 6px; --r-md: 10px; --r-lg: 14px;
+  --r-xl: 20px; --r-2xl: 28px; --r-full: 9999px;
+
+  /* --- Spacing — 4 / 8-pt grid --- */
+  --s-1: 4px; --s-2: 8px; --s-3: 12px; --s-4: 16px;
+  --s-5: 20px; --s-6: 24px; --s-8: 32px; --s-10: 40px;
+  --s-12: 48px; --s-16: 64px;
+
+  /* --- Shadows (cool, low-saturation) --- */
+  --shadow-xs: 0 1px 2px rgba(8, 6, 18, 0.06);
+  --shadow-sm: 0 1px 2px rgba(8, 6, 18, 0.06), 0 2px 6px rgba(8, 6, 18, 0.04);
+  --shadow-md: 0 4px 16px rgba(8, 6, 18, 0.08), 0 1px 3px rgba(8, 6, 18, 0.06);
+  --shadow-lg: 0 16px 40px rgba(8, 6, 18, 0.18), 0 2px 6px rgba(8, 6, 18, 0.06);
+  --shadow-glow: 0 0 0 1px var(--accent-1-soft), 0 8px 28px var(--accent-1-glow);
+
+  /* --- Motion --- */
+  --ease-out:    cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --d-1: 120ms; --d-2: 220ms; --d-3: 360ms; --d-4: 600ms;
+}
+
+/* ===== Theme: dark (primary) ===== */
+[data-theme='dark'], .theme-dark {
+  --bg-0: oklch(15% 0.012 280);
+  --bg-1: oklch(18% 0.014 280);
+  --bg-2: oklch(22% 0.016 282);
+  --bg-3: oklch(27% 0.018 284);
+  --bg-inset: oklch(12% 0.012 280);
+  --line: oklch(30% 0.014 282);
+  --line-soft: oklch(24% 0.012 282);
+
+  --fg-0: oklch(96% 0.005 280);
+  --fg-1: oklch(82% 0.008 282);
+  --fg-2: oklch(64% 0.010 282);
+  --fg-3: oklch(48% 0.012 284);
+
+  --accent-1:      oklch(72% 0.18 var(--accent-h1));
+  --accent-1-fg:   oklch(18% 0.04 var(--accent-h1));
+  --accent-1-soft: oklch(72% 0.18 var(--accent-h1) / 0.18);
+  --accent-1-glow: oklch(72% 0.18 var(--accent-h1) / 0.28);
+  --accent-2:      oklch(70% 0.17 var(--accent-h2));
+  --accent-2-fg:   oklch(18% 0.04 var(--accent-h2));
+  --accent-2-soft: oklch(70% 0.17 var(--accent-h2) / 0.18);
+
+  --success: oklch(74% 0.16 155);
+  --warning: oklch(80% 0.15 80);
+  --danger:  oklch(66% 0.20 25);
+  --scrim:   rgba(0, 0, 0, 0.55);
+}
+
+/* ===== Theme: light (parity) ===== */
+[data-theme='light'], .theme-light {
+  --bg-0: oklch(98% 0.004 80);
+  --bg-1: oklch(100% 0 0);
+  --bg-2: oklch(96% 0.006 80);
+  --bg-3: oklch(93% 0.008 80);
+  --bg-inset: oklch(95% 0.006 80);
+  --line: oklch(88% 0.008 80);
+  --line-soft: oklch(92% 0.006 80);
+
+  --fg-0: oklch(20% 0.012 280);
+  --fg-1: oklch(34% 0.014 280);
+  --fg-2: oklch(50% 0.014 280);
+  --fg-3: oklch(64% 0.014 280);
+
+  --accent-1:      oklch(60% 0.20 var(--accent-h1));
+  --accent-1-fg:   oklch(98% 0.01 var(--accent-h1));
+  --accent-1-soft: oklch(60% 0.20 var(--accent-h1) / 0.12);
+  --accent-1-glow: oklch(60% 0.20 var(--accent-h1) / 0.20);
+  --accent-2:      oklch(56% 0.20 var(--accent-h2));
+  --accent-2-fg:   oklch(98% 0.01 var(--accent-h2));
+  --accent-2-soft: oklch(56% 0.20 var(--accent-h2) / 0.10);
+
+  --success: oklch(58% 0.16 155);
+  --warning: oklch(64% 0.16 80);
+  --danger:  oklch(58% 0.22 25);
+  --scrim:   rgba(8, 6, 18, 0.35);
+}
+
+/* ===== Semantic helpers (use directly in HTML) ===== */
+.font-display { font: var(--type-display); letter-spacing: -0.02em; }
+.font-h1      { font: var(--type-h1); letter-spacing: -0.02em; }
+.font-h2      { font: var(--type-h2); letter-spacing: -0.015em; }
+.font-h3      { font: var(--type-h3); letter-spacing: -0.01em; }
+.font-body-lg { font: var(--type-body-lg); }
+.font-body    { font: var(--type-body); }
+.font-small   { font: var(--type-small); }
+.font-micro   { font: var(--type-micro); letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-2); }
+.font-mono    { font: var(--type-mono); letter-spacing: -0.01em; }
+.italic-display { font-family: var(--font-serif); font-style: italic; font-weight: 400; }
+
+/* ===== Accent hue overrides ===== */
+[data-accent="iris"]   { --accent-h1: 285; --accent-h2: 28;  }
+[data-accent="matcha"] { --accent-h1: 145; --accent-h2: 80;  }
+[data-accent="sakura"] { --accent-h1: 350; --accent-h2: 285; }
+[data-accent="citron"] { --accent-h1: 80;  --accent-h2: 200; }
+
+/* ===== Self-hosted fonts ===== */
+@font-face {
+  font-family: 'Geist';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Geist/Geist-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Geist';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Geist/Geist-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Geist';
+  font-weight: 600;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Geist/Geist-600.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Geist';
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/Geist/Geist-700.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/GeistMono/GeistMono-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Geist Mono';
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/GeistMono/GeistMono-500.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+  src: url('/fonts/InstrumentSerif/InstrumentSerif-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'Instrument Serif';
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+  src: url('/fonts/InstrumentSerif/InstrumentSerif-400i.woff2') format('woff2');
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --d-1: 0ms;
+    --d-2: 0ms;
+    --d-3: 0ms;
+    --d-4: 0ms;
+  }
+}
