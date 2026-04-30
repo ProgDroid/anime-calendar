@@ -5,6 +5,7 @@ import { createI18n } from 'vue-i18n'
 import { createRouter, createWebHistory } from 'vue-router'
 import LoginPage from '@/components/LoginPage.vue'
 import en from '@/locales/en.json'
+import { inputAt } from './helpers/uiInput'
 
 vi.mock('@/config/api', () => ({
   default: { post: vi.fn(), get: vi.fn(), delete: vi.fn(), put: vi.fn() }
@@ -23,11 +24,6 @@ function mountPage() {
     }
   })
 }
-
-// UiInput wraps the <input> in a <div>; data-testid lands on the wrapper, so
-// we drill into the inner input for value setting.
-const inputAt = (wrapper: ReturnType<typeof mountPage>, testid: string) =>
-  wrapper.find(`[data-testid="${testid}"] input`)
 
 describe('LoginPage', () => {
   beforeEach(() => {
