@@ -42,7 +42,13 @@ UI-only re-skin of every existing screen. No new business logic.
 
 **i18n**: every new string lands in both `en.json` and `pt.json` (project rule).
 
+**Scoping decision (recorded 2026-04-30)**: Track 2 is **re-skin + Weekly schedule, NOT multi-editor calendars**. The handoff's My Calendars tile shows an "avatar stack of editors" that implies a multi-user calendar concept. Calendars are currently single-owner (`calendars.user_id` is a single FK; no `calendar_editors` table). For Track 2, the avatar stack renders the **single owner avatar** as a degraded but coherent form. Multi-editor calendars are deferred to a separate feature cycle outside this redesign — when that feature is picked up, the existing handoff designs (avatar stack, sharing UX) can be reused without needing a fresh design pass.
+
 **Open questions**: weekly schedule routing (sub-route of `/calendar/:id` or sibling?); whether the Pro chip on accents is shown today or hidden until Track 4.
+
+## Deferred features (not part of any current track)
+
+- **Multi-editor calendars** (deferred 2026-04-30 during Track 2 brainstorm). Backend: new `calendar_editors` table or similar, permission model, sharing flow, invitation UX. Frontend: avatar stack with multiple editors on MyCalendars tiles, editor management in Account or Calendar settings. Reuse the handoff designs (`screens-auth-list.jsx` MyCalendars tile, related Account flows) when the feature is greenlit.
 
 ### Track 3 — Mobile companion (depends on Tracks 2 and 4)
 
