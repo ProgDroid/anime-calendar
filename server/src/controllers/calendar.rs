@@ -120,6 +120,22 @@ async fn export(
                 .filter_map(|id| Id::new(i64::from(*id)))
                 .collect();
 
+            if item_ids.is_empty() {
+                let filename = format!(
+                    "{}.ics",
+                    calendar_data.name.replace(' ', "_").to_lowercase()
+                );
+                return HttpResponse::Ok()
+                    .append_header(("Content-Type", "text/calendar"))
+                    .append_header((
+                        "Content-Disposition",
+                        format!("attachment; filename=\"{filename}\""),
+                    ))
+                    .body(
+                        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//anime-calendar//EN\r\nEND:VCALENDAR\r\n",
+                    );
+            }
+
             let items = anilist.get_items(item_ids).await;
 
             if items.is_empty() {
@@ -290,6 +306,11 @@ async fn put(
         return HttpResponse::BadRequest().json(serde_json::json!({
             "error": validation_error
         }));
+    }
+
+    const MAX_ITEMS: usize = 2000;
+    if body.items.len() > MAX_ITEMS {
+        return Error::InvalidRequest.error_response();
     }
 
     let item_ids: Vec<i32> = body
@@ -718,6 +739,40 @@ mod integration_tests {
             .uri("/calendar")
             .insert_header(("Cookie", format!("auth_token={}", user.token)))
             .set_json(serde_json::json!({ "id": 0, "name": long_name, "language": "english", "items": [] }))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+
+    #[tokio::test]
+    async fn put_calendar_too_many_items_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Anilist::default()))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(jwt_data())
+                .service(put),
+        )
+        .await;
+        // Build a vec of 2001 minimal items — one over the cap.
+        let items: Vec<serde_json::Value> = (0..2001)
+            .map(|i| serde_json::json!({ "id": i, "title": "x", "episodes": [] }))
+            .collect();
+        let req = test::TestRequest::put()
+            .uri("/calendar")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "id": 0,
+                "name": "Big",
+                "language": "english",
+                "items": items
+            }))
             .to_request();
         assert_eq!(
             test::call_service(&app, req).await.status(),

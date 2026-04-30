@@ -80,7 +80,8 @@ const router = createRouter({
     {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
-      component: () => import('@/components/NotFoundPage.vue')
+      component: () => import('@/components/NotFoundPage.vue'),
+      meta: { public: true }
     }
   ]
 })

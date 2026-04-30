@@ -23,13 +23,18 @@ export interface Recommendation {
   media: RecommendationMedia;
 }
 
+export interface AiringScheduleEntry {
+  episode: number;
+  airingAt: number;
+}
+
 export interface Item {
   id: number;
   id_mal: number | null;
   title: Title;
   media_type: 'ANIME' | 'MANGA';
   episode_duration: number;
-  airing_schedule: any[];
+  airing_schedule: AiringScheduleEntry[];
   cover_image?: CoverImage;
   banner_image?: string;
   recommendations?: Recommendation[];

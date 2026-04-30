@@ -2,9 +2,7 @@
 import { onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { i18n } from '@/plugins/i18n'
 
-const { t } = i18n.global
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()

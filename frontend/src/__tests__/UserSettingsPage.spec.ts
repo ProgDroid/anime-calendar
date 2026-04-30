@@ -74,8 +74,8 @@ describe('UserSettingsPage', () => {
     await flushPromises()
     const radios = wrapper.findAll('input[type="radio"][name="theme"]')
     expect(radios.length).toBe(2)
-    expect(radios.map(r => r.element.value)).toContain('light')
-    expect(radios.map(r => r.element.value)).toContain('dark')
+    expect(radios.map(r => (r.element as HTMLInputElement).value)).toContain('light')
+    expect(radios.map(r => (r.element as HTMLInputElement).value)).toContain('dark')
   })
 
   it('renders language select with en and pt options', async () => {

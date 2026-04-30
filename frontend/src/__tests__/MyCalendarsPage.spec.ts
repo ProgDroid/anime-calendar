@@ -91,7 +91,7 @@ describe('MyCalendarsPage', () => {
   it('opens confirm modal when delete button is clicked', async () => {
     const wrapper = mountPage()
     await flushPromises()
-    await wrapper.findAll('.btn-error')[0].trigger('click')
+    await wrapper.findAll('.btn-error')[0]!.trigger('click')
     expect(wrapper.find('[data-testid="modal-box"]').exists()).toBe(true)
     expect(wrapper.text()).toContain(en.calendars.deleteConfirmTitle)
   })
@@ -102,7 +102,7 @@ describe('MyCalendarsPage', () => {
     await flushPromises()
 
     // Open the confirm modal
-    await wrapper.findAll('.btn-error')[0].trigger('click')
+    await wrapper.findAll('.btn-error')[0]!.trigger('click')
     await wrapper.vm.$nextTick()
 
     // Click the confirm button inside the modal

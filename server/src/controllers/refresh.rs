@@ -6,6 +6,7 @@ use crate::error::Error;
 use crate::mappers::refresh_token::RefreshTokenMapper;
 use crate::services::auth::generate_token;
 use actix_web::{HttpRequest, HttpResponse, ResponseError, post, web};
+use log::error;
 
 #[utoipa::path(
     post,
@@ -35,7 +36,18 @@ pub async fn refresh(
     let token_hash = hash_refresh_token(&raw_token);
     let token_row = match refresh_mapper.find_valid_token(&token_hash).await {
         Ok(row) => row,
-        Err(e) => return e.error_response(),
+        Err(e) => {
+            // Replay of a used token is a theft indicator — kill the entire family.
+            if let Ok(Some(user_id)) = refresh_mapper
+                .find_user_id_for_used_token(&token_hash)
+                .await
+            {
+                if let Err(inv_err) = refresh_mapper.invalidate_all_for_user(user_id).await {
+                    error!("Failed to invalidate token family for user {user_id}: {inv_err}");
+                }
+            }
+            return e.error_response();
+        }
     };
 
     // Issue a fresh 30-min JWT.
@@ -154,34 +166,36 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn used_refresh_token_returns_401() {
+    async fn used_refresh_token_returns_401_and_kills_family() {
         let pool = crate::test_helpers::test_pool().await;
-        let (_user_id, raw) = seed_user_with_refresh_token(&pool).await;
+        let (user_id, raw) = seed_user_with_refresh_token(&pool).await;
         let mapper = RefreshTokenMapper::from_pool(pool.clone());
 
-        // Use the token once via find_valid_token + rotate
+        // Rotate the original token so it becomes "used" and a second active token exists.
         let h = hash_refresh_token(&raw);
         let row = mapper.find_valid_token(&h).await.unwrap();
         let n: u64 = rand::random();
+        let new_raw = format!("new_token_{n}");
+        let new_hash = hash_refresh_token(&new_raw);
         mapper
-            .rotate_token(
-                row.id,
-                row.user_id,
-                &hash_refresh_token(&format!("new_token_{n}")),
-            )
+            .rotate_token(row.id, row.user_id, &new_hash)
             .await
             .unwrap();
 
+        // Confirm the second (active) token exists before the replay.
+        let active_before = mapper.find_valid_token(&new_hash).await;
+        assert!(active_before.is_ok(), "active token must exist before replay");
+
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool.clone())))
                 .app_data(jwt_data())
                 .app_data(cookie_data())
                 .service(refresh),
         )
         .await;
 
-        // Now try to reuse the original token
+        // Replay the original (now-used) token.
         let req = test::TestRequest::post()
             .uri("/auth/refresh")
             .insert_header(("Cookie", format!("refresh_token={raw}")))
@@ -190,5 +204,14 @@ mod tests {
             test::call_service(&app, req).await.status(),
             StatusCode::UNAUTHORIZED
         );
+
+        // The entire token family must be wiped — the active second token is gone too.
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM refresh_tokens WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(count, 0, "all tokens for the user must be invalidated on replay");
     }
 }

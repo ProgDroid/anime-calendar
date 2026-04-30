@@ -155,6 +155,35 @@ impl RefreshTokenMapper {
         Ok(())
     }
 
+    /// Return the `user_id` if the hash matches a token that has already been used.
+    /// Used by the refresh endpoint to detect token-theft replays.
+    ///
+    /// # Errors
+    /// Returns an error if the database query fails.
+    pub async fn find_user_id_for_used_token(&self, token_hash: &str) -> ServerResult<Option<i32>> {
+        crate::metrics::db::timed("refresh_token.find_used_token", async {
+            Self::find_user_id_for_used_token_with(
+                &mut *self.db.pool.acquire().await?,
+                token_hash,
+            )
+            .await
+        })
+        .await
+    }
+
+    pub(crate) async fn find_user_id_for_used_token_with(
+        conn: &mut sqlx::PgConnection,
+        token_hash: &str,
+    ) -> ServerResult<Option<i32>> {
+        let user_id = sqlx::query_scalar!(
+            "SELECT user_id FROM refresh_tokens WHERE token_hash = $1 AND used_at IS NOT NULL",
+            token_hash,
+        )
+        .fetch_optional(conn)
+        .await?;
+        Ok(user_id)
+    }
+
     /// Invalidate all refresh tokens for a user — called on logout.
     ///
     /// # Errors
@@ -289,6 +318,38 @@ mod tests {
                 .await
                 .is_err()
         );
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn find_used_token_returns_user_id_after_rotation() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = seed_user(&mut tx).await;
+        let h1 = hash("original_token");
+        let h2 = hash("rotated_token");
+
+        RefreshTokenMapper::replace_token_with(&mut tx, user_id, &h1)
+            .await
+            .unwrap();
+        let old = RefreshTokenMapper::find_valid_token_with(&mut tx, &h1)
+            .await
+            .unwrap();
+        RefreshTokenMapper::rotate_token_with(&mut tx, old.id, user_id, &h2)
+            .await
+            .unwrap();
+
+        // h1 is now used — find_user_id_for_used_token must return its user_id.
+        let found = RefreshTokenMapper::find_user_id_for_used_token_with(&mut tx, &h1)
+            .await
+            .unwrap();
+        assert_eq!(found, Some(user_id));
+
+        // h2 is still valid — must not be returned as a used token.
+        let not_used = RefreshTokenMapper::find_user_id_for_used_token_with(&mut tx, &h2)
+            .await
+            .unwrap();
+        assert_eq!(not_used, None);
+
         tx.rollback().await.unwrap();
     }
 

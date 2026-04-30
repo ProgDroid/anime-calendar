@@ -1,12 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
 import api from '@/config/api'
 import { i18n } from '@/plugins/i18n'
 
 const { t } = i18n.global
-const router = useRouter()
-
 // Email is passed via router navigation state from Register.vue
 const email = (history.state?.email as string) ?? ''
 const resending = ref(false)

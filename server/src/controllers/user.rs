@@ -7,6 +7,7 @@ use crate::{
 };
 
 use crate::entity::user_settings::UserSettings;
+use crate::mappers::refresh_token::RefreshTokenMapper;
 use crate::mappers::user_settings::UserSettingsMapper;
 use actix_web::{HttpResponse, ResponseError, delete, get, post, put, web};
 use log::{error, info};
@@ -94,8 +95,8 @@ pub async fn update_user(
         }
     };
 
-    // Validate username length
-    if user_data.username.len() > 50 {
+    // Validate username length (chars, not bytes — emoji/multibyte-safe)
+    if user_data.username.chars().count() > 50 {
         return Error::InvalidRequest.error_response();
     }
 
@@ -146,6 +147,7 @@ pub async fn update_user(
 #[post("/user/password")]
 pub async fn update_password(
     user_mapper: web::Data<UserMapper>,
+    refresh_token_mapper: web::Data<RefreshTokenMapper>,
     cache: web::Data<Cache>,
     claims: Claims,
     password_data: web::Json<UpdatePasswordRequest>,
@@ -189,7 +191,14 @@ pub async fn update_password(
         .await
     {
         Ok(()) => {
-            // Invalidate user cache
+            // Log out all other devices — anyone who had a session before the
+            // password change can no longer silently stay authenticated.
+            if let Err(e) = refresh_token_mapper
+                .invalidate_all_for_user(user.id)
+                .await
+            {
+                error!("Failed to invalidate refresh tokens for user {}: {e}", user.id);
+            }
             let _ = cache.invalidate_user_details(user.id).await;
             HttpResponse::Ok().finish()
         }
@@ -258,14 +267,16 @@ pub async fn delete_user(
 )]
 #[get("/user/settings")]
 pub async fn get_user_settings(
+    user_mapper: web::Data<UserMapper>,
     user_settings_mapper: web::Data<UserSettingsMapper>,
     claims: Claims,
 ) -> HttpResponse {
-    let Ok(user_id) = claims.sub.parse::<i32>() else {
-        return Error::Unauthorised.error_response();
+    let user = match user_mapper.get_user_from_claims(&claims).await {
+        Ok(u) => u,
+        Err(e) => return e.error_response(),
     };
 
-    match user_settings_mapper.get_user_settings(user_id).await {
+    match user_settings_mapper.get_user_settings(user.id).await {
         Ok(settings) => HttpResponse::Ok().json(settings),
         Err(e) => e.error_response(),
     }
@@ -284,14 +295,17 @@ pub async fn get_user_settings(
 )]
 #[put("/user/settings")]
 pub async fn update_user_settings(
+    user_mapper: web::Data<UserMapper>,
     user_settings_mapper: web::Data<UserSettingsMapper>,
     cache: web::Data<Cache>,
     claims: Claims,
     settings_data: web::Json<UserSettings>,
 ) -> HttpResponse {
-    let Ok(user_id) = claims.sub.parse::<i32>() else {
-        return Error::Unauthorised.error_response();
+    let user = match user_mapper.get_user_from_claims(&claims).await {
+        Ok(u) => u,
+        Err(e) => return e.error_response(),
     };
+    let user_id = user.id;
 
     info!("{settings_data:?}");
     match user_settings_mapper
@@ -319,6 +333,7 @@ mod integration_tests {
     use super::*;
     use crate::cache::Cache;
     use crate::config::server::JwtSecret;
+    use crate::mappers::refresh_token::RefreshTokenMapper;
     use crate::mappers::user::UserMapper;
     use crate::mappers::user_settings::UserSettingsMapper;
     use crate::services::auth::{generate_token, hash_password};
@@ -505,7 +520,8 @@ mod integration_tests {
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .app_data(cache)
                 .service(update_password),
@@ -523,13 +539,57 @@ mod integration_tests {
     }
 
     #[tokio::test]
+    async fn update_password_invalidates_refresh_tokens() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let rt_mapper = RefreshTokenMapper::from_pool(pool.clone());
+
+        // Seed an active refresh token for the user.
+        use crate::controllers::auth::hash_refresh_token;
+        rt_mapper
+            .replace_token(user.id, &hash_refresh_token("existing_session"))
+            .await
+            .unwrap();
+
+        let cache = web::Data::new(Cache::for_tests().await);
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool.clone())))
+                .app_data(jwt_data())
+                .app_data(cache)
+                .service(update_password),
+        )
+        .await;
+
+        let req = test::TestRequest::post()
+            .uri("/user/password")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "current_password": STRONG_PW,
+                "new_password": NEW_PW
+            }))
+            .to_request();
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
+
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM refresh_tokens WHERE user_id = $1")
+                .bind(user.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(count, 0, "refresh tokens must be wiped after password change");
+    }
+
+    #[tokio::test]
     async fn update_password_wrong_current_returns_401() {
         let pool = crate::test_helpers::test_pool().await;
         let user = seed_user(&pool).await;
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .app_data(cache)
                 .service(update_password),
@@ -556,7 +616,8 @@ mod integration_tests {
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .app_data(cache)
                 .service(update_password),
@@ -583,7 +644,8 @@ mod integration_tests {
         let cache = web::Data::new(Cache::for_tests().await);
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .app_data(cache)
                 .service(update_password),
@@ -661,6 +723,7 @@ mod integration_tests {
         let user = seed_user(&pool).await;
         let app = test::init_service(
             App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(UserSettingsMapper::from_pool(pool)))
                 .app_data(jwt_data())
                 .service(get_user_settings),
@@ -678,6 +741,33 @@ mod integration_tests {
         assert_eq!(body["language_preference"], "en");
     }
 
+    #[tokio::test]
+    async fn get_user_settings_deleted_user_returns_401() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        // Delete the user — their JWT remains valid for up to 30 min.
+        UserMapper::from_pool(pool.clone())
+            .delete_user(user.id)
+            .await
+            .unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(UserSettingsMapper::from_pool(pool)))
+                .app_data(jwt_data())
+                .service(get_user_settings),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri("/user/settings")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+    }
+
     // ─── PUT /user/settings ──────────────────────────────────────────────────
 
     #[tokio::test]
@@ -688,6 +778,7 @@ mod integration_tests {
         let mapper = web::Data::new(UserSettingsMapper::from_pool(pool.clone()));
         let app = test::init_service(
             App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(mapper.clone())
                 .app_data(jwt_data())
                 .app_data(cache)

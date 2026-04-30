@@ -29,7 +29,7 @@ const handleSubmit = async (e: Event) => {
       await authStore.login(email.value, password.value)
     }
     router.push('/my-calendars')
-  } catch (err) {
+  } catch {
     error.value = t('errors.generic')
   } finally {
     loading.value = false

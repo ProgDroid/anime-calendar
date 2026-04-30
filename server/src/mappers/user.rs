@@ -259,11 +259,17 @@ impl UserMapper {
     }
 
     /// # Errors
-    /// Fails if user ID cannot be extracted from Claims
+    /// Returns `Error::Unauthorised` if the sub cannot be parsed or the user no longer exists.
     pub async fn get_user_from_claims(&self, claims: &Claims) -> ServerResult<User> {
         let user_id = claims.sub.parse::<i32>().map_err(|_| Error::Unauthorised)?;
 
-        self.get_user_by_id(user_id).await
+        self.get_user_by_id(user_id).await.map_err(|e| {
+            if matches!(e, Error::Database(sqlx::Error::RowNotFound)) {
+                Error::Unauthorised
+            } else {
+                e
+            }
+        })
     }
 }
 

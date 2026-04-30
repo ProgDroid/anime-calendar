@@ -206,6 +206,13 @@ impl PasswordResetMapper {
         .execute(&mut *conn)
         .await?;
 
+        // Wipe all refresh tokens in the same transaction — a user resetting
+        // their password (likely after a compromise) must be logged out everywhere.
+        crate::mappers::refresh_token::RefreshTokenMapper::invalidate_all_for_user_with(
+            conn, user_id,
+        )
+        .await?;
+
         Ok(())
     }
 }
@@ -277,6 +284,46 @@ mod tests {
                 .await
                 .is_err()
         );
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn complete_reset_wipes_refresh_tokens() {
+        // Verifies the H4 fix: refresh tokens are deleted in the same transaction
+        // as the password update so a compromised session cannot outlive a reset.
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = seed_user(&mut tx, "d@test.com").await;
+
+        // Seed a refresh token for the user.
+        sqlx::query!(
+            "INSERT INTO refresh_tokens (user_id, token_hash, expires_at) \
+             VALUES ($1, 'h4_tok', NOW() + INTERVAL '30 days')",
+            user_id,
+        )
+        .execute(&mut *tx)
+        .await
+        .unwrap();
+
+        PasswordResetMapper::create_token_with(&mut tx, user_id, "hash_h4")
+            .await
+            .unwrap();
+        let token = PasswordResetMapper::find_valid_token_with(&mut tx, "hash_h4")
+            .await
+            .unwrap();
+
+        let new_hash = hash_password("NewPass12!@").unwrap();
+        PasswordResetMapper::complete_reset_with(&mut tx, token.id, user_id, &new_hash)
+            .await
+            .unwrap();
+
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM refresh_tokens WHERE user_id = $1")
+                .bind(user_id)
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap();
+        assert_eq!(count, 0, "refresh tokens must be wiped by complete_reset");
+
         tx.rollback().await.unwrap();
     }
 

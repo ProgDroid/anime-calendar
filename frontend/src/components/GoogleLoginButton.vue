@@ -56,7 +56,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <component is="script" src="https://accounts.google.com/gsi/client" async />
+  <component :is="'script'" src="https://accounts.google.com/gsi/client" async />
   
   <div class="flex flex-col items-center">
     <div id="g_id_onload"

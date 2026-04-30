@@ -5,16 +5,16 @@
 )]
 
 use argon2::{
+    password_hash::{rand_core::OsRng, SaltString},
     Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier,
-    password_hash::{SaltString, rand_core::OsRng},
 };
-use jsonwebtoken::{DecodingKey, EncodingKey, Header, encode};
+use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
 use log::error;
 use rand::RngCore as _;
 use sha2::{Digest as _, Sha256};
 use std::fmt::Write;
 
-use crate::{ServerResult, middleware::auth::Claims};
+use crate::{middleware::auth::Claims, ServerResult};
 
 /// # Errors
 /// Fails if password cannot be hashed
@@ -78,9 +78,12 @@ pub fn validate_password_strength(password: &str) -> bool {
 /// # Errors
 /// Fails if claims cannot be encoded
 pub fn generate_token<T: AsRef<[u8]>>(id: &i32, jwt_secret: T) -> ServerResult<String> {
+    use crate::middleware::auth::{AUD, ISS};
     let claims = Claims {
         sub: id.to_string(),
         exp: (chrono::Utc::now() + chrono::Duration::minutes(30)).timestamp() as usize,
+        iss: ISS.to_owned(),
+        aud: AUD.to_owned(),
     };
 
     let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
@@ -113,9 +116,12 @@ fn hash(data: &[u8]) -> String {
 /// # Errors
 /// Returns an error if the token is invalid or expired
 pub fn verify_token<T: AsRef<[u8]>>(token: &str, jwt_secret: T) -> ServerResult<Claims> {
+    use crate::middleware::auth::{AUD, ISS};
     let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
-    let token_data =
-        jsonwebtoken::decode::<Claims>(token, &decoding_key, &jsonwebtoken::Validation::default())?;
+    let mut validation = jsonwebtoken::Validation::default();
+    validation.set_issuer(&[ISS]);
+    validation.set_audience(&[AUD]);
+    let token_data = jsonwebtoken::decode::<Claims>(token, &decoding_key, &validation)?;
     Ok(token_data.claims)
 }
 

@@ -31,33 +31,9 @@ Anime Calendar is a web application for tracking anime series and episodes acros
 
 ## Project Structure
 
-```
-server/src/
-  cache.rs          — Redis wrapper with metrics + key generators
-  config/           — Server + DB config structs
-  controllers/      — HTTP handlers (auth, calendar, item, items, oauth, user, cache_metrics)
-  entity/           — Domain structs (Calendar, User, UserSettings, Language enum)
-  error.rs          — Unified error type
-  mappers/          — DB <-> domain layer (UserMapper, CalendarMapper, UserSettingsMapper, etc.)
-  middleware/       — JWT auth middleware
-  services/         — Business logic (auth, calendar_export, google_oauth)
-  server.rs         — App factory + route registration
-  main.rs           — Entry point, wires dependencies
+Cargo workspace: `server` (HTTP + business logic), `anilist` (API client), `common` (shared types). Backend follows a controllers → services → mappers (repository) layering. Frontend is a Vue SPA under `frontend/src/` with `components/`, `stores/`, `services/`, `router/`, and `locales/`.
 
-frontend/src/
-  components/       — Page-level Vue components (LoginPage, MyCalendarsPage, CalendarPage, etc.)
-    calendar/       — CalendarPage sub-components (CalendarItemsList, CalendarSettingsForm, ItemSearchPanel, RecommendationsSection)
-    shared/         — Reusable components (ConfirmModal, MediaItemCard, PaginationControls)
-  locales/          — en.json, pt.json
-  router/index.ts   — Route definitions + auth guard + settings fetch on navigation
-  services/         — applySettings.ts, toastService.ts, userSettingsService.ts
-  stores/           — auth.ts, userSettingsStore.ts
-  types/            — TypeScript type definitions
-
-anilist/            — Anilist API client crate
-common/             — Shared types (calendar, item, id, language, schedule, etc.)
-docs/               — Architecture and implementation notes
-```
+Non-obvious layout: `server/src/entity/` holds domain structs; `server/src/mappers/` owns DB pool clones and acts as the repository layer; `components/calendar/` holds CalendarPage sub-components; `components/shared/` holds reusable UI.
 
 ## Build & Run
 
@@ -94,113 +70,22 @@ Copy `config.toml.dist` → `config.toml` and `database.toml.dist` → `database
 - Redis key scanning: use `SCAN` cursor loop, never blocking `KEYS`
 - All `Error` variants must return `{"error":"..."}` JSON — never plain text
 - Auth failures: always return `Error::Unauthorised` regardless of whether the user exists
-
-### sqlx offline queries
-sqlx verifies queries at compile time, which requires a live DB or a pre-generated cache.
+- sqlx: regenerate and commit `.sqlx/` after any query change (`DATABASE_URL=... cargo sqlx prepare --workspace`)
 
 ### CI/CD
 
-For security reasons, third-party GitHub Actions should be pinned to specific commit hashes, e.g.:
+Pin all third-party GitHub Actions to commit hashes, not tags:
 ```yaml
-jobs:
-  backend:
-    name: Backend
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # <-- commit hash
+- uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 ```
-
-**Preferred: generate the offline cache** (commit `.sqlx/` so CI and teammates don't need a DB):
-```bash
-DATABASE_URL=postgresql://user:pass@host:port/dbname cargo sqlx prepare --workspace
-# generates .sqlx/ directory — commit this
-```
-
-**One-off check against the live DB** (when `.sqlx/` is stale or missing):
-```bash
-DATABASE_URL=postgresql://user:pass@host:port/dbname cargo check --package server
-```
-
-After running `cargo sqlx prepare`, subsequent `cargo build`/`cargo check` work offline without `DATABASE_URL`.
 
 ### Frontend
 - All user-facing strings use `$t()` / `t()` — never hardcode text in components
 - When adding translatable text, add the key to **both** `en.json` and `pt.json`
-- Translation key naming: hierarchical, e.g. `auth.login.title`, `userSettings.language` — top-level namespaces: `app`, `auth`, `calendar`, `calendars`, `userDetails`, `userSettings`, `errors`
-- Auth guard lives in `router/index.ts` `beforeEach` — settings fetched on non-public navigations only (routes with `meta: { public: true }` skip it)
-- Pinia stores: `auth.ts` for auth state, `userSettingsStore.ts` for user preferences
+- Translation key naming: hierarchical, e.g. `auth.login.title` — top-level namespaces: `app`, `auth`, `calendar`, `calendars`, `userDetails`, `userSettings`, `errors`
+- Auth guard lives in `router/index.ts` `beforeEach` — settings fetched on non-public navigations only
 - Public routes must declare `meta: { public: true }`; `fetchSettings` is skipped for them
+- Pinia stores: `auth.ts` for auth state, `userSettingsStore.ts` for user preferences
 - Use `axios.isAxiosError(err)` when you need `err.response.status`; use bare `catch` (no binding) when the error value is never read
 - Deduplicate concurrent Pinia async actions with `ref<Promise<T> | null>` — return the in-flight promise if one exists
 - Debounce watchers that write to `sessionStorage`/`localStorage` — at least 1s timeout, cleared in `onBeforeUnmount`
-
-## API Routes
-
-```
-POST   /auth/login
-POST   /auth/register
-GET    /auth/me
-GET    /auth/verify
-POST   /auth/google
-
-GET    /calendars          (paginated)
-GET    /calendars/:id
-PUT    /calendar
-DELETE /calendars/:id
-GET    /calendars/:id/export
-GET    /calendars/subscription/:token   (public iCal feed)
-
-GET    /items/:id
-GET    /items              (by IDs)
-GET    /items/search
-
-GET    /user/details
-PUT    /user
-DELETE /user
-PUT    /user/password
-GET    /user/settings
-PUT    /user/settings
-
-GET    /cache/metrics
-GET    /cache/performance
-GET    /cache/health
-GET    /cache/stats
-POST   /cache/reset
-POST   /cache/flush
-```
-
-## Implementation Status
-
-Core features are complete:
-- User auth (JWT + Google OAuth)
-- Calendar CRUD + iCalendar export
-- Calendar subscription tokens — unique per-calendar URL for iCal feed subscriptions (copy link, Google Calendar import)
-- Anilist item search and fetch
-- Redis caching (calendars, items, search, user settings, paginated lists) with TTL + invalidation
-- Prometheus metrics (`/metrics` endpoint) — HTTP, cache, DB, auth counters + histograms
-- Monitoring stack: Prometheus + Grafana + redis_exporter in `ops/` (see `ops/README.md`)
-- User profile management + settings
-- i18n (English + Portuguese), keys normalized to `auth.*`, `calendar.*`, `calendars.*`, `userDetails.*`, `userSettings.*`, `errors.*`
-- Responsive frontend (DaisyUI + Tailwind)
-- CalendarPage decomposed into sub-components under `components/calendar/`
-- Shared components: ConfirmModal (replaces native `confirm()`), MediaItemCard, PaginationControls
-- Rate limiting: `actix-governor` (60 burst, 1 req/s per IP)
-- CORS: configurable `allowed_origins` list in `config.toml`; defaults to `http://localhost:5173`
-- All error responses unified to `{"error":"..."}` JSON
-- User enumeration prevention on login
-- Redis `SCAN` cursor loop (replaced blocking `KEYS`)
-- 404 page + catch-all route
-- Router guard skips `fetchSettings` for public routes
-- `fetchSettings` concurrent-call deduplication in Pinia store
-- More backend tests (controllers + services)
-- DB indexes: `calendars.user_id`, `calendars.subscription_token`, `calendar_items.calendar_id`
-- JWT in localStorage → httpOnly cookies
-- TypeScript `strict: true`
-- Docker / CI-CD pipeline
-
-## Known TODOs (from source)
-- Episode-specific times (not just all-day calendar entries)
-- Load testing
-- `npm run build` fixes
-- `npm run test:unit -- --run` warnings
-- `npm run lint` fixes

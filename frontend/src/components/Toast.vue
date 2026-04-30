@@ -1,11 +1,12 @@
 <script setup lang="ts">
+defineOptions({ name: 'AppToast' })
 interface ToastProps {
   message: string
   type: 'success' | 'error' | 'warning' | 'info'
   duration?: number
 }
 
-const props = defineProps<ToastProps>()
+defineProps<ToastProps>()
 const emit = defineEmits(['close'])
 
 const toastClasses = {

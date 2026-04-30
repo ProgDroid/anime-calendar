@@ -18,7 +18,7 @@ describe('useWindowSize', () => {
     })
 
     const wrapper = mount(TestComponent)
-    const vm = wrapper.vm as any
+    const vm = wrapper.vm as { width: number; height: number; isMobile: boolean }
 
     expect(vm.width).toBe(1024)
     expect(vm.height).toBe(768)
@@ -35,7 +35,7 @@ describe('useWindowSize', () => {
     })
 
     const wrapper = mount(TestComponent)
-    const vm = wrapper.vm as any
+    const vm = wrapper.vm as { width: number; height: number; isMobile: boolean }
 
     expect(vm.isMobile).toBe(false)
 
@@ -52,7 +52,7 @@ describe('useWindowSize', () => {
     })
 
     const wrapper = mount(TestComponent)
-    const vm = wrapper.vm as any
+    const vm = wrapper.vm as { width: number; height: number; isMobile: boolean }
 
     expect(vm.isMobile).toBe(true)
 
@@ -68,7 +68,7 @@ describe('useWindowSize', () => {
     })
 
     const wrapper = mount(TestComponent)
-    const vm = wrapper.vm as any
+    const vm = wrapper.vm as { width: number; height: number; isMobile: boolean }
 
     Object.defineProperty(window, 'innerWidth', { writable: true, configurable: true, value: 375 })
     window.dispatchEvent(new Event('resize'))

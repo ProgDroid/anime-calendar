@@ -95,7 +95,7 @@ describe('LoginPage', () => {
   })
 
   it('disables submit button while loading', async () => {
-    let resolve: (v: any) => void
+    let resolve!: (v: unknown) => void
     vi.mocked(api.post).mockReturnValue(new Promise(r => { resolve = r }))
     const wrapper = mountPage()
     await wrapper.find('#email').setValue('test@example.com')

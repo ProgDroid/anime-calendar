@@ -35,7 +35,6 @@ const RESET_RESPONSE: &str =
     request_body = ForgotPasswordRequest,
     responses(
         (status = 200, description = "Always returned — prevents user enumeration", body = MessageResponse),
-        (status = 500, description = "Email or DB error", body = ErrorResponse),
     )
 )]
 #[post("/auth/forgot-password")]
@@ -47,18 +46,20 @@ pub async fn forgot_password(
     app_base_url: web::Data<AppBaseUrl>,
     body: web::Json<ForgotPasswordRequest>,
 ) -> HttpResponse {
-    let ok = HttpResponse::Ok().json(MessageResponse {
-        message: RESET_RESPONSE.into(),
-    });
+    let ok = || {
+        HttpResponse::Ok().json(MessageResponse {
+            message: RESET_RESPONSE.into(),
+        })
+    };
 
     // Always return 200 — do not reveal whether the account exists.
     let Ok(user) = user_mapper.get_user_by_email(&body.email).await else {
-        return ok;
+        return ok();
     };
 
     // OAuth-only users have no password — silently do nothing.
     if user.password_hash.is_none() {
-        return ok;
+        return ok();
     }
 
     let raw_token = generate_random_token();
@@ -75,7 +76,7 @@ pub async fn forgot_password(
 
     if let Err(e) = token_mapper.create_token(user.id, &token_hash).await {
         error!("{e}");
-        return e.error_response();
+        return ok();
     }
 
     if let Err(e) = email_service
@@ -83,13 +84,11 @@ pub async fn forgot_password(
         .await
     {
         error!("{e}");
-        return e.error_response();
+        return ok();
     }
 
     metrics::counter!(crate::metrics::names::PASSWORD_RESETS_REQUESTED_TOTAL).increment(1);
-    HttpResponse::Ok().json(MessageResponse {
-        message: RESET_RESPONSE.into(),
-    })
+    ok()
 }
 
 #[utoipa::path(

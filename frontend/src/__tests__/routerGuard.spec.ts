@@ -46,7 +46,7 @@ function makeRouter() {
     if (!to.meta.public) {
       const settings = await userSettingsStore.fetchSettings()
       if (settings) {
-        applySettings(settings as any)
+        applySettings(settings as Parameters<typeof applySettings>[0])
       }
     }
 
@@ -66,14 +66,14 @@ function mockAuth(authenticated: boolean) {
   vi.mocked(useAuthStore).mockReturnValue({
     isAuthenticated: () => authenticated,
     initAuth: vi.fn().mockResolvedValue(undefined),
-  } as any)
+  } as unknown as ReturnType<typeof useAuthStore>)
 }
 
 function mockSettings(result: object | null) {
   vi.mocked(useUserSettingsStore).mockReturnValue({
     fetchSettings: vi.fn().mockResolvedValue(result),
     initAuth: vi.fn().mockResolvedValue(undefined),
-  } as any)
+  } as unknown as ReturnType<typeof useUserSettingsStore>)
 }
 
 // ── Tests ──────────────────────────────────────────────────────────────────
@@ -126,7 +126,7 @@ describe('Router navigation guard', () => {
     vi.mocked(useUserSettingsStore).mockReturnValue({
       fetchSettings,
       initAuth: vi.fn().mockResolvedValue(undefined),
-    } as any)
+    } as unknown as ReturnType<typeof useUserSettingsStore>)
     const router = makeRouter()
     await router.push('/login')
     expect(fetchSettings).not.toHaveBeenCalled()
@@ -138,7 +138,7 @@ describe('Router navigation guard', () => {
     vi.mocked(useUserSettingsStore).mockReturnValue({
       fetchSettings,
       initAuth: vi.fn().mockResolvedValue(undefined),
-    } as any)
+    } as unknown as ReturnType<typeof useUserSettingsStore>)
     const router = makeRouter()
     await router.push('/my-calendars')
     expect(fetchSettings).toHaveBeenCalledOnce()
@@ -169,7 +169,7 @@ describe('Router navigation guard', () => {
     vi.mocked(useUserSettingsStore).mockReturnValue({
       fetchSettings,
       initAuth: vi.fn().mockResolvedValue(undefined),
-    } as any)
+    } as unknown as ReturnType<typeof useUserSettingsStore>)
     const router = makeRouter()
     await router.push('/my-calendars')
     await router.push('/user/details')

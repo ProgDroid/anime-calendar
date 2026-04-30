@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+defineOptions({ name: 'RegisterPage' })
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import GoogleLoginButton from './GoogleLoginButton.vue'
@@ -27,7 +28,7 @@ const handleSubmit = async (e: Event) => {
       name: 'VerifyEmailPending',
       state: { email: email.value },
     })
-  } catch (err) {
+  } catch {
     error.value = t('errors.generic')
   } finally {
     loading.value = false

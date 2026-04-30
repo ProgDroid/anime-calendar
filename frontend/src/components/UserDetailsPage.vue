@@ -54,7 +54,7 @@ const fetchUserDetails = async () => {
     user.value = response.data
     updatedUsername.value = response.data.username
     updatedEmail.value = response.data.email
-  } catch (err) {
+  } catch {
     error.value = t('userDetails.fetchFailed')
   } finally {
     loading.value = false
@@ -77,7 +77,7 @@ const handleUpdate = async (e: Event) => {
     
     // Show success notification
     toastService.success(t('userDetails.updateSuccess'))
-  } catch (err) {
+  } catch {
     error.value = t('userDetails.updateFailed')
   }
 }

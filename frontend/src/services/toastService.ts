@@ -1,4 +1,4 @@
-import { createApp } from 'vue'
+import { createApp, type App } from 'vue'
 import Toast from '@/components/Toast.vue'
 
 interface ToastOptions {
@@ -14,7 +14,7 @@ toastContainer.className = 'fixed bottom-4 left-4 z-50 space-y-2 w-full max-w-xs
 document.body.appendChild(toastContainer)
 
 // Global toast state
-const toasts: Array<{ id: number; component: any }> = []
+const toasts: Array<{ id: number; component: App<Element> }> = []
 
 // Generate unique ID
 let toastId = 0

@@ -23,6 +23,8 @@ pub struct Server {
     pub smtp: SmtpConfig,
     #[serde(default)]
     pub metrics: MetricsConfig,
+    #[serde(default)]
+    pub enable_docs: bool,
 }
 
 #[must_use]
@@ -57,6 +59,7 @@ impl Default for Server {
             app_base_url: default_app_base_url(),
             smtp: SmtpConfig::default(),
             metrics: MetricsConfig::default(),
+            enable_docs: false,
         }
     }
 }

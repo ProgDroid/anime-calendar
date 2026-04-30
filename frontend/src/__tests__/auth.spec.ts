@@ -68,8 +68,8 @@ describe('Auth Store', () => {
     try {
       await store.login('test@example.com', 'wrongpassword')
       expect.fail('Should have thrown an error')
-    } catch (error: any) {
-      expect(error.message).toBe('Invalid credentials')
+    } catch (error) {
+      expect((error as Error).message).toBe('Invalid credentials')
     }
   })
 

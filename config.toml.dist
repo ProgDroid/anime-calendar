@@ -6,6 +6,8 @@ google_client_secret = ""
 jwt_secret = ""
 compress = true
 cookie_secure = false
+# Set to true only in development — exposes full API surface at /swagger-ui/
+enable_docs = false
 
 [redis]
 host = "127.0.0.1"

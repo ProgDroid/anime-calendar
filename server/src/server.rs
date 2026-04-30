@@ -3,18 +3,16 @@ use std::str::FromStr;
 use actix_cors::Cors;
 use actix_governor::{Governor, GovernorConfigBuilder};
 use actix_web::{
-    App, HttpServer,
     dev::Server,
-    middleware::{Compress, Condition, Logger},
-    web,
+    middleware::{Compress, Condition, DefaultHeaders, Logger},
+    web, App, HttpServer,
 };
 use env_logger::Builder;
-use log::{LevelFilter, error};
+use log::{error, LevelFilter};
 use utoipa::OpenApi as _;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
-    ServerResult,
     cache::Cache,
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig},
     controllers::{
@@ -28,6 +26,7 @@ use crate::{
     },
     openapi::ApiDoc,
     services::email::EmailService,
+    ServerResult,
 };
 
 #[allow(clippy::too_many_arguments)]
@@ -59,8 +58,19 @@ pub fn start(
     let host = config.host.clone();
     let port = config.port;
     let compress = config.compress;
+    let enable_docs = config.enable_docs;
     let allowed_origins = config.allowed_origins.clone();
+    if allowed_origins.is_empty() {
+        return Err(Error::Config(config::ConfigError::Message(
+            "allowed_origins must not be empty — refusing to start with open CORS".into(),
+        )));
+    }
     let jwt_secret = JwtSecret::new(config.jwt_secret);
+    if jwt_secret.expose_secret().is_empty() {
+        return Err(Error::Config(config::ConfigError::Message(
+            "jwt_secret must not be empty — refusing to start with an empty signing key".into(),
+        )));
+    }
     let cookie_settings = CookieSettings {
         secure: config.cookie_secure,
     };
@@ -73,12 +83,7 @@ pub fn start(
         .ok_or(Error::GovernorConfig)?;
 
     Ok(HttpServer::new(move || {
-        let cors = if allowed_origins.is_empty() {
-            Cors::default()
-                .allow_any_origin()
-                .allow_any_method()
-                .allow_any_header()
-        } else {
+        let cors = {
             let mut cors = Cors::default();
             for origin in &allowed_origins {
                 cors = cors.allowed_origin(origin);
@@ -89,15 +94,39 @@ pub fn start(
         };
 
         App::new()
-            .service(
-                SwaggerUi::new("/swagger-ui/{_:.*}")
-                    .url("/api-docs/openapi.json", ApiDoc::openapi()),
-            )
+            .configure(move |cfg| {
+                if enable_docs {
+                    cfg.service(
+                        SwaggerUi::new("/swagger-ui/{_:.*}")
+                            .url("/api-docs/openapi.json", ApiDoc::openapi()),
+                    );
+                }
+            })
             .wrap(Condition::new(compress, Compress::default()))
             .wrap(crate::metrics::http::HttpMetrics)
-            .wrap(Logger::default())
+            .wrap(
+                Logger::new("%a \"%m %{safe_url}xi %H\" %s %b %T").custom_request_replace(
+                    "safe_url",
+                    |req| {
+                        let path = req.path();
+                        if path.starts_with("/calendars/subscribe/") {
+                            "/calendars/subscribe/[redacted]".to_owned()
+                        } else {
+                            path.to_owned()
+                        }
+                    },
+                ),
+            )
             .wrap(Governor::new(&governor_conf))
             .wrap(cors)
+            .wrap(
+                DefaultHeaders::new()
+                    .add(("X-Content-Type-Options", "nosniff"))
+                    .add(("X-Frame-Options", "DENY"))
+                    .add(("Referrer-Policy", "strict-origin-when-cross-origin"))
+                    .add(("Content-Security-Policy", "default-src 'none'")),
+            )
+            .app_data(web::JsonConfig::default().limit(1_048_576))
             .app_data(web::Data::new(user_mapper.clone()))
             .app_data(web::Data::new(calendar_mapper.clone()))
             .app_data(web::Data::new(user_settings_mapper.clone()))

@@ -6,10 +6,23 @@ use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
 
+pub const ISS: &str = "anime-calendar";
+pub const AUD: &str = "anime-calendar";
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Claims {
     pub sub: String,
     pub exp: usize,
+    pub iss: String,
+    pub aud: String,
+}
+
+impl Claims {
+    /// # Errors
+    /// Returns `Error::Unauthorised` if `sub` is not a valid i32.
+    pub fn user_id(&self) -> Result<i32, Error> {
+        self.sub.parse().map_err(|_| Error::Unauthorised)
+    }
 }
 
 impl FromRequest for Claims {
@@ -31,7 +44,9 @@ impl FromRequest for Claims {
 
             let secret = jwt_secret.expose_secret().as_bytes();
             let decoding_key = DecodingKey::from_secret(secret);
-            let validation = Validation::default();
+            let mut validation = Validation::default();
+            validation.set_issuer(&[ISS]);
+            validation.set_audience(&[AUD]);
 
             let token_data = decode::<Self>(&token, &decoding_key, &validation)
                 .map_err(|_| Error::Unauthorised)?;
@@ -82,6 +97,8 @@ mod tests {
         let claims = Claims {
             sub: "1".to_owned(),
             exp: 0,
+            iss: ISS.to_owned(),
+            aud: AUD.to_owned(),
         };
         let token = encode(
             &Header::default(),

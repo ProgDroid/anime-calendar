@@ -4,7 +4,7 @@ import type { Item } from '@/types/item'
 
 const { t } = useI18n()
 
-const props = defineProps<{
+defineProps<{
   item: Item
   displayTitle: string
   isSelected: boolean

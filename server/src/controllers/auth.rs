@@ -24,17 +24,13 @@ pub struct ErrorResponse {
 }
 
 fn is_valid_email(email: &str) -> bool {
-    let parts: Vec<&str> = email.split('@').collect();
-    if parts.len() != 2 {
-        return false;
-    }
-    let (local, domain) = (parts[0], parts[1]);
-    if local.is_empty() || domain.is_empty() {
-        return false;
-    }
-    domain
-        .rfind('.')
-        .is_some_and(|pos| pos > 0 && pos < domain.len() - 1)
+    // RFC 5321 syntax check via the email_address crate.
+    // We also require a dot in the domain — local-only hostnames are RFC-valid
+    // but not acceptable for internet-facing registration.
+    email_address::EmailAddress::is_valid(email)
+        && email
+            .rsplit_once('@')
+            .is_some_and(|(_, domain)| domain.contains('.'))
 }
 
 /// Generate 32 random bytes as a lowercase hex string.
@@ -198,7 +194,7 @@ pub struct RegisterRequest {
     request_body = RegisterRequest,
     responses(
         (status = 200, description = "Registration accepted — verification email sent", body = MessageResponse),
-        (status = 400, description = "Invalid request, weak password, or duplicate email", body = ErrorResponse),
+        (status = 400, description = "Invalid request or weak password", body = ErrorResponse),
     )
 )]
 #[post("/register")]
@@ -216,11 +212,11 @@ pub async fn register(
         metrics::counter!(AUTH_REGISTRATIONS_TOTAL, LABEL_OUTCOME => outcome).increment(1);
     };
 
-    // Check if user already exists
-    if (db.get_user_by_email(&user_data.email).await).is_ok() {
-        record(OUTCOME_FAILED);
-        return Error::UserAlreadyExists.error_response();
-    }
+    let ok = || {
+        HttpResponse::Ok().json(MessageResponse {
+            message: "Verification email sent. Please check your inbox.".into(),
+        })
+    };
 
     if user_data.username.len() > 50 {
         record(OUTCOME_FAILED);
@@ -240,6 +236,30 @@ pub async fn register(
     if !validate_password_strength(user_data.password.expose_secret()) {
         record(OUTCOME_FAILED);
         return Error::InvalidPassword.error_response();
+    }
+
+    // Email already registered — silently resend verification (if unverified) and
+    // return the same 200 shape as a new registration to prevent enumeration.
+    if let Ok(existing) = db.get_user_by_email(&user_data.email).await {
+        if existing.email_verified_at.is_none() {
+            let raw_token = generate_random_token();
+            let token_hash = hash_token(&raw_token);
+            let verify_url =
+                format!("{}/verify-email?token={raw_token}", app_base_url.as_str());
+            if let Err(e) = verification_mapper
+                .replace_token(existing.id, &token_hash)
+                .await
+            {
+                error!("{e}");
+            } else if let Err(e) = email_service
+                .send_verification_email(&existing.email, &verify_url)
+                .await
+            {
+                error!("{e}");
+            }
+        }
+        record(OUTCOME_FAILED);
+        return ok();
     }
 
     let hashed_password = match hash_password(user_data.password.expose_secret()) {
@@ -296,9 +316,7 @@ pub async fn register(
     }
 
     record(OUTCOME_OK);
-    HttpResponse::Ok().json(MessageResponse {
-        message: "Verification email sent. Please check your inbox.".into(),
-    })
+    ok()
 }
 
 #[utoipa::path(
@@ -659,22 +677,29 @@ mod integration_tests {
     }
 
     #[tokio::test]
-    async fn register_duplicate_email_returns_400() {
+    async fn register_duplicate_email_returns_200_and_refreshes_token() {
+        // Anti-enumeration: duplicate email must return 200 (same shape as
+        // success) so an attacker cannot probe which emails are registered.
         let pool = crate::test_helpers::test_pool().await;
-        let user = seed_user(&pool).await;
+        // Seed an unverified user (no mark_email_verified) so the resend path runs.
+        let n: u64 = rand::random();
+        let unverified_email = format!("dup_unverified_{n}@test.com");
+        let user = UserMapper::from_pool(pool.clone())
+            .create_user(&format!("dup_{n}"), &unverified_email, Some(&hash_password(STRONG_PW).unwrap()))
+            .await
+            .unwrap();
+        let ev_mapper = EmailVerificationMapper::from_pool(pool.clone());
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(EmailVerificationMapper::from_pool(
-                    pool.clone(),
-                )))
+                .app_data(web::Data::new(ev_mapper.clone()))
                 .app_data(web::Data::new(EmailService::new(
                     crate::config::server::SmtpConfig::default(),
                 )))
                 .app_data(web::Data::new(AppBaseUrl::new(
                     "http://localhost:5173".to_string(),
                 )))
-                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool)))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool.clone())))
                 .app_data(jwt_data())
                 .app_data(cookie_data())
                 .service(register),
@@ -684,14 +709,54 @@ mod integration_tests {
             .uri("/register")
             .set_json(serde_json::json!({
                 "username": "dupcheck",
+                "email": unverified_email,
+                "password": STRONG_PW
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        // A fresh verification token must have been written for the existing user.
+        let count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM email_verification_tokens WHERE user_id = $1")
+                .bind(user.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(count, 1, "verification token must be refreshed on duplicate registration");
+    }
+
+    #[tokio::test]
+    async fn register_duplicate_verified_email_returns_200_silently() {
+        // A verified user re-registering still gets 200 (no enumeration),
+        // but we do NOT resend a verification email (they're already verified).
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await; // verified
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(EmailVerificationMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(EmailService::new(
+                    crate::config::server::SmtpConfig::default(),
+                )))
+                .app_data(web::Data::new(AppBaseUrl::new(
+                    "http://localhost:5173".to_string(),
+                )))
+                .app_data(web::Data::new(RefreshTokenMapper::from_pool(pool.clone())))
+                .app_data(jwt_data())
+                .app_data(cookie_data())
+                .service(register),
+        )
+        .await;
+        let req = test::TestRequest::post()
+            .uri("/register")
+            .set_json(serde_json::json!({
+                "username": "dupverified",
                 "email": user.email,
                 "password": STRONG_PW
             }))
             .to_request();
-        assert_eq!(
-            test::call_service(&app, req).await.status(),
-            StatusCode::BAD_REQUEST
-        );
+        assert_eq!(test::call_service(&app, req).await.status(), StatusCode::OK);
     }
 
     #[tokio::test]
