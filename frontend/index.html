@@ -4,6 +4,28 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Anime Calendar</title>
+    <script>
+      (function() {
+        try {
+          var t = localStorage.getItem('theme');
+          var a = localStorage.getItem('accent');
+          if (t === 'light' || t === 'dark') {
+            document.documentElement.setAttribute('data-theme', t);
+          } else {
+            document.documentElement.setAttribute('data-theme', 'dark');
+          }
+          var accents = ['coral','iris','matcha','sakura','citron'];
+          if (accents.indexOf(a) !== -1) {
+            document.documentElement.setAttribute('data-accent', a);
+          } else {
+            document.documentElement.setAttribute('data-accent', 'coral');
+          }
+        } catch (e) {
+          document.documentElement.setAttribute('data-theme', 'dark');
+          document.documentElement.setAttribute('data-accent', 'coral');
+        }
+      })();
+    </script>
 </head>
 <body>
     <div id="app"></div>
