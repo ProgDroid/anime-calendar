@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import VerifyEmailPendingPage from '@/components/VerifyEmailPendingPage.vue'
 import en from '@/locales/en.json'
 
@@ -14,7 +14,7 @@ import api from '@/config/api'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 const router = createRouter({
-  history: createWebHistory(),
+  history: createMemoryHistory(),
   routes: [
     { path: '/verify-email-pending', component: VerifyEmailPendingPage },
     { path: '/login', name: 'Login', component: { template: '<div />' } },

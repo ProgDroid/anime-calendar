@@ -72,6 +72,22 @@ describe('VerifyEmailConfirmPage', () => {
     expect(wrapper.find('[data-testid="verify-back-to-login"]').exists()).toBe(true)
   })
 
+  it('redirects to /my-calendars 1.5s after successful verification', async () => {
+    verifyEmailMock.mockResolvedValue('alice')
+    const router = makeRouter({ token: 'valid' })
+    await router.isReady()
+    mount(VerifyEmailConfirmPage, {
+      global: {
+        plugins: [i18n, router, createPinia()],
+      },
+    })
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/verify-email')
+    vi.advanceTimersByTime(1500)
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/my-calendars')
+  })
+
   it('shows error status when token is missing from query', async () => {
     const wrapper = await mountPage({})
     await flushPromises()
