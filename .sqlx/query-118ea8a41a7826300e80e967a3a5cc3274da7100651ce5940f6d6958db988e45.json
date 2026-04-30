@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT user_id, theme_preference as \"theme_preference: Theme\", language_preference as \"language_preference: SiteLanguage\", title_language_preference as \"title_language_preference: Language\", timezone, created_at, updated_at FROM user_settings WHERE user_id = $1",
+  "query": "SELECT user_id, theme_preference as \"theme_preference: Theme\", language_preference as \"language_preference: SiteLanguage\", title_language_preference as \"title_language_preference: Language\", accent_preference as \"accent_preference: Accent\", timezone, created_at, updated_at FROM user_settings WHERE user_id = $1",
   "describe": {
     "columns": [
       {
@@ -56,16 +56,34 @@
       },
       {
         "ordinal": 4,
+        "name": "accent_preference: Accent",
+        "type_info": {
+          "Custom": {
+            "name": "accent",
+            "kind": {
+              "Enum": [
+                "coral",
+                "iris",
+                "matcha",
+                "sakura",
+                "citron"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
         "name": "timezone",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "created_at",
         "type_info": "Timestamp"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "updated_at",
         "type_info": "Timestamp"
       }
@@ -82,8 +100,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "df7a992cc8841abd1605117b6e75e0f011d1ef68aedf1e8880b8dd5dd00f7a3a"
+  "hash": "118ea8a41a7826300e80e967a3a5cc3274da7100651ce5940f6d6958db988e45"
 }

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO user_settings (user_id, theme_preference, language_preference, title_language_preference, timezone) VALUES ($1, $2, $3, $4, $5) ON CONFLICT (user_id) DO UPDATE SET theme_preference = EXCLUDED.theme_preference, language_preference = EXCLUDED.language_preference, title_language_preference = EXCLUDED.title_language_preference, timezone = EXCLUDED.timezone",
+  "query": "INSERT INTO user_settings (user_id, theme_preference, language_preference, title_language_preference, accent_preference, timezone) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (user_id) DO UPDATE SET theme_preference = EXCLUDED.theme_preference, language_preference = EXCLUDED.language_preference, title_language_preference = EXCLUDED.title_language_preference, accent_preference = EXCLUDED.accent_preference, timezone = EXCLUDED.timezone",
   "describe": {
     "columns": [],
     "parameters": {
@@ -40,10 +40,24 @@
             }
           }
         },
+        {
+          "Custom": {
+            "name": "accent",
+            "kind": {
+              "Enum": [
+                "coral",
+                "iris",
+                "matcha",
+                "sakura",
+                "citron"
+              ]
+            }
+          }
+        },
         "Text"
       ]
     },
     "nullable": []
   },
-  "hash": "95dfc6eb76e221e45e124b3e9407ca4bca6c8be67cc229480ec8af6c3ef9e395"
+  "hash": "891945082381a863017c2e6e4138215d9b0709ffd00ea3ddd56d39d5e0f8ea4b"
 }
