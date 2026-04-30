@@ -11,6 +11,7 @@ pub struct UserSettings {
     pub theme_preference: Theme,
     pub language_preference: SiteLanguage,
     pub title_language_preference: Language,
+    pub accent_preference: Accent,
     pub timezone: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
@@ -52,6 +53,32 @@ impl FromStr for SiteLanguage {
         Ok(match s {
             "pt" => Self::Pt,
             _ => Self::En,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, Default, sqlx::Type, Copy, utoipa::ToSchema)]
+#[serde(rename_all = "lowercase")]
+#[sqlx(type_name = "accent", rename_all = "lowercase")]
+pub enum Accent {
+    #[default]
+    Coral,
+    Iris,
+    Matcha,
+    Sakura,
+    Citron,
+}
+
+impl FromStr for Accent {
+    type Err = Infallible;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(match s {
+            "iris" => Self::Iris,
+            "matcha" => Self::Matcha,
+            "sakura" => Self::Sakura,
+            "citron" => Self::Citron,
+            _ => Self::Coral,
         })
     }
 }
