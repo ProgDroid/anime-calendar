@@ -46,7 +46,7 @@
       "title": "Esqueci a senha",
       "subtitle": "Insira seu endereço de e-mail e enviaremos um link de redefinição.",
       "emailLabel": "E-mail",
-      "emailPlaceholder": "seu@email.com",
+      "emailPlaceholder": "voce{'@'}exemplo.com",
       "submit": "Enviar link de redefinição",
       "sending": "Enviando...",
       "successMessage": "Se existir uma conta com esse e-mail, você receberá um link de redefinição em breve.",

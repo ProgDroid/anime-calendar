@@ -46,7 +46,7 @@
       "title": "Forgot password",
       "subtitle": "Enter your email address and we'll send you a reset link.",
       "emailLabel": "Email",
-      "emailPlaceholder": "your@email.com",
+      "emailPlaceholder": "you{'@'}example.com",
       "submit": "Send reset link",
       "sending": "Sending...",
       "successMessage": "If an account exists with that email, you'll receive a reset link shortly.",

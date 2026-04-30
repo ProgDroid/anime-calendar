@@ -2,6 +2,11 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
+import Wordmark from './shared/Wordmark.vue'
+import UiInput from './ui/UiInput.vue'
+import UiButton from './ui/UiButton.vue'
+
+defineOptions({ name: 'ForgotPasswordPage' })
 
 const { t } = useI18n()
 
@@ -24,45 +29,69 @@ async function handleSubmit(e: Event) {
 </script>
 
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-base-200">
-    <div class="card w-full max-w-md bg-base-100 shadow-xl">
-      <div class="card-body">
-        <h2 class="card-title">{{ t('auth.forgotPassword.title') }}</h2>
+  <div class="min-h-[calc(100vh-6rem)] flex bg-bg-1">
+    <div data-testid="forgot-poster-collage" class="hidden lg:block flex-1 bg-bg-2" />
 
-        <div v-if="submitted" class="alert alert-success">
-          <span>{{ t('auth.forgotPassword.successMessage') }}</span>
-        </div>
-
-        <form v-else @submit="handleSubmit" class="space-y-4">
-          <p class="text-sm text-base-content/70">
+    <div class="flex-1 flex items-center justify-center p-6">
+      <div class="w-full max-w-[420px] flex flex-col gap-6 bg-bg-1 rounded-xl p-8 border border-line">
+        <div class="flex flex-col gap-2">
+          <Wordmark size="lg" />
+          <h1 class="font-display text-4xl text-fg-1">
+            {{ t('auth.forgotPassword.title') }}
+          </h1>
+          <p data-testid="forgot-tagline" class="text-fg-2 text-sm">
             {{ t('auth.forgotPassword.subtitle') }}
           </p>
-          <div class="form-control">
-            <label class="label mb-2">
-              <span class="label-text">{{ t('auth.forgotPassword.emailLabel') }}</span>
-            </label>
-            <input
-              v-model="email"
-              type="email"
-              required
-              class="input input-bordered w-full"
-              :placeholder="t('auth.forgotPassword.emailPlaceholder')"
-            />
-          </div>
-          <button
+        </div>
+
+        <div
+          v-if="submitted"
+          data-testid="forgot-success"
+          role="status"
+          class="text-sm text-fg-1 bg-bg-2 border border-line rounded-md p-4"
+        >
+          {{ t('auth.forgotPassword.successMessage') }}
+        </div>
+
+        <form
+          v-else
+          data-testid="forgot-form"
+          class="flex flex-col gap-4"
+          @submit="handleSubmit"
+        >
+          <UiInput
+            id="forgot-email"
+            v-model="email"
+            type="email"
+            name="email"
+            :label="t('auth.forgotPassword.emailLabel')"
+            :placeholder="t('auth.forgotPassword.emailPlaceholder')"
+            autocomplete="email"
+            required
+            data-testid="forgot-email"
+          />
+
+          <UiButton
             type="submit"
-            class="btn btn-primary w-full"
+            variant="primary"
+            size="lg"
+            :loading="loading"
             :disabled="loading"
+            data-testid="forgot-submit"
           >
             {{ loading ? t('auth.forgotPassword.sending') : t('auth.forgotPassword.submit') }}
-          </button>
+          </UiButton>
         </form>
 
-        <div class="text-center mt-2">
-          <router-link to="/login" class="link link-primary text-sm">
-            {{ t('auth.login.title') }}
+        <p class="text-center text-sm text-fg-2">
+          <router-link
+            to="/login"
+            data-testid="forgot-login-link"
+            class="text-accent-1 hover:underline"
+          >
+            {{ t('auth.login.submit') }}
           </router-link>
-        </div>
+        </p>
       </div>
     </div>
   </div>
