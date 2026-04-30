@@ -17,6 +17,8 @@
     },
     "login": {
       "title": "Login",
+      "tagline": "Track every season, share every calendar.",
+      "or": "or",
       "email": "Email",
       "password": "Password",
       "rememberMe": "Remember Me",

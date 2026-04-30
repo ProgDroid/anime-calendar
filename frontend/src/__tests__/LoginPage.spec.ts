@@ -24,6 +24,11 @@ function mountPage() {
   })
 }
 
+// UiInput wraps the <input> in a <div>; data-testid lands on the wrapper, so
+// we drill into the inner input for value setting.
+const inputAt = (wrapper: ReturnType<typeof mountPage>, testid: string) =>
+  wrapper.find(`[data-testid="${testid}"] input`)
+
 describe('LoginPage', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
@@ -33,37 +38,48 @@ describe('LoginPage', () => {
   it('renders in login mode by default', () => {
     const wrapper = mountPage()
     expect(wrapper.text()).toContain(en.auth.login.title)
-    expect(wrapper.find('#username').exists()).toBe(false)
-    expect(wrapper.find('#email').exists()).toBe(true)
-    expect(wrapper.find('#password').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-username"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="login-email"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-password"]').exists()).toBe(true)
   })
 
-  it('toggles to register mode when link clicked', async () => {
+  it('renders the new design surfaces (tagline, poster collage, submit, google)', () => {
     const wrapper = mountPage()
-    await wrapper.find('[data-testid="toggle-mode"]').trigger('click')
+    expect(wrapper.find('[data-testid="login-tagline"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-poster-collage"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-submit"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-google"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-forgot-link"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-register-link"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-form"]').exists()).toBe(true)
+  })
+
+  it('toggles to register mode when register link clicked', async () => {
+    const wrapper = mountPage()
+    await wrapper.find('[data-testid="login-register-link"]').trigger('click')
     expect(wrapper.text()).toContain(en.auth.register.title)
-    expect(wrapper.find('#username').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-username"]').exists()).toBe(true)
   })
 
   it('clears error when toggling mode', async () => {
     vi.mocked(api.post).mockRejectedValue({ isAxiosError: true, response: { data: { error: 'fail' } } })
     const wrapper = mountPage()
-    await wrapper.find('#email').setValue('x@x.com')
-    await wrapper.find('#password').setValue('pass')
-    await wrapper.find('form').trigger('submit')
+    await inputAt(wrapper, 'login-email').setValue('x@x.com')
+    await inputAt(wrapper, 'login-password').setValue('pass')
+    await wrapper.find('[data-testid="login-form"]').trigger('submit')
     await flushPromises()
-    expect(wrapper.find('.alert-error').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-error"]').exists()).toBe(true)
 
-    await wrapper.find('[data-testid="toggle-mode"]').trigger('click')
-    expect(wrapper.find('.alert-error').exists()).toBe(false)
+    await wrapper.find('[data-testid="login-register-link"]').trigger('click')
+    expect(wrapper.find('[data-testid="login-error"]').exists()).toBe(false)
   })
 
   it('calls api.post /login with correct credentials on submit', async () => {
     vi.mocked(api.post).mockResolvedValue({ data: { username: 'user' } })
     const wrapper = mountPage()
-    await wrapper.find('#email').setValue('test@example.com')
-    await wrapper.find('#password').setValue('secret')
-    await wrapper.find('form').trigger('submit')
+    await inputAt(wrapper, 'login-email').setValue('test@example.com')
+    await inputAt(wrapper, 'login-password').setValue('secret')
+    await wrapper.find('[data-testid="login-form"]').trigger('submit')
     await flushPromises()
     expect(api.post).toHaveBeenCalledWith('/login', { email: 'test@example.com', password: 'secret' })
   })
@@ -71,11 +87,11 @@ describe('LoginPage', () => {
   it('calls api.post /register with credentials in register mode', async () => {
     vi.mocked(api.post).mockResolvedValue({ data: { username: 'user' } })
     const wrapper = mountPage()
-    await wrapper.find('[data-testid="toggle-mode"]').trigger('click')
-    await wrapper.find('#username').setValue('newuser')
-    await wrapper.find('#email').setValue('test@example.com')
-    await wrapper.find('#password').setValue('secret')
-    await wrapper.find('form').trigger('submit')
+    await wrapper.find('[data-testid="login-register-link"]').trigger('click')
+    await inputAt(wrapper, 'login-username').setValue('newuser')
+    await inputAt(wrapper, 'login-email').setValue('test@example.com')
+    await inputAt(wrapper, 'login-password').setValue('secret')
+    await wrapper.find('[data-testid="login-form"]').trigger('submit')
     await flushPromises()
     expect(api.post).toHaveBeenCalledWith('/register', {
       username: 'newuser',
@@ -84,25 +100,25 @@ describe('LoginPage', () => {
     })
   })
 
-  it('shows error alert on login failure', async () => {
+  it('shows error on login failure', async () => {
     vi.mocked(api.post).mockRejectedValue({ isAxiosError: true, response: { data: { error: 'bad creds' } } })
     const wrapper = mountPage()
-    await wrapper.find('#email').setValue('test@example.com')
-    await wrapper.find('#password').setValue('wrong')
-    await wrapper.find('form').trigger('submit')
+    await inputAt(wrapper, 'login-email').setValue('test@example.com')
+    await inputAt(wrapper, 'login-password').setValue('wrong')
+    await wrapper.find('[data-testid="login-form"]').trigger('submit')
     await flushPromises()
-    expect(wrapper.find('.alert-error').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="login-error"]').exists()).toBe(true)
   })
 
   it('disables submit button while loading', async () => {
     let resolve!: (v: unknown) => void
     vi.mocked(api.post).mockReturnValue(new Promise(r => { resolve = r }))
     const wrapper = mountPage()
-    await wrapper.find('#email').setValue('test@example.com')
-    await wrapper.find('#password').setValue('pass')
-    wrapper.find('form').trigger('submit')
+    await inputAt(wrapper, 'login-email').setValue('test@example.com')
+    await inputAt(wrapper, 'login-password').setValue('pass')
+    wrapper.find('[data-testid="login-form"]').trigger('submit')
     await wrapper.vm.$nextTick()
-    expect(wrapper.find('button[type="submit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-testid="login-submit"]').attributes('disabled')).toBeDefined()
     resolve!({ data: { username: 'u' } })
   })
 })

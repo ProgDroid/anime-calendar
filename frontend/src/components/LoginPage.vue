@@ -3,7 +3,12 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import GoogleLoginButton from './GoogleLoginButton.vue'
+import Wordmark from './shared/Wordmark.vue'
+import UiInput from './ui/UiInput.vue'
+import UiButton from './ui/UiButton.vue'
 import { useI18n } from 'vue-i18n'
+
+defineOptions({ name: 'LoginPage' })
 
 const { t } = useI18n()
 
@@ -43,87 +48,100 @@ const toggleMode = () => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-6rem)] bg-base-200 flex items-center justify-center">
-    <div class="card bg-base-100 w-full max-w-md shadow-xl">
-      <div class="card-body">
-        <h2 class="card-title">{{ isRegistering ? $t('auth.register.title') : $t('auth.login.title') }}</h2>
-        <form @submit="handleSubmit" class="space-y-4">
-          <div v-if="isRegistering" class="form-control w-full">
-            <label class="label mb-2">
-              <span class="label-text">{{ $t('auth.register.name') }}</span>
-            </label>
-            <input
+  <div class="min-h-[calc(100vh-6rem)] flex bg-bg-1">
+    <div data-testid="login-poster-collage" class="hidden lg:block flex-1 bg-bg-2" />
+
+    <div class="flex-1 flex items-center justify-center p-6">
+      <div class="w-full max-w-[420px] flex flex-col gap-6 bg-bg-1 rounded-xl p-8 border border-line">
+        <div class="flex flex-col gap-2">
+          <Wordmark size="lg" />
+          <h1 class="font-display text-4xl text-fg-1">
+            {{ isRegistering ? t('auth.register.title') : t('auth.login.title') }}
+          </h1>
+          <p data-testid="login-tagline" class="text-fg-2 text-sm">
+            {{ t('auth.login.tagline') }}
+          </p>
+        </div>
+
+        <form data-testid="login-form" class="flex flex-col gap-4" @submit="handleSubmit">
+          <div v-if="isRegistering" data-testid="login-username-wrap">
+            <UiInput
               id="username"
               v-model="username"
               type="text"
-              required
-              class="input input-bordered w-full"
-              :placeholder="$t('auth.register.usernamePlaceholder')"
-              maxlength="50"
+              :label="t('auth.register.name')"
+              :placeholder="t('auth.register.usernamePlaceholder')"
+              data-testid="login-username"
             />
           </div>
 
-          <div class="form-control w-full">
-            <label class="label mb-2">
-              <span class="label-text">{{ $t('auth.login.email') }}</span>
-            </label>
-            <input
-              id="email"
-              v-model="email"
-              type="email"
-              required
-              class="input input-bordered w-full"
-              :placeholder="$t('auth.login.emailPlaceholder')"
-            />
-          </div>
+          <UiInput
+            id="email"
+            v-model="email"
+            type="email"
+            :label="t('auth.login.email')"
+            :placeholder="t('auth.login.emailPlaceholder')"
+            autocomplete="email"
+            data-testid="login-email"
+          />
 
-          <div class="form-control w-full">
-            <label class="label mb-2">
-              <span class="label-text">{{ $t('auth.login.password') }}</span>
-            </label>
-            <input
-              id="password"
-              v-model="password"
-              type="password"
-              required
-              class="input input-bordered w-full"
-              :placeholder="$t('auth.login.passwordPlaceholder')"
-              maxlength="128"
-            />
-          </div>
+          <UiInput
+            id="password"
+            v-model="password"
+            type="password"
+            :label="t('auth.login.password')"
+            :placeholder="t('auth.login.passwordPlaceholder')"
+            autocomplete="current-password"
+            data-testid="login-password"
+          />
 
-          <div v-if="!isRegistering" class="text-right -mt-2">
-            <router-link to="/forgot-password" class="link link-primary text-sm">
-              {{ $t('auth.forgotPassword.link') }}
+          <div v-if="!isRegistering" class="flex justify-end -mt-1">
+            <router-link
+              to="/forgot-password"
+              data-testid="login-forgot-link"
+              class="text-sm text-accent-1 hover:underline"
+            >
+              {{ t('auth.forgotPassword.link') }}
             </router-link>
           </div>
 
-          <button
+          <UiButton
             type="submit"
+            variant="primary"
+            size="lg"
+            :loading="loading"
             :disabled="loading"
-            class="btn btn-primary w-full"
+            data-testid="login-submit"
           >
-            {{ loading ? (isRegistering ? $t('auth.register.registering') : $t('auth.login.submit')) : (isRegistering ? $t('auth.register.submit') : $t('auth.login.submit')) }}
-          </button>
-          
-          <div v-if="error" class="alert alert-error mt-2">
+            {{ isRegistering ? t('auth.register.submit') : t('auth.login.submit') }}
+          </UiButton>
+
+          <div v-if="error" data-testid="login-error" class="text-sm text-danger" role="alert">
             {{ error }}
           </div>
         </form>
-        
-        <div class="divider">{{ $t('app.orContinueWith') }}</div>
-        <div class="flex flex-col gap-3">
+
+        <div class="flex items-center gap-3 text-fg-3 text-sm">
+          <span class="flex-1 h-px bg-line" />
+          <span>{{ t('auth.login.or') }}</span>
+          <span class="flex-1 h-px bg-line" />
+        </div>
+
+        <div data-testid="login-google" class="flex flex-col items-stretch">
           <GoogleLoginButton />
         </div>
-        
-        <div class="card-actions justify-center mt-4">
-          <p class="text-center">
-            {{ isRegistering ? $t('auth.register.alreadyHaveAccount') : $t('auth.register.noAccount') }}
-            <button @click="toggleMode" class="link link-primary" data-testid="toggle-mode">
-              {{ isRegistering ? $t('auth.login.submit') : $t('auth.register.submit') }}
-            </button>
-          </p>
-        </div>
+
+        <p class="text-center text-sm text-fg-2">
+          {{ isRegistering ? t('auth.register.alreadyHaveAccount') : t('auth.register.noAccount') }}
+          <button
+            type="button"
+            data-testid="login-register-link"
+            class="text-accent-1 hover:underline ml-1"
+            @click="toggleMode"
+          >
+            {{ isRegistering ? t('auth.login.submit') : t('auth.register.submit') }}
+          </button>
+        </p>
       </div>
     </div>
   </div>

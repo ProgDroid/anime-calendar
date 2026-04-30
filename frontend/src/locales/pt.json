@@ -17,6 +17,8 @@
     },
     "login": {
       "title": "Entrar",
+      "tagline": "Acompanhe cada temporada, partilhe cada calendário.",
+      "or": "ou",
       "email": "Email",
       "password": "Senha",
       "rememberMe": "Lembrar-me",
