@@ -1,0 +1,24 @@
+<script setup lang="ts">
+interface Props { ariaLabel?: string }
+const props = defineProps<Props>()
+defineOptions({ name: 'IconMoon' })
+</script>
+
+<template>
+  <svg
+    xmlns="http://www.w3.org/2000/svg"
+    viewBox="0 0 24 24"
+    width="24"
+    height="24"
+    fill="none"
+    stroke="currentColor"
+    stroke-width="1.6"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    :aria-hidden="!props.ariaLabel"
+    :aria-label="props.ariaLabel"
+    :role="props.ariaLabel ? 'img' : undefined"
+  >
+    <path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" />
+  </svg>
+</template>
