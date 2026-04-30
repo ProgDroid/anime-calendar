@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
 import Wordmark from './shared/Wordmark.vue'
+import UiAuthShell from './ui/UiAuthShell.vue'
 import UiInput from './ui/UiInput.vue'
 import UiButton from './ui/UiButton.vue'
 
@@ -59,90 +60,70 @@ async function handleSubmit(e: Event) {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-6rem)] flex bg-bg-1">
-    <div data-testid="reset-poster-collage" class="hidden lg:block flex-1 bg-bg-2" />
-
-    <div class="flex-1 flex items-center justify-center p-6">
-      <div class="w-full max-w-[420px] flex flex-col gap-6 bg-bg-1 rounded-xl p-8 border border-line">
-        <div class="flex flex-col gap-2">
-          <Wordmark size="lg" />
-          <h1 class="font-display text-4xl text-fg-1">
-            {{ t('auth.resetPassword.title') }}
-          </h1>
-        </div>
-
-        <div
-          v-if="success"
-          data-testid="reset-success"
-          role="status"
-          class="text-sm text-fg-1 bg-bg-2 border border-line rounded-md p-4"
-        >
-          {{ t('auth.resetPassword.successMessage') }}
-        </div>
-
-        <form
-          v-else
-          data-testid="reset-form"
-          class="flex flex-col gap-4"
-          @submit="handleSubmit"
-        >
-          <UiInput
-            id="reset-password"
-            v-model="newPassword"
-            type="password"
-            name="new-password"
-            :label="t('auth.resetPassword.newPasswordLabel')"
-            :placeholder="t('auth.resetPassword.newPasswordPlaceholder')"
-            autocomplete="new-password"
-            required
-            :maxlength="128"
-            data-testid="reset-password"
-          />
-
-          <UiInput
-            id="reset-confirm"
-            v-model="confirmPassword"
-            type="password"
-            name="confirm-password"
-            :label="t('auth.resetPassword.confirmPasswordLabel')"
-            :placeholder="t('auth.resetPassword.confirmPasswordPlaceholder')"
-            autocomplete="new-password"
-            required
-            :maxlength="128"
-            data-testid="reset-confirm"
-          />
-
-          <UiButton
-            type="submit"
-            variant="primary"
-            size="lg"
-            :loading="loading"
-            :disabled="loading"
-            data-testid="reset-submit"
-          >
-            {{ loading ? t('auth.resetPassword.resetting') : t('auth.resetPassword.submit') }}
-          </UiButton>
-
-          <div
-            v-if="errorMessage"
-            data-testid="reset-error"
-            class="text-sm text-danger"
-            role="alert"
-          >
-            {{ errorMessage }}
-          </div>
-        </form>
-
-        <p class="text-center text-sm text-fg-2">
-          <router-link
-            to="/login"
-            data-testid="reset-login-link"
-            class="text-accent-1 hover:underline"
-          >
-            {{ t('auth.login.submit') }}
-          </router-link>
-        </p>
-      </div>
+  <UiAuthShell poster-testid="reset-poster-collage">
+    <div class="flex flex-col gap-2">
+      <Wordmark size="lg" />
+      <h1 class="font-display text-4xl text-fg-1">
+        {{ t('auth.resetPassword.title') }}
+      </h1>
     </div>
-  </div>
+
+    <div
+      v-if="success"
+      data-testid="reset-success"
+      role="status"
+      class="text-sm text-fg-1 bg-bg-2 border border-line rounded-md p-4"
+    >
+      {{ t('auth.resetPassword.successMessage') }}
+    </div>
+
+    <form v-else data-testid="reset-form" class="flex flex-col gap-4" @submit="handleSubmit">
+      <UiInput
+        id="reset-password"
+        v-model="newPassword"
+        type="password"
+        name="new-password"
+        :label="t('auth.resetPassword.newPasswordLabel')"
+        :placeholder="t('auth.resetPassword.newPasswordPlaceholder')"
+        autocomplete="new-password"
+        required
+        :maxlength="128"
+        data-testid="reset-password"
+      />
+
+      <UiInput
+        id="reset-confirm"
+        v-model="confirmPassword"
+        type="password"
+        name="confirm-password"
+        :label="t('auth.resetPassword.confirmPasswordLabel')"
+        :placeholder="t('auth.resetPassword.confirmPasswordPlaceholder')"
+        autocomplete="new-password"
+        required
+        :maxlength="128"
+        data-testid="reset-confirm"
+      />
+
+      <UiButton
+        type="submit"
+        variant="primary"
+        size="lg"
+        :loading="loading"
+        :disabled="loading"
+        data-testid="reset-submit"
+      >
+        {{ loading ? t('auth.resetPassword.resetting') : t('auth.resetPassword.submit') }}
+      </UiButton>
+
+      <div v-if="errorMessage" data-testid="reset-error" class="text-sm text-danger" role="alert">
+        {{ errorMessage }}
+      </div>
+    </form>
+
+    <p class="text-center text-sm text-fg-2">
+      <router-link to="/login" data-testid="reset-login-link" class="text-accent-1 hover:underline">
+        {{ t('auth.login.submit') }}
+      </router-link>
+    </p>
+  </UiAuthShell>
 </template>
