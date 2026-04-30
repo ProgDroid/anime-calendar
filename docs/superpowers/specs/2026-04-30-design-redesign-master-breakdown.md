@@ -2,15 +2,17 @@
 
 **Source**: `design_handoff_anime_calendar/` (Claude Design hifi handoff, 2026-04-30)
 **Status**: Master tracking doc. Each track below gets its own brainstorm → spec → plan → implementation cycle.
-**Sequencing decision**: Option A — four sequential tracks. Foundations must land before any surface work; upgrade flow is deferred until monetization is on the roadmap.
+**Sequencing decision**: Four sequential tracks, all in scope now. Foundations must land before any surface work. Upgrade flow runs ahead of mobile because monetization is a higher business priority than the mobile companion.
+
+**Order**: Track 1 (Foundations) → Track 2 (Existing surfaces) → Track 4 (Upgrade flow) → Track 3 (Mobile companion).
 
 ## Why split
 
-The handoff bundles four logically independent tracks. A single spec at this scope would be too vague to execute. Splitting preserves YAGNI (track 4 may never ship as designed) and lets each track ship in isolation behind well-defined token / component contracts.
+The handoff bundles four logically independent tracks. A single spec at this scope would be too vague to execute. Splitting lets each track ship in isolation behind well-defined token / component contracts, and lets us re-prioritize ordering (e.g., upgrade flow ahead of mobile) without re-cutting scope.
 
 ## Tracks
 
-### Track 1 — Foundations (BLOCKER for 2 and 3)
+### Track 1 — Foundations (BLOCKER for all other tracks)
 
 Design tokens + base components + iconography. Everything else depends on this.
 
@@ -42,7 +44,9 @@ UI-only re-skin of every existing screen. No new business logic.
 
 **Open questions**: weekly schedule routing (sub-route of `/calendar/:id` or sibling?); whether the Pro chip on accents is shown today or hidden until Track 4.
 
-### Track 3 — Mobile companion (depends on Track 2)
+### Track 3 — Mobile companion (depends on Tracks 2 and 4)
+
+**Runs last.** Re-skinning desktop first then doing the responsive pass once is cheaper than redoing mobile twice (once before upgrade flow, once after).
 
 Responsive pass over Track 2. The handoff renders mobile inside an iOS device frame for canvas display only — production drops the frame and uses real viewport.
 
@@ -54,15 +58,15 @@ Responsive pass over Track 2. The handoff renders mobile inside an iOS device fr
 
 **Open questions**: tablet breakpoint between 430 and 1280 (handoff explicitly defers); whether mobile gets a separate route tree or shares with desktop via responsive layout.
 
-### Track 4 — Upgrade flow (DEFERRED until monetization lands)
+### Track 4 — Upgrade flow (depends on Track 2)
 
 Interrupt → Paywall → Checkout → Success. Backend + frontend + payments.
 
-- Backend: Pro tier model, entitlement check, Stripe (Checkout vs embedded Elements — open question).
-- Frontend: 4 new screens per `screens-upgrade.jsx`, plus access-gating logic on Pro accents.
-- README explicitly says "implement when monetisation lands". Tier names and prices in handoff are illustrative.
+- Backend: Pro tier model, entitlement check, Stripe (Checkout vs embedded Elements — open question for Track 4 brainstorm).
+- Frontend: 4 new screens per `screens-upgrade.jsx`, plus access-gating logic on Pro accents (Matcha / Sakura / Citron).
+- Tier names and prices in handoff are illustrative — needs business sign-off as part of Track 4 brainstorm.
 
-**Do not start until**: business has signed off on Pro/Studio tiers and prices, and a payment processor is chosen.
+**Prerequisites flagged at brainstorm time**: business confirmation of Pro/Studio tiers and prices; choice of payment processor (Stripe Checkout is the recommended baseline).
 
 ## Cross-cutting rules
 
@@ -73,9 +77,11 @@ Interrupt → Paywall → Checkout → Success. Backend + frontend + payments.
 
 ## Sequencing
 
-1. Track 1 — Foundations (this is brainstormed next, in this conversation)
+1. Track 1 — Foundations (brainstormed next, in this conversation)
 2. Track 2 — Existing surfaces redesign (own brainstorm session)
-3. Track 3 — Mobile companion (own brainstorm session)
-4. Track 4 — Upgrade flow (own brainstorm session, deferred)
+3. Track 4 — Upgrade flow (own brainstorm session) — **runs ahead of Track 3 because monetization is the higher business priority**
+4. Track 3 — Mobile companion (own brainstorm session, runs last)
 
 Each track produces its own `YYYY-MM-DD-<track>-design.md` spec and corresponding implementation plan. This master doc is the pointer.
+
+**Decision to revisit if it bites us**: doing upgrade flow desktop-only and then bringing it to mobile in Track 3 means designing the upgrade flow twice in some sense. The handoff already specs both desktop and mobile upgrade screens, so the shared component layer should make Track 3 mostly layout work — but if Track 4 ends up coupling tightly to desktop-specific layout, Track 3 may need to revisit upgrade screen markup.
