@@ -22,10 +22,12 @@ const authStore = useAuthStore()
 authStore.initAuth().then(() => {
     const userSettingsStore = useUserSettingsStore()
     userSettingsStore.fetchSettings().then(settings => {
-        useTheme().reconcileFromServer({
-            theme_preference: settings.theme_preference,
-            accent_preference: settings.accent_preference,
-        })
+        if (authStore.isAuthenticated()) {
+            useTheme().reconcileFromServer({
+                theme_preference: settings.theme_preference,
+                accent_preference: settings.accent_preference,
+            })
+        }
         initI18n(settings.language_preference)
         app.mount('#app')
     }).catch(() => {
