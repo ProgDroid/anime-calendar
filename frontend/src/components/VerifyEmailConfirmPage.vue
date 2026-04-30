@@ -1,8 +1,14 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
+import Wordmark from './shared/Wordmark.vue'
+import UiEmptyState from './ui/UiEmptyState.vue'
 
+defineOptions({ name: 'VerifyEmailConfirmPage' })
+
+const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
@@ -28,30 +34,63 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-6rem)] bg-base-200 flex items-center justify-center">
-    <div class="card bg-base-100 w-full max-w-md shadow-xl">
-      <div class="card-body items-center text-center gap-4">
+  <div class="min-h-[calc(100vh-6rem)] flex bg-bg-1">
+    <div data-testid="verify-poster-collage" class="hidden lg:block flex-1 bg-bg-2" />
 
-        <span
-          v-if="status === 'verifying'"
-          class="loading loading-spinner loading-lg"
-          data-testid="verifying-spinner"
-        />
-        <p v-if="status === 'verifying'">{{ $t('auth.verifyEmail.confirm.verifying') }}</p>
-
-        <div v-if="status === 'success'" class="alert alert-success" data-testid="success-message">
-          {{ $t('auth.verifyEmail.confirm.success') }}
+    <div class="flex-1 flex items-center justify-center p-6">
+      <div
+        class="w-full max-w-[420px] flex flex-col gap-6 bg-bg-1 rounded-xl p-8 border border-line"
+      >
+        <div class="flex flex-col gap-2">
+          <Wordmark size="lg" />
         </div>
 
-        <template v-if="status === 'error'">
-          <div class="alert alert-error" data-testid="error-message">
-            {{ $t('auth.verifyEmail.confirm.error') }}
-          </div>
-          <router-link to="/login" class="btn btn-primary btn-sm">
-            {{ $t('auth.verifyEmail.confirm.loginLink') }}
-          </router-link>
-        </template>
+        <div
+          v-if="status === 'verifying'"
+          data-testid="verify-spinner"
+          role="status"
+          aria-live="polite"
+          class="flex flex-col items-center gap-4 p-8"
+        >
+          <span
+            class="inline-block w-8 h-8 border-2 border-fg-3 border-t-accent-1 rounded-full animate-spin"
+          />
+          <p class="text-sm text-fg-2">{{ t('auth.verifyEmail.confirm.verifying') }}</p>
+        </div>
 
+        <div v-else data-testid="verify-confirm-status">
+          <UiEmptyState
+            v-if="status === 'success'"
+            :title="t('auth.verifyEmail.confirm.successTitle')"
+            :body="t('auth.verifyEmail.confirm.success')"
+          >
+            <template #action>
+              <router-link
+                to="/my-calendars"
+                data-testid="verify-go-to-calendars"
+                class="text-accent-1 hover:underline text-sm"
+              >
+                {{ t('app.myCalendars') }}
+              </router-link>
+            </template>
+          </UiEmptyState>
+
+          <UiEmptyState
+            v-else
+            :title="t('auth.verifyEmail.confirm.errorTitle')"
+            :body="t('auth.verifyEmail.confirm.error')"
+          >
+            <template #action>
+              <router-link
+                to="/login"
+                data-testid="verify-back-to-login"
+                class="text-accent-1 hover:underline text-sm"
+              >
+                {{ t('auth.verifyEmail.confirm.loginLink') }}
+              </router-link>
+            </template>
+          </UiEmptyState>
+        </div>
       </div>
     </div>
   </div>

@@ -75,7 +75,9 @@
       },
       "confirm": {
         "verifying": "A verificar o seu email...",
+        "successTitle": "Está tudo pronto",
         "success": "Email verificado! Já está autenticado.",
+        "errorTitle": "Verificação falhou",
         "error": "Este link de verificação é inválido ou expirou.",
         "loginLink": "Ir para o login"
       }

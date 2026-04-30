@@ -75,7 +75,9 @@
       },
       "confirm": {
         "verifying": "Verifying your email...",
+        "successTitle": "You're all set",
         "success": "Email verified! You are now logged in.",
+        "errorTitle": "Verification failed",
         "error": "This verification link is invalid or has expired.",
         "loginLink": "Go to login"
       }

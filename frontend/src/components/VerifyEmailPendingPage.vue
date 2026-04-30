@@ -1,9 +1,15 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import api from '@/config/api'
-import { i18n } from '@/plugins/i18n'
+import Wordmark from './shared/Wordmark.vue'
+import UiButton from './ui/UiButton.vue'
+import UiEmptyState from './ui/UiEmptyState.vue'
 
-const { t } = i18n.global
+defineOptions({ name: 'VerifyEmailPendingPage' })
+
+const { t } = useI18n()
+
 // Email is passed via router navigation state from Register.vue
 const email = (history.state?.email as string) ?? ''
 const resending = ref(false)
@@ -27,28 +33,67 @@ const handleResend = async () => {
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-6rem)] bg-base-200 flex items-center justify-center">
-    <div class="card bg-base-100 w-full max-w-md shadow-xl">
-      <div class="card-body items-center text-center gap-4">
-        <h2 class="card-title text-2xl">{{ $t('auth.verifyEmail.pending.title') }}</h2>
-        <p class="text-base-content/70">{{ $t('auth.verifyEmail.pending.subtitle') }}</p>
+  <div class="min-h-[calc(100vh-6rem)] flex bg-bg-1">
+    <div data-testid="verify-poster-collage" class="hidden lg:block flex-1 bg-bg-2" />
 
-        <div v-if="resendMessage" class="alert alert-success w-full">
-          {{ resendMessage }}
-        </div>
-        <div v-if="resendError" class="alert alert-error w-full">
-          {{ resendError }}
+    <div class="flex-1 flex items-center justify-center p-6">
+      <div
+        data-testid="verify-pending"
+        class="w-full max-w-[420px] flex flex-col gap-6 bg-bg-1 rounded-xl p-8 border border-line"
+      >
+        <div class="flex flex-col gap-2">
+          <Wordmark size="lg" />
         </div>
 
-        <button
-          v-if="email"
-          :disabled="resending"
-          class="btn btn-outline btn-sm"
-          data-testid="resend-button"
-          @click="handleResend"
+        <UiEmptyState
+          :title="t('auth.verifyEmail.pending.title')"
+          :body="t('auth.verifyEmail.pending.subtitle')"
         >
-          {{ resending ? $t('auth.verifyEmail.pending.resending') : $t('auth.verifyEmail.pending.resendButton') }}
-        </button>
+          <template #action>
+            <div class="flex flex-col items-stretch gap-3 w-full">
+              <UiButton
+                v-if="email"
+                variant="secondary"
+                size="md"
+                :loading="resending"
+                :disabled="resending"
+                data-testid="verify-resend"
+                @click="handleResend"
+              >
+                {{ resending
+                  ? t('auth.verifyEmail.pending.resending')
+                  : t('auth.verifyEmail.pending.resendButton') }}
+              </UiButton>
+
+              <p
+                v-if="resendMessage"
+                data-testid="verify-resend-success"
+                role="status"
+                class="text-sm text-fg-1 bg-bg-2 border border-line rounded-md p-3"
+              >
+                {{ resendMessage }}
+              </p>
+              <p
+                v-if="resendError"
+                data-testid="verify-resend-error"
+                role="alert"
+                class="text-sm text-danger"
+              >
+                {{ resendError }}
+              </p>
+            </div>
+          </template>
+        </UiEmptyState>
+
+        <p class="text-center text-sm text-fg-2">
+          <router-link
+            to="/login"
+            data-testid="verify-back-to-login"
+            class="text-accent-1 hover:underline"
+          >
+            {{ t('auth.login.submit') }}
+          </router-link>
+        </p>
       </div>
     </div>
   </div>
