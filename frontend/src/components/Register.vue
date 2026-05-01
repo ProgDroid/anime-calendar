@@ -3,7 +3,6 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import GoogleLoginButton from './GoogleLoginButton.vue'
-import Wordmark from './shared/Wordmark.vue'
 import UiAuthShell from './ui/UiAuthShell.vue'
 import UiInput from './ui/UiInput.vue'
 import UiButton from './ui/UiButton.vue'
@@ -48,16 +47,15 @@ const handleSubmit = async (e: Event) => {
 </script>
 
 <template>
-  <UiAuthShell poster-testid="register-poster-collage">
-    <div class="flex flex-col gap-2">
-      <Wordmark size="lg" />
-      <h1 class="font-display text-4xl text-fg-1">
-        {{ t('auth.register.title') }}
-      </h1>
-      <p data-testid="register-tagline" class="text-fg-2 text-sm">
-        {{ t('auth.register.tagline') }}
-      </p>
-    </div>
+  <UiAuthShell
+    poster-testid="register-poster-collage"
+    :eyebrow="t('auth.register.eyebrow')"
+    :heading="t('auth.register.heading')"
+    :subtitle="t('auth.register.subtitle')"
+  >
+    <p data-testid="register-tagline" class="-mt-4 text-fg-2 text-sm">
+      {{ t('auth.register.tagline') }}
+    </p>
 
     <form data-testid="register-form" class="flex flex-col gap-4" @submit="handleSubmit">
       <UiInput

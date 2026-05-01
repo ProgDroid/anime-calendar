@@ -2,7 +2,6 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import api from '@/config/api'
-import Wordmark from './shared/Wordmark.vue'
 import UiAuthShell from './ui/UiAuthShell.vue'
 import UiButton from './ui/UiButton.vue'
 import UiEmptyState from './ui/UiEmptyState.vue'
@@ -35,11 +34,11 @@ const handleResend = async () => {
 </script>
 
 <template>
-  <UiAuthShell poster-testid="verify-poster-collage" card-testid="verify-pending">
-    <div class="flex flex-col gap-2">
-      <Wordmark size="lg" />
-    </div>
-
+  <UiAuthShell
+    poster-testid="verify-poster-collage"
+    card-testid="verify-pending"
+    :eyebrow="t('auth.verifyEmail.pending.eyebrow')"
+  >
     <UiEmptyState
       :title="t('auth.verifyEmail.pending.title')"
       :body="t('auth.verifyEmail.pending.subtitle')"

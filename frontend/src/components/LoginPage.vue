@@ -3,7 +3,6 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import GoogleLoginButton from './GoogleLoginButton.vue'
-import Wordmark from './shared/Wordmark.vue'
 import UiAuthShell from './ui/UiAuthShell.vue'
 import UiInput from './ui/UiInput.vue'
 import UiButton from './ui/UiButton.vue'
@@ -49,16 +48,15 @@ const toggleMode = () => {
 </script>
 
 <template>
-  <UiAuthShell poster-testid="login-poster-collage">
-    <div class="flex flex-col gap-2">
-      <Wordmark size="lg" />
-      <h1 class="font-display text-4xl text-fg-1">
-        {{ isRegistering ? t('auth.register.title') : t('auth.login.title') }}
-      </h1>
-      <p data-testid="login-tagline" class="text-fg-2 text-sm">
-        {{ t('auth.login.tagline') }}
-      </p>
-    </div>
+  <UiAuthShell
+    poster-testid="login-poster-collage"
+    :eyebrow="isRegistering ? t('auth.register.eyebrow') : t('auth.login.eyebrow')"
+    :heading="isRegistering ? t('auth.register.heading') : t('auth.login.heading')"
+    :subtitle="isRegistering ? t('auth.register.subtitle') : t('auth.login.subtitle')"
+  >
+    <p data-testid="login-tagline" class="-mt-4 text-fg-2 text-sm">
+      {{ t('auth.login.tagline') }}
+    </p>
 
     <form data-testid="login-form" class="flex flex-col gap-4" @submit="handleSubmit">
       <UiInput

@@ -3,7 +3,6 @@ import { onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
-import Wordmark from './shared/Wordmark.vue'
 import UiAuthShell from './ui/UiAuthShell.vue'
 import UiEmptyState from './ui/UiEmptyState.vue'
 
@@ -35,11 +34,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <UiAuthShell poster-testid="verify-poster-collage">
-    <div class="flex flex-col gap-2">
-      <Wordmark size="lg" />
-    </div>
-
+  <UiAuthShell
+    poster-testid="verify-poster-collage"
+    :eyebrow="t('auth.verifyEmail.confirm.eyebrow')"
+  >
     <div
       v-if="status === 'verifying'"
       data-testid="verify-spinner"

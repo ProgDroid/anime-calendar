@@ -2,7 +2,6 @@
 import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import Wordmark from './shared/Wordmark.vue'
 import UiAuthShell from './ui/UiAuthShell.vue'
 import UiInput from './ui/UiInput.vue'
 import UiButton from './ui/UiButton.vue'
@@ -30,16 +29,15 @@ async function handleSubmit(e: Event) {
 </script>
 
 <template>
-  <UiAuthShell poster-testid="forgot-poster-collage">
-    <div class="flex flex-col gap-2">
-      <Wordmark size="lg" />
-      <h1 class="font-display text-4xl text-fg-1">
-        {{ t('auth.forgotPassword.title') }}
-      </h1>
-      <p data-testid="forgot-tagline" class="text-fg-2 text-sm">
-        {{ t('auth.forgotPassword.subtitle') }}
-      </p>
-    </div>
+  <UiAuthShell
+    poster-testid="forgot-poster-collage"
+    :eyebrow="t('auth.forgotPassword.eyebrow')"
+    :heading="t('auth.forgotPassword.heading')"
+    :subtitle="t('auth.forgotPassword.subtitle')"
+  >
+    <span data-testid="forgot-tagline" class="sr-only">{{
+      t('auth.forgotPassword.subtitle')
+    }}</span>
 
     <div
       v-if="submitted"

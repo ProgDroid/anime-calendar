@@ -3,7 +3,6 @@ import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
-import Wordmark from './shared/Wordmark.vue'
 import UiAuthShell from './ui/UiAuthShell.vue'
 import UiInput from './ui/UiInput.vue'
 import UiButton from './ui/UiButton.vue'
@@ -60,13 +59,12 @@ async function handleSubmit(e: Event) {
 </script>
 
 <template>
-  <UiAuthShell poster-testid="reset-poster-collage">
-    <div class="flex flex-col gap-2">
-      <Wordmark size="lg" />
-      <h1 class="font-display text-4xl text-fg-1">
-        {{ t('auth.resetPassword.title') }}
-      </h1>
-    </div>
+  <UiAuthShell
+    poster-testid="reset-poster-collage"
+    :eyebrow="t('auth.resetPassword.eyebrow')"
+    :heading="t('auth.resetPassword.heading')"
+    :subtitle="t('auth.resetPassword.subtitle')"
+  >
 
     <div
       v-if="success"

@@ -16,8 +16,16 @@
     "google": {
       "failed": "Falhou ao entrar com Google"
     },
+    "tagline": {
+      "headlineLead": "Cada temporada,",
+      "headlineItalic": "no seu calendário.",
+      "body": "Crie watchlists do AniList. Subscreva em qualquer app de calendário. Nunca perca uma estreia."
+    },
     "login": {
       "title": "Entrar",
+      "eyebrow": "Bem-vindo de volta",
+      "heading": "Entrar",
+      "subtitle": "Continue de onde parou.",
       "tagline": "Acompanhe cada temporada, partilhe cada calendário.",
       "or": "ou",
       "email": "Email",
@@ -30,6 +38,9 @@
     },
     "register": {
       "title": "Registar",
+      "eyebrow": "Bem-vindo",
+      "heading": "Criar conta",
+      "subtitle": "Comece a acompanhar cada temporada.",
       "tagline": "Crie a sua conta para começar a acompanhar cada temporada.",
       "name": "Nome",
       "email": "Email",
@@ -45,6 +56,8 @@
     },
     "forgotPassword": {
       "title": "Esqueci a senha",
+      "eyebrow": "Recuperar",
+      "heading": "Esqueceu a senha?",
       "subtitle": "Insira seu endereço de e-mail e enviaremos um link de redefinição.",
       "emailLabel": "E-mail",
       "emailPlaceholder": "voce{'@'}exemplo.com",
@@ -55,6 +68,9 @@
     },
     "resetPassword": {
       "title": "Redefinir senha",
+      "eyebrow": "Quase lá",
+      "heading": "Redefinir senha",
+      "subtitle": "Escolha uma nova senha.",
       "newPasswordLabel": "Nova senha",
       "newPasswordPlaceholder": "Mínimo 12 caracteres",
       "confirmPasswordLabel": "Confirmar senha",
@@ -67,6 +83,7 @@
     },
     "verifyEmail": {
       "pending": {
+        "eyebrow": "Verifique a caixa de entrada",
         "title": "Verifique o seu email",
         "subtitle": "Enviámos um link de verificação para o seu endereço de email. Clique no link para ativar a sua conta.",
         "resendButton": "Reenviar email",
@@ -75,6 +92,7 @@
         "resendError": "Falha ao reenviar. Por favor tente novamente."
       },
       "confirm": {
+        "eyebrow": "Verificar",
         "verifying": "A verificar o seu email...",
         "successTitle": "Está tudo pronto",
         "success": "Email verificado! Já está autenticado.",

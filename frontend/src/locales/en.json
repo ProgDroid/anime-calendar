@@ -16,8 +16,16 @@
     "google": {
       "failed": "Google login failed"
     },
+    "tagline": {
+      "headlineLead": "Every season,",
+      "headlineItalic": "in your calendar.",
+      "body": "Build watchlists from AniList. Subscribe from any calendar app. Never miss a premiere."
+    },
     "login": {
       "title": "Login",
+      "eyebrow": "Welcome back",
+      "heading": "Sign in",
+      "subtitle": "Pick up where you left off.",
       "tagline": "Track every season, share every calendar.",
       "or": "or",
       "email": "Email",
@@ -30,6 +38,9 @@
     },
     "register": {
       "title": "Register",
+      "eyebrow": "New here?",
+      "heading": "Create your account",
+      "subtitle": "Start tracking every season.",
       "tagline": "Create your account to start tracking every season.",
       "name": "Name",
       "email": "Email",
@@ -45,6 +56,8 @@
     },
     "forgotPassword": {
       "title": "Forgot password",
+      "eyebrow": "Reset",
+      "heading": "Forgot password?",
       "subtitle": "Enter your email address and we'll send you a reset link.",
       "emailLabel": "Email",
       "emailPlaceholder": "you{'@'}example.com",
@@ -55,6 +68,9 @@
     },
     "resetPassword": {
       "title": "Reset password",
+      "eyebrow": "Almost there",
+      "heading": "Reset password",
+      "subtitle": "Choose a new password.",
       "newPasswordLabel": "New password",
       "newPasswordPlaceholder": "At least 12 characters",
       "confirmPasswordLabel": "Confirm password",
@@ -67,6 +83,7 @@
     },
     "verifyEmail": {
       "pending": {
+        "eyebrow": "Check your inbox",
         "title": "Check your email",
         "subtitle": "We've sent a verification link to your email address. Click the link to activate your account.",
         "resendButton": "Resend email",
@@ -75,6 +92,7 @@
         "resendError": "Failed to resend. Please try again."
       },
       "confirm": {
+        "eyebrow": "Verify",
         "verifying": "Verifying your email...",
         "successTitle": "You're all set",
         "success": "Email verified! You are now logged in.",
