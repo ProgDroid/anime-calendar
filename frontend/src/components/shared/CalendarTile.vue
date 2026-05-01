@@ -118,6 +118,19 @@ const overflowCount = computed(() => {
             {{ t('calendars.tile.itemCount', { count: calendar.item_count }) }}
           </span>
           <span aria-hidden="true">·</span>
+          <template v-if="(calendar.airing_count ?? 0) > 0">
+            <span
+              data-testid="calendar-tile-airing"
+              class="inline-flex items-center gap-1 text-warning"
+            >
+              <span
+                class="w-1.5 h-1.5 rounded-full bg-warning"
+                aria-hidden="true"
+              />
+              {{ t('calendars.tile.airing', { count: calendar.airing_count }) }}
+            </span>
+            <span aria-hidden="true">·</span>
+          </template>
           <span data-testid="calendar-tile-updated">{{ updatedLabel }}</span>
         </div>
       </div>

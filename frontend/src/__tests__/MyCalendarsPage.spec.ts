@@ -24,6 +24,7 @@ const mockCalendars = [
     id: 1,
     name: 'My Anime Calendar',
     item_count: 5,
+    airing_count: 0,
     subscription_token: 'token123',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-02T00:00:00Z',
@@ -33,6 +34,7 @@ const mockCalendars = [
     id: 2,
     name: 'Second Calendar',
     item_count: 2,
+    airing_count: 0,
     subscription_token: 'token456',
     created_at: '2026-01-03T00:00:00Z',
     updated_at: '2026-01-03T00:00:00Z',
@@ -155,6 +157,34 @@ describe('MyCalendarsPage', () => {
     await flushPromises()
     await wrapper.findAll('[data-testid="calendar-tile-edit"]')[0]!.trigger('click')
     expect(pushSpy).toHaveBeenCalledWith('/calendar/1')
+    wrapper.unmount()
+  })
+
+  it('hides the airing stat when no calendars are airing', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="my-calendars-airing"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('renders the summed airing stat when calendars have airing items', async () => {
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith('/items')) return { data: [] }
+      return {
+        data: {
+          data: [
+            { ...mockCalendars[0]!, airing_count: 2 },
+            { ...mockCalendars[1]!, airing_count: 5 },
+          ],
+          pagination: mockPagination,
+        },
+      }
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    const stat = wrapper.find('[data-testid="my-calendars-airing"]')
+    expect(stat.exists()).toBe(true)
+    expect(stat.text()).toContain('7')
     wrapper.unmount()
   })
 })

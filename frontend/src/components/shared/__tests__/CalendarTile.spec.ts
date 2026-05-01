@@ -24,6 +24,7 @@ const baseCalendar = {
   id: 1,
   name: 'My Calendar',
   item_count: 12,
+  airing_count: 0,
   subscription_token: 'tok',
   created_at: '2026-04-01T00:00:00Z',
   updated_at: '2026-04-02T00:00:00Z',
@@ -85,6 +86,22 @@ describe('CalendarTile', () => {
     await wrapper.find('[data-testid="calendar-tile-kebab-trigger"]').trigger('click');
     await wrapper.find('[data-testid="calendar-tile-kebab-delete"]').trigger('click');
     expect(wrapper.emitted('delete')).toBeTruthy();
+    wrapper.unmount();
+  });
+
+  it('hides the airing chip when airing_count is 0', async () => {
+    const wrapper = mountTile({ calendar: { ...baseCalendar, airing_count: 0 } });
+    await flushPromises();
+    expect(wrapper.find('[data-testid="calendar-tile-airing"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('renders the airing chip with the count when airing_count > 0', async () => {
+    const wrapper = mountTile({ calendar: { ...baseCalendar, airing_count: 3 } });
+    await flushPromises();
+    const chip = wrapper.find('[data-testid="calendar-tile-airing"]');
+    expect(chip.exists()).toBe(true);
+    expect(chip.text()).toContain('3');
     wrapper.unmount();
   });
 });

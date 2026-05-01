@@ -23,6 +23,16 @@
       <span>{{ $t('calendars.stats.calendarCount', { count: pagination.total }) }}</span>
       <span aria-hidden="true">·</span>
       <span>{{ $t('calendars.stats.totalItems', { count: totalItems }) }}</span>
+      <template v-if="totalAiring > 0">
+        <span aria-hidden="true">·</span>
+        <span
+          data-testid="my-calendars-airing"
+          class="inline-flex items-center gap-1 text-warning"
+        >
+          <span class="w-1.5 h-1.5 rounded-full bg-warning" aria-hidden="true" />
+          {{ $t('calendars.stats.airing', { count: totalAiring }) }}
+        </span>
+      </template>
     </div>
 
     <div
@@ -123,6 +133,10 @@ const calendarToDelete = ref<number | null>(null)
 
 const totalItems = computed(() =>
   calendars.value.reduce((sum, c) => sum + c.item_count, 0),
+)
+
+const totalAiring = computed(() =>
+  calendars.value.reduce((sum, c) => sum + (c.airing_count ?? 0), 0),
 )
 
 onMounted(() => loadCalendars(1))

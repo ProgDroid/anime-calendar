@@ -12,6 +12,7 @@ export interface Calendar {
 export interface PageCalendar {
   id: number;
   item_count: number;
+  airing_count: number;
   name: string;
   subscription_token: string;
   created_at: string;

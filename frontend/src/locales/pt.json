@@ -194,13 +194,15 @@
     "openInGoogle": "Adicionar ao Google Agenda",
     "tile": {
       "itemCount": "{count} itens",
+      "airing": "{count} a transmitir",
       "updatedLabel": "Atualizado {date}",
       "moreActions": "Mais ações"
     },
     "yourLibrary": "Sua biblioteca",
     "stats": {
       "calendarCount": "{count} calendários",
-      "totalItems": "{count} itens no total"
+      "totalItems": "{count} itens no total",
+      "airing": "{count} a transmitir esta temporada"
     },
     "emptyTitle": "Ainda sem calendários",
     "emptyBody": "Crie seu primeiro calendário para começar a acompanhar séries."

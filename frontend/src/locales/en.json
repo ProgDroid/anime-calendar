@@ -194,13 +194,15 @@
     "openInGoogle": "Add to Google Calendar",
     "tile": {
       "itemCount": "{count} items",
+      "airing": "{count} airing",
       "updatedLabel": "Updated {date}",
       "moreActions": "More actions"
     },
     "yourLibrary": "Your library",
     "stats": {
       "calendarCount": "{count} calendars",
-      "totalItems": "{count} total items"
+      "totalItems": "{count} total items",
+      "airing": "{count} airing this season"
     },
     "emptyTitle": "No calendars yet",
     "emptyBody": "Create your first calendar to start tracking shows."
