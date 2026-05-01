@@ -165,7 +165,9 @@
     "linkCopied": "Subscription link copied to clipboard!",
     "openInGoogle": "Add to Google Calendar",
     "tile": {
-      "itemCount": "{count} items"
+      "itemCount": "{count} items",
+      "updatedLabel": "Updated {date}",
+      "moreActions": "More actions"
     }
   },
   "userDetails": {

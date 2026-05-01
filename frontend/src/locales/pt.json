@@ -165,7 +165,9 @@
     "linkCopied": "Link de assinatura copiado para a área de transferência!",
     "openInGoogle": "Adicionar ao Google Agenda",
     "tile": {
-      "itemCount": "{count} itens"
+      "itemCount": "{count} itens",
+      "updatedLabel": "Atualizado {date}",
+      "moreActions": "Mais ações"
     }
   },
   "userDetails": {

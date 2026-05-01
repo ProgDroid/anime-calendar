@@ -30,35 +30,61 @@ const baseCalendar = {
   recent_item_ids: [101, 102],
 };
 
+function mountTile(props: Partial<Record<string, unknown>> = {}) {
+  return mount(CalendarTile, {
+    global: { plugins: [i18n] },
+    props: { calendar: baseCalendar, ...props },
+    attachTo: document.body,
+  });
+}
+
 describe('CalendarTile', () => {
-  it('renders name, item count, and avatar slot', async () => {
-    const wrapper = mount(CalendarTile, {
-      global: { plugins: [i18n] },
-      props: { calendar: baseCalendar, ownerAvatarUrl: '/avatar.png' },
-    });
+  it('renders name, item count, and updated label', async () => {
+    const wrapper = mountTile();
     await flushPromises();
     expect(wrapper.find('[data-testid="calendar-tile-name"]').text()).toBe('My Calendar');
     expect(wrapper.find('[data-testid="calendar-tile-count"]').text()).toContain('12');
-    expect(wrapper.find('[data-testid="calendar-tile-avatar"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="calendar-tile-updated"]').exists()).toBe(true);
+    wrapper.unmount();
   });
 
-  it('emits click', async () => {
-    const wrapper = mount(CalendarTile, {
-      global: { plugins: [i18n] },
-      props: {
-        calendar: { ...baseCalendar, recent_item_ids: [] },
-      },
-    });
-    await wrapper.find('[data-testid="calendar-tile"]').trigger('click');
-    expect(wrapper.emitted('click')).toBeTruthy();
+  it('emits open when tile body is clicked', async () => {
+    const wrapper = mountTile();
+    await wrapper.find('[data-testid="calendar-tile-body"]').trigger('click');
+    expect(wrapper.emitted('open')).toBeTruthy();
+    wrapper.unmount();
   });
 
-  it('does not render avatar when ownerAvatarUrl is omitted', async () => {
-    const wrapper = mount(CalendarTile, {
-      global: { plugins: [i18n] },
-      props: { calendar: baseCalendar },
-    });
-    await flushPromises();
-    expect(wrapper.find('[data-testid="calendar-tile-avatar"]').exists()).toBe(false);
+  it('emits edit when Edit button is clicked', async () => {
+    const wrapper = mountTile();
+    await wrapper.find('[data-testid="calendar-tile-edit"]').trigger('click');
+    expect(wrapper.emitted('edit')).toBeTruthy();
+    expect(wrapper.emitted('open')).toBeFalsy();
+    wrapper.unmount();
+  });
+
+  it('emits delete when delete button is clicked (does not bubble open)', async () => {
+    const wrapper = mountTile();
+    await wrapper.find('[data-testid="calendar-tile-delete"]').trigger('click');
+    expect(wrapper.emitted('delete')).toBeTruthy();
+    expect(wrapper.emitted('open')).toBeFalsy();
+    wrapper.unmount();
+  });
+
+  it('opens export menu and emits export-ics on click', async () => {
+    const wrapper = mountTile();
+    await wrapper.find('[data-testid="calendar-tile-export-trigger"]').trigger('click');
+    expect(wrapper.find('[data-testid="calendar-tile-export-ics"]').exists()).toBe(true);
+    await wrapper.find('[data-testid="calendar-tile-export-ics"]').trigger('click');
+    expect(wrapper.emitted('export-ics')).toBeTruthy();
+    wrapper.unmount();
+  });
+
+  it('opens kebab menu and emits delete from it', async () => {
+    const wrapper = mountTile();
+    await wrapper.find('[data-testid="calendar-tile-kebab-trigger"]').trigger('click');
+    await wrapper.find('[data-testid="calendar-tile-kebab-delete"]').trigger('click');
+    expect(wrapper.emitted('delete')).toBeTruthy();
+    wrapper.unmount();
   });
 });
