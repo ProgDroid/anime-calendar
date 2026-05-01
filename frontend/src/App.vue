@@ -45,10 +45,7 @@ const handleLogout = () => {
                 <RouterLink to="/my-calendars" active-class="active">{{ $t('app.myCalendars') }}</RouterLink>
               </li>
               <li v-if="authStore.isAuthenticated()" class="py-1">
-                <RouterLink to="/user/details" active-class="active">{{ $t('app.myAccount') }}</RouterLink>
-              </li>
-              <li v-if="authStore.isAuthenticated()" class="py-1">
-                <RouterLink to="/user/settings" active-class="active">{{ $t('app.settings') }}</RouterLink>
+                <RouterLink to="/account" active-class="active">{{ $t('app.myAccount') }}</RouterLink>
               </li>
               <li v-if="authStore.isAuthenticated()" class="mt-auto py-1">
                 <button @click="handleLogout" class="w-full text-left">{{ $t('app.logout') }}</button>
@@ -63,7 +60,7 @@ const handleLogout = () => {
             <RouterLink to="/my-calendars" active-class="active">{{ $t('app.myCalendars') }}</RouterLink>
           </li>
           <li v-if="authStore.isAuthenticated()">
-            <RouterLink to="/user/details" active-class="active">{{ $t('app.myAccount') }}</RouterLink>
+            <RouterLink to="/account" active-class="active">{{ $t('app.myAccount') }}</RouterLink>
           </li>
           <li v-if="authStore.isAuthenticated()">
             <button @click="handleLogout">{{ $t('app.logout') }}</button>

@@ -88,6 +88,7 @@
     "theme": "Tema",
     "light": "Claro",
     "dark": "Escuro",
+    "accent": "Destaque",
     "language": "Idioma",
     "titleLanguage": "Idioma de Títulos",
     "english": "Inglês",
@@ -204,6 +205,7 @@
     "cancel": "Cancelar",
     "update": "Guardar Detalhes",
     "changePassword": "Atualizar Palavra Pass",
+    "passwordOauthNotice": "A alteração da palavra-passe não está disponível para contas autenticadas com Google.",
     "currentPassword": "Palavra Pass Atual",
     "newPassword": "Palavra Pass Nova",
     "passwordHint": "Palavra pass deve conter pelo menos 12 caracteres com letra maiúscula, letra minúscula, dígito e caracter especial",
@@ -223,6 +225,12 @@
     }
   },
   "account": {
+    "tabs": {
+      "profile": "Perfil",
+      "preferences": "Preferências",
+      "password": "Palavra Passe",
+      "danger": "Zona Perigosa"
+    },
     "preferences": {
       "accents": {
         "coral": "Coral",

@@ -88,6 +88,7 @@
     "theme": "Theme",
     "light": "Light",
     "dark": "Dark",
+    "accent": "Accent",
     "language": "Language",
     "titleLanguage": "Title Language",
     "english": "English",
@@ -204,6 +205,7 @@
     "cancel": "Cancel",
     "update": "Save Details",
     "changePassword": "Update Password",
+    "passwordOauthNotice": "Password change is not available for accounts signed in with Google.",
     "currentPassword": "Current Password",
     "newPassword": "New Password",
     "passwordHint": "Password must be at least 12 characters with uppercase, lowercase, digit, and special character",
@@ -223,6 +225,12 @@
     }
   },
   "account": {
+    "tabs": {
+      "profile": "Profile",
+      "preferences": "Preferences",
+      "password": "Password",
+      "danger": "Danger Zone"
+    },
     "preferences": {
       "accents": {
         "coral": "Coral",
