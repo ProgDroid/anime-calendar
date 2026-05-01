@@ -1,6 +1,5 @@
 @import './tokens.css';
 @import "tailwindcss";
-@plugin "daisyui";
 
 /* Add Tailwind directives */
 @tailwind base;
