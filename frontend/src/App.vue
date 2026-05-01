@@ -46,6 +46,12 @@ watch(
 
 <template>
   <div class="min-h-screen bg-bg-0 text-fg-1">
+    <a
+      href="#main"
+      class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-md focus:bg-bg-1 focus:border focus:border-line focus:text-fg-1 focus:shadow-lg"
+    >
+      {{ $t('app.skipToMain') }}
+    </a>
     <header class="sticky top-0 z-40 bg-bg-1/80 backdrop-blur border-b border-line">
       <div class="container mx-auto px-4 h-14 flex items-center justify-between">
         <RouterLink
@@ -57,7 +63,11 @@ watch(
           <span>Anime <span class="italic font-normal" style="font-family: var(--font-display)">Calendar</span></span>
         </RouterLink>
 
-        <nav v-if="authStore.isAuthenticated()" class="hidden md:flex items-center gap-1">
+        <nav
+          v-if="authStore.isAuthenticated()"
+          :aria-label="$t('app.nav.primary')"
+          class="hidden md:flex items-center gap-1"
+        >
           <RouterLink
             to="/my-calendars"
             class="px-3 py-1.5 rounded-md text-sm text-fg-2 hover:text-fg-1 hover:bg-bg-2 transition-colors"
@@ -85,12 +95,15 @@ watch(
           </button>
 
           <UiMenu align="right">
-            <template #trigger>
+            <template #trigger="{ open: menuOpen, panelId }">
               <button
                 type="button"
                 data-testid="topbar-avatar"
                 :aria-label="$t('app.userMenu')"
-                class="w-[30px] h-[30px] rounded-full bg-accent-1/15 text-accent-1 font-semibold text-xs flex items-center justify-center hover:ring-2 hover:ring-accent-1/30 transition"
+                aria-haspopup="menu"
+                :aria-expanded="menuOpen"
+                :aria-controls="panelId"
+                class="w-[30px] h-[30px] rounded-full bg-accent-1/15 text-accent-1-text font-semibold text-xs flex items-center justify-center hover:ring-2 hover:ring-accent-1/30 transition"
               >
                 {{ initials }}
               </button>
@@ -117,7 +130,7 @@ watch(
         <button
           v-if="authStore.isAuthenticated()"
           type="button"
-          class="md:hidden p-2 rounded-md text-fg-1 hover:bg-bg-2 transition-colors"
+          class="md:hidden p-2.5 min-h-11 min-w-11 inline-flex items-center justify-center rounded-md text-fg-1 hover:bg-bg-2 transition-colors focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2"
           :aria-label="$t('app.toggleNavigation')"
           :aria-expanded="mobileOpen"
           data-testid="mobile-nav-toggle"
@@ -140,8 +153,9 @@ watch(
         </button>
       </div>
 
-      <div
+      <nav
         v-if="mobileOpen && authStore.isAuthenticated()"
+        :aria-label="$t('app.nav.mobilePrimary')"
         class="md:hidden border-t border-line bg-bg-1"
         data-testid="mobile-nav-panel"
       >
@@ -170,7 +184,7 @@ watch(
             <button
               type="button"
               data-testid="mobile-theme-toggle"
-              class="w-full text-left px-3 py-2 rounded-md text-fg-2 hover:text-fg-1 hover:bg-bg-2 transition-colors flex items-center gap-2"
+              class="w-full text-left px-3 py-3 min-h-11 rounded-md text-fg-2 hover:text-fg-1 hover:bg-bg-2 transition-colors flex items-center gap-2"
               :aria-label="$t('app.toggleTheme')"
               @click="toggleTheme"
             >
@@ -182,17 +196,17 @@ watch(
           <li>
             <button
               type="button"
-              class="w-full text-left px-3 py-2 rounded-md text-fg-2 hover:text-fg-1 hover:bg-bg-2 transition-colors"
+              class="w-full text-left px-3 py-3 min-h-11 rounded-md text-fg-2 hover:text-fg-1 hover:bg-bg-2 transition-colors"
               @click="handleLogout"
             >
               {{ $t('app.logout') }}
             </button>
           </li>
         </ul>
-      </div>
+      </nav>
     </header>
 
-    <main class="container mx-auto p-4">
+    <main id="main" tabindex="-1" class="container mx-auto p-4 focus:outline-none">
       <RouterView />
     </main>
     <UiToastHost />

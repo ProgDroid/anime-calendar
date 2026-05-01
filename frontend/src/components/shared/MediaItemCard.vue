@@ -60,7 +60,7 @@ const posterUrl = computed<string | null>(() => {
               v-else
               class="bg-bg-2 border border-line rounded w-16 h-20 flex items-center justify-center"
             >
-              <span class="text-xs text-fg-3">{{ t('calendar.noImage') }}</span>
+              <span class="text-xs text-fg-2">{{ t('calendar.noImage') }}</span>
             </div>
           </div>
           <div class="flex-grow min-w-0">

@@ -81,7 +81,7 @@ const handleResend = async () => {
             v-if="resendError"
             data-testid="verify-resend-error"
             role="alert"
-            class="text-sm text-danger"
+            class="text-sm text-danger-text"
           >
             {{ resendError }}
           </p>
@@ -93,7 +93,7 @@ const handleResend = async () => {
       <router-link
         to="/login"
         data-testid="verify-back-to-login"
-        class="text-accent-1 hover:underline"
+        class="text-accent-1-text hover:underline"
       >
         {{ t('auth.login.submit') }}
       </router-link>

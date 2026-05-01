@@ -70,13 +70,14 @@ onMounted(() => {
       <p class="text-sm text-fg-2 mt-2">{{ t('account.preferences.subtitle') }}</p>
     </header>
     <div v-if="loading" class="text-fg-2 mt-6">{{ t('app.loading') }}</div>
-    <div v-else-if="error" class="text-danger mt-6" data-testid="preferences-error">{{ error }}</div>
+    <div v-else-if="error" class="text-danger-text mt-6" data-testid="preferences-error">{{ error }}</div>
     <div v-else class="bg-bg-1 border border-line rounded-lg p-6 mt-6 flex flex-col gap-6">
       <!-- Theme -->
       <div class="flex flex-col gap-2">
         <label class="text-sm text-fg-2">{{ t('userSettings.theme') }}</label>
         <UiSegmented
           v-model="settings.theme_preference"
+          :aria-label="t('userSettings.theme')"
           :options="[
             { value: 'light', label: t('userSettings.light') },
             { value: 'dark', label: t('userSettings.dark') },
@@ -109,6 +110,7 @@ onMounted(() => {
         <label class="text-sm text-fg-2" for="title-language-select">{{ t('userSettings.titleLanguage') }}</label>
         <UiSegmented
           v-model="settings.title_language_preference"
+          :aria-label="t('userSettings.titleLanguage')"
           :options="[
             { value: 'English', label: t('userSettings.english') },
             { value: 'Romaji', label: t('userSettings.romaji') },

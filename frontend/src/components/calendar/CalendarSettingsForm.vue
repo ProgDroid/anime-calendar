@@ -30,7 +30,7 @@ const emit = defineEmits<{
         :maxlength="100"
         @update:model-value="emit('update:name', $event)"
       />
-      <span class="absolute right-3 bottom-2 text-sm text-fg-3 pointer-events-none">
+      <span class="absolute right-3 bottom-2 text-sm text-fg-2 pointer-events-none">
         {{ name.length }}/100
       </span>
     </div>
@@ -71,7 +71,7 @@ const emit = defineEmits<{
       </div>
     </div>
 
-    <div v-if="error" class="text-sm text-danger bg-danger/10 border border-danger/30 rounded-md px-3 py-2">{{ error }}</div>
+    <div v-if="error" class="text-sm text-danger-text bg-danger/10 border border-danger/30 rounded-md px-3 py-2">{{ error }}</div>
 
     <UiButton
       data-testid="submit-btn"

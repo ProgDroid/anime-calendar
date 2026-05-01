@@ -9,6 +9,7 @@ import UiButton from './ui/UiButton.vue'
 import IconMail from './ui/icons/IconMail.vue'
 import IconLock from './ui/icons/IconLock.vue'
 import IconEye from './ui/icons/IconEye.vue'
+import UiCheckbox from './ui/UiCheckbox.vue'
 import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'LoginPage' })
@@ -68,10 +69,14 @@ const toggleMode = () => {
       <GoogleLoginButton />
     </div>
 
-    <div class="flex items-center gap-3 text-fg-3 text-sm">
-      <span class="flex-1 h-px bg-line" />
+    <div
+      class="flex items-center gap-3 text-fg-2 text-sm"
+      role="separator"
+      aria-orientation="horizontal"
+    >
+      <span class="flex-1 h-px bg-line" aria-hidden="true" />
       <span>{{ t('auth.login.or') }}</span>
-      <span class="flex-1 h-px bg-line" />
+      <span class="flex-1 h-px bg-line" aria-hidden="true" />
     </div>
 
     <form data-testid="login-form" class="flex flex-col gap-4" @submit="handleSubmit">
@@ -110,7 +115,7 @@ const toggleMode = () => {
             v-if="!isRegistering"
             to="/forgot-password"
             data-testid="login-forgot-link"
-            class="text-sm text-accent-1 hover:underline"
+            class="text-sm text-accent-1-text hover:underline"
           >
             {{ t('auth.forgotPassword.link') }}
           </router-link>
@@ -131,7 +136,7 @@ const toggleMode = () => {
               type="button"
               :aria-label="passwordVisible ? t('auth.login.hidePassword') : t('auth.login.showPassword')"
               data-testid="login-password-toggle"
-              class="cursor-pointer hover:text-fg-1"
+              class="cursor-pointer hover:text-fg-1 inline-flex items-center justify-center w-9 h-9 rounded-sm focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2"
               @click="passwordVisible = !passwordVisible"
             >
               <IconEye />
@@ -140,18 +145,12 @@ const toggleMode = () => {
         </UiInput>
       </div>
 
-      <label
+      <UiCheckbox
         v-if="!isRegistering"
-        class="flex items-center gap-2 text-sm text-fg-1 cursor-pointer"
-      >
-        <input
-          v-model="rememberMe"
-          type="checkbox"
-          class="accent-accent-1"
-          data-testid="login-remember"
-        >
-        {{ t('auth.login.rememberMe') }}
-      </label>
+        v-model="rememberMe"
+        :label="t('auth.login.rememberMe')"
+        data-testid="login-remember"
+      />
 
       <UiButton
         type="submit"
@@ -164,7 +163,7 @@ const toggleMode = () => {
         {{ isRegistering ? t('auth.register.submit') : t('auth.login.submit') }}
       </UiButton>
 
-      <div v-if="error" data-testid="login-error" class="text-sm text-danger" role="alert">
+      <div v-if="error" data-testid="login-error" class="text-sm text-danger-text" role="alert">
         {{ error }}
       </div>
     </form>
@@ -174,7 +173,7 @@ const toggleMode = () => {
       <button
         type="button"
         data-testid="login-register-link"
-        class="text-accent-1 hover:underline ml-1"
+        class="text-accent-1-text hover:underline ml-1"
         @click="toggleMode"
       >
         {{ isRegistering ? t('auth.login.submit') : t('auth.register.submit') }}

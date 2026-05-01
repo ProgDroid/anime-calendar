@@ -98,7 +98,7 @@ async function handleSubmit(e: Event) {
             type="button"
             :aria-label="newPasswordVisible ? t('auth.login.hidePassword') : t('auth.login.showPassword')"
             data-testid="reset-password-toggle"
-            class="cursor-pointer hover:text-fg-1"
+            class="cursor-pointer hover:text-fg-1 inline-flex items-center justify-center w-9 h-9 rounded-sm focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2"
             @click="newPasswordVisible = !newPasswordVisible"
           >
             <IconEye />
@@ -124,7 +124,7 @@ async function handleSubmit(e: Event) {
             type="button"
             :aria-label="confirmPasswordVisible ? t('auth.login.hidePassword') : t('auth.login.showPassword')"
             data-testid="reset-confirm-toggle"
-            class="cursor-pointer hover:text-fg-1"
+            class="cursor-pointer hover:text-fg-1 inline-flex items-center justify-center w-9 h-9 rounded-sm focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2"
             @click="confirmPasswordVisible = !confirmPasswordVisible"
           >
             <IconEye />
@@ -143,13 +143,13 @@ async function handleSubmit(e: Event) {
         {{ loading ? t('auth.resetPassword.resetting') : t('auth.resetPassword.submit') }}
       </UiButton>
 
-      <div v-if="errorMessage" data-testid="reset-error" class="text-sm text-danger" role="alert">
+      <div v-if="errorMessage" data-testid="reset-error" class="text-sm text-danger-text" role="alert">
         {{ errorMessage }}
       </div>
     </form>
 
     <p class="text-center text-sm text-fg-2">
-      <router-link to="/login" data-testid="reset-login-link" class="text-accent-1 hover:underline">
+      <router-link to="/login" data-testid="reset-login-link" class="text-accent-1-text hover:underline">
         {{ t('auth.login.submit') }}
       </router-link>
     </p>

@@ -81,7 +81,7 @@ onMounted(() => {
       <p class="text-sm text-fg-2 mt-2">{{ t('account.profile.subtitle') }}</p>
     </header>
     <div v-if="loading" class="text-fg-2 mt-6">{{ t('userDetails.loading') }}</div>
-    <div v-else-if="error" class="text-danger mt-6" data-testid="profile-error">{{ error }}</div>
+    <div v-else-if="error" class="text-danger-text mt-6" data-testid="profile-error">{{ error }}</div>
     <div v-else-if="user" class="bg-bg-1 border border-line rounded-lg p-6 mt-6 flex flex-col gap-6">
       <div v-if="user.is_oauth" class="flex justify-center">
         <div class="w-24 h-24 rounded-full overflow-hidden bg-bg-2">

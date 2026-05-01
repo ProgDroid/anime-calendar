@@ -108,7 +108,7 @@ onMounted(() => {
     </div>
     <div v-else-if="user" class="bg-bg-1 border border-line rounded-lg p-6 mt-6 flex flex-col gap-4">
       <h3 class="text-lg font-medium text-fg-1">{{ t('userDetails.changePassword') }}</h3>
-      <div v-if="error" class="text-danger" data-testid="password-error">{{ error }}</div>
+      <div v-if="error" class="text-danger-text" data-testid="password-error">{{ error }}</div>
       <form class="flex flex-col gap-4" @submit="handleUpdatePassword">
         <UiInput
           v-model="currentPassword"
