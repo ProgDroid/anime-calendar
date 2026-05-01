@@ -77,7 +77,7 @@ onMounted(() => {
     <template v-else-if="user">
       <div v-if="user.is_oauth" class="flex justify-center">
         <div class="w-24 h-24 rounded-full overflow-hidden bg-bg-2">
-          <img v-if="userAvatar" :src="userAvatar" :alt="userName + ' avatar'" class="w-full h-full object-cover" />
+          <img v-if="userAvatar" :src="userAvatar" :alt="t('userDetails.avatarAlt', { name: userName })" class="w-full h-full object-cover" />
         </div>
       </div>
 

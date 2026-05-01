@@ -72,7 +72,7 @@ const posterUrl = computed<string | null>(() => {
               :size="compact ? 'sm' : 'sm'"
               class="mt-1"
             >
-              {{ item.media_type }}
+              {{ item.media_type === 'MANGA' ? t('calendar.mediaTypeManga') : t('calendar.mediaTypeAnime') }}
             </UiChip>
             <p v-if="item.media_type === 'ANIME' && !compact" class="text-xs text-fg-2 mt-1">
               {{ t('calendar.episodes') }}: {{ item.episode_duration }}

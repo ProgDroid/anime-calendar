@@ -4,6 +4,7 @@
     "home": "Início",
     "myCalendars": "Meus Calendários",
     "myAccount": "Minha Conta",
+    "toggleNavigation": "Alternar menu de navegação",
     "settings": "Configurações",
     "logout": "Sair",
     "orContinueWith": "Ou continue com",
@@ -183,6 +184,7 @@
     "emptyBody": "Crie seu primeiro calendário para começar a acompanhar séries."
   },
   "userDetails": {
+    "avatarAlt": "Avatar de {name}",
     "fetchFailed": "Falha ao obter detalhes de usuário",
     "updateSuccess": "Detalhes de usuário atualizados com successo!",
     "updateFailed": "Falha ao atualizar detalhes de usuário",

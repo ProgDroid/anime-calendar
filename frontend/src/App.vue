@@ -62,7 +62,7 @@ watch(
           v-if="authStore.isAuthenticated()"
           type="button"
           class="md:hidden p-2 rounded-md text-fg-1 hover:bg-bg-2 transition-colors"
-          :aria-label="$t('app.myAccount')"
+          :aria-label="$t('app.toggleNavigation')"
           :aria-expanded="mobileOpen"
           data-testid="mobile-nav-toggle"
           @click="mobileOpen = !mobileOpen"

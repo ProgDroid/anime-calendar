@@ -4,6 +4,7 @@
     "home": "Home",
     "myCalendars": "My Calendars",
     "myAccount": "My Account",
+    "toggleNavigation": "Toggle navigation menu",
     "settings": "Settings",
     "logout": "Logout",
     "orContinueWith": "Or continue with",
@@ -183,6 +184,7 @@
     "emptyBody": "Create your first calendar to start tracking shows."
   },
   "userDetails": {
+    "avatarAlt": "{name} avatar",
     "fetchFailed": "Failed to fetch user details",
     "updateSuccess": "User details updated successfully!",
     "updateFailed": "Failed to update user details",

@@ -39,7 +39,7 @@ describe('MediaItemCard', () => {
       props: { item, displayTitle: 'Attack on Titan', isSelected: false, isInCalendar: false },
       ...mountOpts
     })
-    expect(wrapper.text()).toContain('ANIME')
+    expect(wrapper.text()).toContain('Anime')
   })
 
   it('applies border-accent-1 class when selected', () => {
