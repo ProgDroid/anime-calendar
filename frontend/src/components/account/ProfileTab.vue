@@ -96,23 +96,15 @@ onMounted(() => {
           type="text"
           required
         />
-        <div class="flex flex-col gap-1">
-          <label for="profile-email-edit" class="text-sm text-fg-2">{{ t('userDetails.email') }}</label>
-          <div class="relative">
-            <span
-              class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-2 [&_svg]:w-3.5 [&_svg]:h-3.5"
-            >
-              <IconMail />
-            </span>
-            <input
-              id="profile-email-edit"
-              v-model="updatedEmail"
-              type="email"
-              required
-              class="w-full h-10 pl-9 pr-3 rounded-md bg-bg-1 text-fg-1 border border-line outline-none transition-shadow duration-[var(--d-1)] focus:border-accent-1 focus:shadow-[0_0_0_3px_var(--accent-1-soft)]"
-            />
-          </div>
-        </div>
+        <UiInput
+          id="profile-email-edit"
+          v-model="updatedEmail"
+          type="email"
+          :label="t('userDetails.email')"
+          required
+        >
+          <template #iconLeft><IconMail /></template>
+        </UiInput>
         <div class="flex justify-end gap-3 mt-2">
           <UiButton variant="ghost" type="button" @click="isEditing = false">
             {{ t('userDetails.cancel') }}
@@ -130,23 +122,15 @@ onMounted(() => {
           type="text"
           disabled
         />
-        <div class="flex flex-col gap-1">
-          <label for="profile-email-view" class="text-sm text-fg-2">{{ t('userDetails.email') }}</label>
-          <div class="relative">
-            <span
-              class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-2 [&_svg]:w-3.5 [&_svg]:h-3.5"
-            >
-              <IconMail />
-            </span>
-            <input
-              id="profile-email-view"
-              :value="user.email"
-              type="email"
-              disabled
-              class="w-full h-10 pl-9 pr-3 rounded-md bg-bg-1 text-fg-1 border border-line outline-none disabled:opacity-60"
-            />
-          </div>
-        </div>
+        <UiInput
+          id="profile-email-view"
+          :model-value="user.email"
+          type="email"
+          :label="t('userDetails.email')"
+          disabled
+        >
+          <template #iconLeft><IconMail /></template>
+        </UiInput>
         <div v-if="!user.is_oauth" class="flex justify-end mt-2">
           <UiButton variant="primary" @click="isEditing = true">
             {{ t('userDetails.editDetails') }}

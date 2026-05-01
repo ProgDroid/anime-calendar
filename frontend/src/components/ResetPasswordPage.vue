@@ -6,6 +6,8 @@ import axios from 'axios'
 import UiAuthShell from './ui/UiAuthShell.vue'
 import UiInput from './ui/UiInput.vue'
 import UiButton from './ui/UiButton.vue'
+import IconLock from './ui/icons/IconLock.vue'
+import IconEye from './ui/icons/IconEye.vue'
 
 defineOptions({ name: 'ResetPasswordPage' })
 
@@ -19,6 +21,8 @@ const confirmPassword = ref('')
 const loading = ref(false)
 const errorMessage = ref('')
 const success = ref(false)
+const newPasswordVisible = ref(false)
+const confirmPasswordVisible = ref(false)
 
 onMounted(() => {
   const q = route.query.token
@@ -79,7 +83,7 @@ async function handleSubmit(e: Event) {
       <UiInput
         id="reset-password"
         v-model="newPassword"
-        type="password"
+        :type="newPasswordVisible ? 'text' : 'password'"
         name="new-password"
         :label="t('auth.resetPassword.newPasswordLabel')"
         :placeholder="t('auth.resetPassword.newPasswordPlaceholder')"
@@ -87,12 +91,25 @@ async function handleSubmit(e: Event) {
         required
         :maxlength="128"
         data-testid="reset-password"
-      />
+      >
+        <template #iconLeft><IconLock /></template>
+        <template #iconRight>
+          <button
+            type="button"
+            :aria-label="newPasswordVisible ? t('auth.login.hidePassword') : t('auth.login.showPassword')"
+            data-testid="reset-password-toggle"
+            class="cursor-pointer hover:text-fg-1"
+            @click="newPasswordVisible = !newPasswordVisible"
+          >
+            <IconEye />
+          </button>
+        </template>
+      </UiInput>
 
       <UiInput
         id="reset-confirm"
         v-model="confirmPassword"
-        type="password"
+        :type="confirmPasswordVisible ? 'text' : 'password'"
         name="confirm-password"
         :label="t('auth.resetPassword.confirmPasswordLabel')"
         :placeholder="t('auth.resetPassword.confirmPasswordPlaceholder')"
@@ -100,7 +117,20 @@ async function handleSubmit(e: Event) {
         required
         :maxlength="128"
         data-testid="reset-confirm"
-      />
+      >
+        <template #iconLeft><IconLock /></template>
+        <template #iconRight>
+          <button
+            type="button"
+            :aria-label="confirmPasswordVisible ? t('auth.login.hidePassword') : t('auth.login.showPassword')"
+            data-testid="reset-confirm-toggle"
+            class="cursor-pointer hover:text-fg-1"
+            @click="confirmPasswordVisible = !confirmPasswordVisible"
+          >
+            <IconEye />
+          </button>
+        </template>
+      </UiInput>
 
       <UiButton
         type="submit"

@@ -33,6 +33,8 @@
       "email": "Email",
       "password": "Senha",
       "rememberMe": "Lembrar-me",
+      "showPassword": "Mostrar palavra-passe",
+      "hidePassword": "Esconder palavra-passe",
       "forgotPassword": "Esqueceu a Senha?",
       "submit": "Entrar",
       "emailPlaceholder": "Digite seu email",

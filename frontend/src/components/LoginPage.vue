@@ -6,6 +6,9 @@ import GoogleLoginButton from './GoogleLoginButton.vue'
 import UiAuthShell from './ui/UiAuthShell.vue'
 import UiInput from './ui/UiInput.vue'
 import UiButton from './ui/UiButton.vue'
+import IconMail from './ui/icons/IconMail.vue'
+import IconLock from './ui/icons/IconLock.vue'
+import IconEye from './ui/icons/IconEye.vue'
 import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'LoginPage' })
@@ -21,6 +24,9 @@ const username = ref('')
 const isRegistering = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
+const passwordVisible = ref(false)
+// TODO: wire rememberMe through to authStore.login when backend supports it.
+const rememberMe = ref(false)
 
 const handleSubmit = async (e: Event) => {
   e.preventDefault()
@@ -58,6 +64,16 @@ const toggleMode = () => {
       {{ t('auth.login.tagline') }}
     </p>
 
+    <div data-testid="login-google" class="flex flex-col items-stretch">
+      <GoogleLoginButton />
+    </div>
+
+    <div class="flex items-center gap-3 text-fg-3 text-sm">
+      <span class="flex-1 h-px bg-line" />
+      <span>{{ t('auth.login.or') }}</span>
+      <span class="flex-1 h-px bg-line" />
+    </div>
+
     <form data-testid="login-form" class="flex flex-col gap-4" @submit="handleSubmit">
       <UiInput
         v-if="isRegistering"
@@ -83,30 +99,59 @@ const toggleMode = () => {
         autocomplete="email"
         required
         data-testid="login-email"
-      />
+      >
+        <template #iconLeft><IconMail /></template>
+      </UiInput>
 
-      <UiInput
-        id="password"
-        v-model="password"
-        type="password"
-        name="password"
-        :label="t('auth.login.password')"
-        :placeholder="t('auth.login.passwordPlaceholder')"
-        autocomplete="current-password"
-        required
-        :maxlength="128"
-        data-testid="login-password"
-      />
-
-      <div v-if="!isRegistering" class="flex justify-end -mt-1">
-        <router-link
-          to="/forgot-password"
-          data-testid="login-forgot-link"
-          class="text-sm text-accent-1 hover:underline"
+      <div class="flex flex-col gap-1" data-testid="login-password">
+        <div class="flex items-center justify-between">
+          <label for="password" class="text-sm text-fg-2">{{ t('auth.login.password') }}</label>
+          <router-link
+            v-if="!isRegistering"
+            to="/forgot-password"
+            data-testid="login-forgot-link"
+            class="text-sm text-accent-1 hover:underline"
+          >
+            {{ t('auth.forgotPassword.link') }}
+          </router-link>
+        </div>
+        <UiInput
+          id="password"
+          v-model="password"
+          :type="passwordVisible ? 'text' : 'password'"
+          name="password"
+          :placeholder="t('auth.login.passwordPlaceholder')"
+          autocomplete="current-password"
+          required
+          :maxlength="128"
         >
-          {{ t('auth.forgotPassword.link') }}
-        </router-link>
+          <template #iconLeft><IconLock /></template>
+          <template #iconRight>
+            <button
+              type="button"
+              :aria-label="passwordVisible ? t('auth.login.hidePassword') : t('auth.login.showPassword')"
+              data-testid="login-password-toggle"
+              class="cursor-pointer hover:text-fg-1"
+              @click="passwordVisible = !passwordVisible"
+            >
+              <IconEye />
+            </button>
+          </template>
+        </UiInput>
       </div>
+
+      <label
+        v-if="!isRegistering"
+        class="flex items-center gap-2 text-sm text-fg-1 cursor-pointer"
+      >
+        <input
+          v-model="rememberMe"
+          type="checkbox"
+          class="accent-accent-1"
+          data-testid="login-remember"
+        >
+        {{ t('auth.login.rememberMe') }}
+      </label>
 
       <UiButton
         type="submit"
@@ -123,16 +168,6 @@ const toggleMode = () => {
         {{ error }}
       </div>
     </form>
-
-    <div class="flex items-center gap-3 text-fg-3 text-sm">
-      <span class="flex-1 h-px bg-line" />
-      <span>{{ t('auth.login.or') }}</span>
-      <span class="flex-1 h-px bg-line" />
-    </div>
-
-    <div data-testid="login-google" class="flex flex-col items-stretch">
-      <GoogleLoginButton />
-    </div>
 
     <p class="text-center text-sm text-fg-2">
       {{ isRegistering ? t('auth.register.alreadyHaveAccount') : t('auth.register.noAccount') }}

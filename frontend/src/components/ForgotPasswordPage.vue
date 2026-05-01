@@ -5,6 +5,7 @@ import axios from 'axios'
 import UiAuthShell from './ui/UiAuthShell.vue'
 import UiInput from './ui/UiInput.vue'
 import UiButton from './ui/UiButton.vue'
+import IconMail from './ui/icons/IconMail.vue'
 
 defineOptions({ name: 'ForgotPasswordPage' })
 
@@ -59,7 +60,9 @@ async function handleSubmit(e: Event) {
         autocomplete="email"
         required
         data-testid="forgot-email"
-      />
+      >
+        <template #iconLeft><IconMail /></template>
+      </UiInput>
 
       <UiButton
         type="submit"

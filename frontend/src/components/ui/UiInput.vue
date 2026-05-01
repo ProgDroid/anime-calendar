@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useId } from 'vue'
+import { computed, useId, useSlots } from 'vue'
 import { tv } from 'tailwind-variants'
 
 interface Props {
@@ -31,6 +31,7 @@ const props = withDefaults(defineProps<Props>(), {
 defineOptions({ name: 'UiInput' })
 
 const emit = defineEmits<{ (e: 'update:modelValue', v: string): void }>()
+const slots = useSlots()
 const generatedId = useId()
 const inputId = computed(() => props.id ?? generatedId)
 const helperId = computed(() => `${inputId.value}-helper`)
@@ -45,7 +46,11 @@ const input = tv({
   },
 })
 
-const classes = computed(() => input({ state: props.error ? 'error' : 'default' }))
+const inputClasses = computed(() => [
+  input({ state: props.error ? 'error' : 'default' }),
+  slots.iconLeft ? 'pl-9' : '',
+  slots.iconRight ? 'pr-9' : '',
+])
 
 function onInput(ev: Event) {
   emit('update:modelValue', (ev.target as HTMLInputElement).value)
@@ -55,21 +60,35 @@ function onInput(ev: Event) {
 <template>
   <div class="flex flex-col gap-1">
     <label v-if="label" :for="inputId" class="text-sm text-fg-2">{{ label }}</label>
-    <input
-      :id="inputId"
-      :name="name"
-      :class="classes"
-      :type="type"
-      :value="modelValue"
-      :placeholder="placeholder"
-      :disabled="disabled"
-      :required="required"
-      :maxlength="maxlength"
-      :autocomplete="autocomplete"
-      :aria-invalid="!!error"
-      :aria-describedby="error ? helperId : undefined"
-      @input="onInput"
-    >
+    <div class="relative">
+      <span
+        v-if="$slots.iconLeft"
+        class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-3 [&_svg]:w-3.5 [&_svg]:h-3.5"
+      >
+        <slot name="iconLeft" />
+      </span>
+      <input
+        :id="inputId"
+        :name="name"
+        :class="inputClasses"
+        :type="type"
+        :value="modelValue"
+        :placeholder="placeholder"
+        :disabled="disabled"
+        :required="required"
+        :maxlength="maxlength"
+        :autocomplete="autocomplete"
+        :aria-invalid="!!error"
+        :aria-describedby="error ? helperId : undefined"
+        @input="onInput"
+      >
+      <span
+        v-if="$slots.iconRight"
+        class="absolute right-3 top-1/2 -translate-y-1/2 text-fg-3 [&_svg]:w-3.5 [&_svg]:h-3.5"
+      >
+        <slot name="iconRight" />
+      </span>
+    </div>
     <span v-if="error" :id="helperId" class="text-xs text-danger">{{ error }}</span>
   </div>
 </template>

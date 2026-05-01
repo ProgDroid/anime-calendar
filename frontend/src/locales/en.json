@@ -33,6 +33,8 @@
       "email": "Email",
       "password": "Password",
       "rememberMe": "Remember Me",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password",
       "forgotPassword": "Forgot Password?",
       "submit": "Login",
       "emailPlaceholder": "Enter your email",

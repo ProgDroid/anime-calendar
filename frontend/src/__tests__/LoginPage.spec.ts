@@ -106,6 +106,33 @@ describe('LoginPage', () => {
     expect(wrapper.find('[data-testid="login-error"]').exists()).toBe(true)
   })
 
+  it('toggles password visibility when eye button is clicked', async () => {
+    const wrapper = mountPage()
+    const pwd = inputAt(wrapper, 'login-password')
+    expect(pwd.attributes('type')).toBe('password')
+    await wrapper.find('[data-testid="login-password-toggle"]').trigger('click')
+    expect(inputAt(wrapper, 'login-password').attributes('type')).toBe('text')
+    await wrapper.find('[data-testid="login-password-toggle"]').trigger('click')
+    expect(inputAt(wrapper, 'login-password').attributes('type')).toBe('password')
+  })
+
+  it('remember-me checkbox toggles its checked state', async () => {
+    const wrapper = mountPage()
+    const cb = wrapper.find('[data-testid="login-remember"]')
+    expect(cb.exists()).toBe(true)
+    expect((cb.element as HTMLInputElement).checked).toBe(false)
+    await cb.setValue(true)
+    expect((cb.element as HTMLInputElement).checked).toBe(true)
+  })
+
+  it('renders Google CTA before the form (Google-first ordering)', () => {
+    const wrapper = mountPage()
+    const google = wrapper.find('[data-testid="login-google"]').element
+    const form = wrapper.find('[data-testid="login-form"]').element
+    // DOCUMENT_POSITION_FOLLOWING (4): form follows google
+    expect(google.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  })
+
   it('disables submit button while loading', async () => {
     let resolve!: (v: unknown) => void
     vi.mocked(api.post).mockReturnValue(new Promise(r => { resolve = r }))

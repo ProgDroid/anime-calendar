@@ -6,6 +6,9 @@ import GoogleLoginButton from './GoogleLoginButton.vue'
 import UiAuthShell from './ui/UiAuthShell.vue'
 import UiInput from './ui/UiInput.vue'
 import UiButton from './ui/UiButton.vue'
+import IconMail from './ui/icons/IconMail.vue'
+import IconLock from './ui/icons/IconLock.vue'
+import IconEye from './ui/icons/IconEye.vue'
 import { useI18n } from 'vue-i18n'
 
 defineOptions({ name: 'RegisterPage' })
@@ -21,6 +24,8 @@ const confirmPassword = ref('')
 const username = ref('')
 const loading = ref(false)
 const error = ref<string | null>(null)
+const passwordVisible = ref(false)
+const confirmPasswordVisible = ref(false)
 
 const handleSubmit = async (e: Event) => {
   e.preventDefault()
@@ -57,6 +62,16 @@ const handleSubmit = async (e: Event) => {
       {{ t('auth.register.tagline') }}
     </p>
 
+    <div data-testid="register-google" class="flex flex-col items-stretch">
+      <GoogleLoginButton />
+    </div>
+
+    <div class="flex items-center gap-3 text-fg-3 text-sm">
+      <span class="flex-1 h-px bg-line" />
+      <span>{{ t('auth.login.or') }}</span>
+      <span class="flex-1 h-px bg-line" />
+    </div>
+
     <form data-testid="register-form" class="flex flex-col gap-4" @submit="handleSubmit">
       <UiInput
         id="username"
@@ -81,12 +96,14 @@ const handleSubmit = async (e: Event) => {
         autocomplete="email"
         required
         data-testid="register-email"
-      />
+      >
+        <template #iconLeft><IconMail /></template>
+      </UiInput>
 
       <UiInput
         id="password"
         v-model="password"
-        type="password"
+        :type="passwordVisible ? 'text' : 'password'"
         name="password"
         :label="t('auth.register.password')"
         :placeholder="t('auth.login.passwordPlaceholder')"
@@ -94,12 +111,25 @@ const handleSubmit = async (e: Event) => {
         required
         :maxlength="128"
         data-testid="register-password"
-      />
+      >
+        <template #iconLeft><IconLock /></template>
+        <template #iconRight>
+          <button
+            type="button"
+            :aria-label="passwordVisible ? t('auth.login.hidePassword') : t('auth.login.showPassword')"
+            data-testid="register-password-toggle"
+            class="cursor-pointer hover:text-fg-1"
+            @click="passwordVisible = !passwordVisible"
+          >
+            <IconEye />
+          </button>
+        </template>
+      </UiInput>
 
       <UiInput
         id="confirmPassword"
         v-model="confirmPassword"
-        type="password"
+        :type="confirmPasswordVisible ? 'text' : 'password'"
         name="confirmPassword"
         :label="t('auth.register.confirmPassword')"
         :placeholder="t('auth.register.confirmPasswordPlaceholder')"
@@ -107,7 +137,20 @@ const handleSubmit = async (e: Event) => {
         required
         :maxlength="128"
         data-testid="register-confirm"
-      />
+      >
+        <template #iconLeft><IconLock /></template>
+        <template #iconRight>
+          <button
+            type="button"
+            :aria-label="confirmPasswordVisible ? t('auth.login.hidePassword') : t('auth.login.showPassword')"
+            data-testid="register-confirm-toggle"
+            class="cursor-pointer hover:text-fg-1"
+            @click="confirmPasswordVisible = !confirmPasswordVisible"
+          >
+            <IconEye />
+          </button>
+        </template>
+      </UiInput>
 
       <UiButton
         type="submit"
@@ -124,16 +167,6 @@ const handleSubmit = async (e: Event) => {
         {{ error }}
       </div>
     </form>
-
-    <div class="flex items-center gap-3 text-fg-3 text-sm">
-      <span class="flex-1 h-px bg-line" />
-      <span>{{ t('auth.login.or') }}</span>
-      <span class="flex-1 h-px bg-line" />
-    </div>
-
-    <div data-testid="register-google" class="flex flex-col items-stretch">
-      <GoogleLoginButton />
-    </div>
 
     <p class="text-center text-sm text-fg-2">
       {{ t('auth.register.alreadyHaveAccount') }}

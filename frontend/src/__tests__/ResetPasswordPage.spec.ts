@@ -110,6 +110,17 @@ describe('ResetPasswordPage', () => {
     expect(wrapper.find('[data-testid="reset-error"]').exists()).toBe(true)
   })
 
+  it('toggles visibility for both password fields independently', async () => {
+    const wrapper = await mountPage()
+    expect(inputAt(wrapper, 'reset-password').attributes('type')).toBe('password')
+    expect(inputAt(wrapper, 'reset-confirm').attributes('type')).toBe('password')
+    await wrapper.find('[data-testid="reset-password-toggle"]').trigger('click')
+    expect(inputAt(wrapper, 'reset-password').attributes('type')).toBe('text')
+    expect(inputAt(wrapper, 'reset-confirm').attributes('type')).toBe('password')
+    await wrapper.find('[data-testid="reset-confirm-toggle"]').trigger('click')
+    expect(inputAt(wrapper, 'reset-confirm').attributes('type')).toBe('text')
+  })
+
   it('disables submit while loading', async () => {
     let resolve!: (v: unknown) => void
     vi.mocked(axios.post).mockReturnValue(new Promise(r => { resolve = r }))
