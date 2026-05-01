@@ -1390,6 +1390,17 @@ Tracked here so they survive the plan close-out.
 
 **Sketch:** Either extend `PageCalendar` with an `airing_count` field computed by joining against the existing `airing_schedule` cached data, or compute client-side after `recent_item_ids` resolution. Backend-side is preferred.
 
+### FU-4: Account tabs polish (post-D2)
+
+**Why:** D2 reviewer flagged several non-blocking quality items deferred from the AccountPage commit.
+
+**Sketch:**
+- **`useUserDetails` composable**: ProfileTab and PasswordTab both fetch `GET /user/details` independently on mount. Hoist into a small composable with in-flight Promise dedup (matches the project convention from CLAUDE.md). Avatar+name read from localStorage in ProfileTab also belongs there.
+- **Drop dead `router.push('/login')` in `onMounted`** (ProfileTab + PasswordTab). The router guard already enforces `requiresAuth: true` on `/account`. PreferencesTab does this correctly (early `return` only).
+- **Mobile sidebar overflow**: AccountPage uses `flex md:flex-col` so mobile is `flex-row`. With 4 tabs including "Danger Zone" / "Zona Perigosa", a 320px viewport overflows. Either add `flex-wrap` or convert to a horizontal scrollable strip with `overflow-x-auto`. Coordinate with Track 3 mobile companion.
+- **Test additions to `AccountPage.spec.ts`**: assert sidebar contains exactly 4 buttons; assert tab order matches `[profile, preferences, password, danger]`; add a test that `/account` redirects to `/account/profile`.
+- **Accent persistence semantics**: `setAccent()` fires immediately on swatch change for instant preview, but `userSettingsStore.updateSettings` is only called on Save. If user navigates away without saving, server-wins reconcile reverts on next load. Document this UX as intentional (preview-on-change, commit-on-save) or auto-save on swatch change with a request abort token.
+
 ### FU-3: UiButton success/warning variants + UiRadio primitive
 
 **Why:** C6 reskin had to drop `btn-success` (green submit on settings form) and `btn-warning` (yellow Clear on items list) because `UiButton` only ships `primary | secondary | ghost | danger`. Both call sites currently use `primary` (settings submit) and `secondary` (items clear), losing the original semantic colour. Same trip surfaced that radio inputs are duplicated 6 times across `CalendarSettingsForm` and `ItemSearchPanel` with hand-rolled `accent-accent-1` styling.
