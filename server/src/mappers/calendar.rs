@@ -149,7 +149,7 @@ impl CalendarMapper {
         user_id: i32,
         page: usize,
         page_size: usize,
-    ) -> ServerResult<(Vec<Calendar>, usize)> {
+    ) -> ServerResult<(Vec<(Calendar, Vec<i32>)>, usize)> {
         crate::metrics::db::timed("calendar.list_paginated", async {
             Self::get_calendars_by_user_paginated_with(
                 &mut *self.db.pool.acquire().await?,
@@ -172,7 +172,7 @@ impl CalendarMapper {
         user_id: i32,
         page: usize,
         page_size: usize,
-    ) -> ServerResult<(Vec<Calendar>, usize)> {
+    ) -> ServerResult<(Vec<(Calendar, Vec<i32>)>, usize)> {
         let total_count: i64 = match sqlx::query_scalar!(
             "SELECT COUNT(*) FROM calendars WHERE user_id = $1 AND deleted_at IS NULL",
             user_id
@@ -184,8 +184,7 @@ impl CalendarMapper {
             None => return Err(Error::NotFound),
         };
 
-        let calendars = sqlx::query_as!(
-            Calendar,
+        let rows = sqlx::query!(
             r#"SELECT
                 c.id,
                 c.language as "language: Language",
@@ -197,7 +196,17 @@ impl CalendarMapper {
                 COALESCE(
                     ARRAY_AGG(ci.item_id) FILTER (WHERE ci.item_id IS NOT NULL),
                     '{}'::integer[]
-                ) as "item_ids!: Vec<i32>"
+                ) as "item_ids!: Vec<i32>",
+                COALESCE((
+                    SELECT ARRAY_AGG(item_id ORDER BY added_at DESC)
+                    FROM (
+                        SELECT item_id, added_at
+                        FROM calendar_items
+                        WHERE calendar_id = c.id
+                        ORDER BY added_at DESC
+                        LIMIT 4
+                    ) recent_inner
+                ), '{}'::integer[]) as "recent_item_ids!: Vec<i32>"
             FROM calendars c
             LEFT JOIN calendar_items ci ON ci.calendar_id = c.id
             WHERE c.user_id = $1 AND c.deleted_at IS NULL
@@ -211,6 +220,25 @@ impl CalendarMapper {
         )
         .fetch_all(&mut *conn)
         .await?;
+
+        let calendars: Vec<(Calendar, Vec<i32>)> = rows
+            .into_iter()
+            .map(|r| {
+                (
+                    Calendar {
+                        id: r.id,
+                        language: r.language,
+                        name: r.name,
+                        subscription_token: r.subscription_token,
+                        user_id: r.user_id,
+                        created_at: r.created_at,
+                        updated_at: r.updated_at,
+                        item_ids: r.item_ids,
+                    },
+                    r.recent_item_ids,
+                )
+            })
+            .collect();
 
         Ok((calendars, total_count as usize))
     }
@@ -699,6 +727,64 @@ mod tests {
                 .unwrap();
         assert_eq!(total, 2);
         assert_eq!(cals.len(), 2);
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_calendars_paginated_returns_recent_item_ids_most_recent_first() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(
+            &mut tx,
+            Calendar {
+                item_ids: vec![],
+                ..new_calendar(user_id)
+            },
+        )
+        .await
+        .unwrap();
+        // Insert 5 items with ascending added_at; ids are 10..14, expect newest 4 in DESC order.
+        for (i, item_id) in [10, 11, 12, 13, 14].iter().enumerate() {
+            sqlx::query!(
+                "INSERT INTO calendar_items (calendar_id, item_id, added_at) VALUES ($1, $2, NOW() + ($3 || ' seconds')::interval)",
+                inserted.id,
+                item_id,
+                i.to_string(),
+            )
+            .execute(&mut *tx)
+            .await
+            .unwrap();
+        }
+        let (cals, _) =
+            CalendarMapper::get_calendars_by_user_paginated_with(&mut tx, user_id, 1, 10)
+                .await
+                .unwrap();
+        assert_eq!(cals.len(), 1);
+        let (_cal, recent) = &cals[0];
+        assert_eq!(recent, &vec![14, 13, 12, 11]);
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn get_calendars_paginated_returns_empty_recent_item_ids_for_empty_calendar() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut tx).await;
+        CalendarMapper::insert_calendar_with(
+            &mut tx,
+            Calendar {
+                item_ids: vec![],
+                ..new_calendar(user_id)
+            },
+        )
+        .await
+        .unwrap();
+        let (cals, _) =
+            CalendarMapper::get_calendars_by_user_paginated_with(&mut tx, user_id, 1, 10)
+                .await
+                .unwrap();
+        assert_eq!(cals.len(), 1);
+        let (_cal, recent) = &cals[0];
+        assert!(recent.is_empty());
         tx.rollback().await.unwrap();
     }
 

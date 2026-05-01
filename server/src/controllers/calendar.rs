@@ -380,6 +380,7 @@ pub struct PageCalendar {
     pub subscription_token: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    pub recent_item_ids: Vec<i32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, utoipa::ToSchema)]
@@ -430,7 +431,7 @@ async fn get_calendars(
         Ok((calendars, total_count)) => {
             let mut results: Vec<PageCalendar> = Vec::new();
 
-            for calendar in calendars {
+            for (calendar, recent_item_ids) in calendars {
                 if let Some(id) = Id::new(calendar.id.into()) {
                     results.push(PageCalendar {
                         id,
@@ -439,6 +440,7 @@ async fn get_calendars(
                         subscription_token: calendar.subscription_token,
                         created_at: calendar.created_at,
                         updated_at: calendar.updated_at,
+                        recent_item_ids,
                     });
                 }
             }
