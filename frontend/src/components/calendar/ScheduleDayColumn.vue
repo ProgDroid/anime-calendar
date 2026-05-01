@@ -1,15 +1,8 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n';
+import type { ScheduleEntry } from '@/types/schedule';
 
-interface Entry {
-  id: number;
-  title: string;
-  episode?: number;
-  time?: string;
-  coverUrl?: string;
-}
-
-defineProps<{ label: string; date: Date; entries: Entry[] }>();
+defineProps<{ label: string; date: Date; entries: ScheduleEntry[] }>();
 const { t } = useI18n();
 </script>
 

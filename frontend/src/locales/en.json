@@ -233,6 +233,8 @@
       "sun": "Sun"
     },
     "episode": "Ep. {n}",
-    "noEntries": "No entries"
+    "noEntries": "No entries",
+    "prev": "Previous week",
+    "next": "Next week"
   }
 }

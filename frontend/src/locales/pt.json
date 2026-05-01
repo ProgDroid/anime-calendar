@@ -233,6 +233,8 @@
       "sun": "Dom"
     },
     "episode": "Ep. {n}",
-    "noEntries": "Sem episódios"
+    "noEntries": "Sem episódios",
+    "prev": "Semana anterior",
+    "next": "Próxima semana"
   }
 }
