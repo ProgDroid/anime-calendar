@@ -16,4 +16,5 @@ export interface PageCalendar {
   subscription_token: string;
   created_at: string;
   updated_at: string;
+  recent_item_ids: number[];
 }
