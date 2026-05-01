@@ -163,7 +163,10 @@
     "exportDownload": "Download .ics",
     "copyLink": "Copy subscription link",
     "linkCopied": "Subscription link copied to clipboard!",
-    "openInGoogle": "Add to Google Calendar"
+    "openInGoogle": "Add to Google Calendar",
+    "tile": {
+      "itemCount": "{count} items"
+    }
   },
   "userDetails": {
     "fetchFailed": "Failed to fetch user details",
