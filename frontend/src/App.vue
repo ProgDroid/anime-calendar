@@ -2,15 +2,20 @@
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import { useAuthStore } from './stores/auth'
 import { useUserSettingsStore } from './stores/userSettingsStore'
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { applySettings } from './services/applySettings'
+import { useTheme } from './composables/useTheme'
 import UiToastHost from './components/ui/UiToastHost.vue'
-import UiButton from './components/ui/UiButton.vue'
+import UiMenu from './components/ui/UiMenu.vue'
+import IconLogo from './components/ui/icons/IconLogo.vue'
+import IconSun from './components/ui/icons/IconSun.vue'
+import IconMoon from './components/ui/icons/IconMoon.vue'
 
 const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
 const route = useRoute()
 const mobileOpen = ref(false)
+const { theme, setTheme } = useTheme()
 
 const handleLogout = () => {
   authStore.logout()
@@ -18,6 +23,18 @@ const handleLogout = () => {
   applySettings(userSettingsStore.getDefaultSettings())
   mobileOpen.value = false
 }
+
+const toggleTheme = () => {
+  setTheme(theme.value === 'dark' ? 'light' : 'dark')
+}
+
+const initials = computed(() => {
+  const name = authStore.user ?? ''
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length >= 2) return (parts[0]![0]! + parts[1]![0]!).toUpperCase()
+  if (parts.length === 1) return parts[0]!.slice(0, 2).toUpperCase()
+  return '?'
+})
 
 watch(
   () => route.fullPath,
@@ -33,9 +50,11 @@ watch(
       <div class="container mx-auto px-4 h-14 flex items-center justify-between">
         <RouterLink
           to="/my-calendars"
-          class="text-lg font-semibold tracking-tight hover:text-accent-1 transition-colors"
+          class="flex items-center gap-2 text-lg font-semibold tracking-tight hover:text-accent-1 transition-colors"
+          :aria-label="$t('app.title')"
         >
-          {{ $t('app.title') }}
+          <IconLogo class="w-[22px] h-[22px]" />
+          <span>Anime <span class="italic font-normal" style="font-family: var(--font-display)">Calendar</span></span>
         </RouterLink>
 
         <nav v-if="authStore.isAuthenticated()" class="hidden md:flex items-center gap-1">
@@ -53,9 +72,46 @@ watch(
           >
             {{ $t('app.myAccount') }}
           </RouterLink>
-          <UiButton variant="ghost" size="sm" @click="handleLogout">
-            {{ $t('app.logout') }}
-          </UiButton>
+
+          <button
+            type="button"
+            data-testid="topbar-theme-toggle"
+            class="ml-2 p-2 rounded-md text-fg-2 hover:text-fg-1 hover:bg-bg-2 transition-colors [&_svg]:w-3.5 [&_svg]:h-3.5"
+            :aria-label="$t('app.toggleTheme')"
+            @click="toggleTheme"
+          >
+            <IconSun v-if="theme === 'dark'" />
+            <IconMoon v-else />
+          </button>
+
+          <UiMenu align="right">
+            <template #trigger>
+              <button
+                type="button"
+                data-testid="topbar-avatar"
+                :aria-label="$t('app.userMenu')"
+                class="w-[30px] h-[30px] rounded-full bg-accent-1/15 text-accent-1 font-semibold text-xs flex items-center justify-center hover:ring-2 hover:ring-accent-1/30 transition"
+              >
+                {{ initials }}
+              </button>
+            </template>
+            <RouterLink
+              to="/account"
+              class="px-3 py-1.5 text-sm text-fg-1 hover:bg-bg-2 rounded-sm text-left"
+              role="menuitem"
+            >
+              {{ $t('app.myAccount') }}
+            </RouterLink>
+            <button
+              type="button"
+              data-testid="topbar-logout"
+              class="px-3 py-1.5 text-sm text-fg-1 hover:bg-bg-2 rounded-sm text-left"
+              role="menuitem"
+              @click="handleLogout"
+            >
+              {{ $t('app.logout') }}
+            </button>
+          </UiMenu>
         </nav>
 
         <button
@@ -109,6 +165,19 @@ watch(
             >
               {{ $t('app.myAccount') }}
             </RouterLink>
+          </li>
+          <li>
+            <button
+              type="button"
+              data-testid="mobile-theme-toggle"
+              class="w-full text-left px-3 py-2 rounded-md text-fg-2 hover:text-fg-1 hover:bg-bg-2 transition-colors flex items-center gap-2"
+              :aria-label="$t('app.toggleTheme')"
+              @click="toggleTheme"
+            >
+              <IconSun v-if="theme === 'dark'" class="w-4 h-4" />
+              <IconMoon v-else class="w-4 h-4" />
+              <span>{{ $t('app.toggleTheme') }}</span>
+            </button>
           </li>
           <li>
             <button
