@@ -10,15 +10,101 @@ use crate::{
 };
 
 use actix_web::{HttpResponse, ResponseError, delete, get, put, web};
-use chrono::NaiveDateTime;
+use chrono::{NaiveDateTime, Utc};
 use common::{
     calendar::Calendar,
     id::Id,
     item::{Item, Repository},
     language::Language,
+    schedule::Schedule,
 };
 use log::error;
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+
+/// Count how many of `item_ids` have at least one airing schedule entry strictly after `now_secs`.
+///
+/// Items missing from `schedules_by_id` (e.g. an Anilist cache miss) are not counted.
+#[must_use]
+fn count_airing(
+    item_ids: &[Id],
+    schedules_by_id: &HashMap<u64, &[Schedule]>,
+    now_secs: u64,
+) -> usize {
+    item_ids
+        .iter()
+        .filter(|id| {
+            schedules_by_id
+                .get(&id.to_int())
+                .is_some_and(|schedules| schedules.iter().any(|s| s.airing_at.to_int() > now_secs))
+        })
+        .count()
+}
+
+#[cfg(test)]
+mod airing_count_tests {
+    use super::*;
+    use common::timestamp::Timestamp;
+
+    fn id(n: i64) -> Id {
+        Id::new(n).unwrap()
+    }
+
+    fn schedule_at(secs: i64) -> Schedule {
+        Schedule {
+            id: id(secs.max(1)),
+            airing_at: Timestamp::new(secs).unwrap(),
+            episode: 1,
+            media_id: None,
+        }
+    }
+
+    #[test]
+    fn empty_calendar_yields_zero() {
+        let map: HashMap<u64, &[Schedule]> = HashMap::new();
+        assert_eq!(count_airing(&[], &map, 1_000), 0);
+    }
+
+    #[test]
+    fn item_with_only_past_schedules_is_not_counted() {
+        let schedules = vec![schedule_at(500), schedule_at(900)];
+        let map: HashMap<u64, &[Schedule]> = HashMap::from([(1, schedules.as_slice())]);
+        assert_eq!(count_airing(&[id(1)], &map, 1_000), 0);
+    }
+
+    #[test]
+    fn item_with_a_future_schedule_is_counted() {
+        let schedules = vec![schedule_at(500), schedule_at(2_000)];
+        let map: HashMap<u64, &[Schedule]> = HashMap::from([(1, schedules.as_slice())]);
+        assert_eq!(count_airing(&[id(1)], &map, 1_000), 1);
+    }
+
+    #[test]
+    fn mixed_calendar_counts_only_airing_items() {
+        let airing_a = vec![schedule_at(2_000)];
+        let finished_b = vec![schedule_at(100), schedule_at(500)];
+        let airing_c = vec![schedule_at(3_000)];
+        let map: HashMap<u64, &[Schedule]> = HashMap::from([
+            (1, airing_a.as_slice()),
+            (2, finished_b.as_slice()),
+            (3, airing_c.as_slice()),
+        ]);
+        assert_eq!(count_airing(&[id(1), id(2), id(3)], &map, 1_000), 2);
+    }
+
+    #[test]
+    fn item_missing_from_anilist_cache_is_not_counted() {
+        let map: HashMap<u64, &[Schedule]> = HashMap::new();
+        assert_eq!(count_airing(&[id(42)], &map, 1_000), 0);
+    }
+
+    #[test]
+    fn schedule_exactly_at_now_is_not_counted_as_future() {
+        let schedules = vec![schedule_at(1_000)];
+        let map: HashMap<u64, &[Schedule]> = HashMap::from([(1, schedules.as_slice())]);
+        assert_eq!(count_airing(&[id(1)], &map, 1_000), 0);
+    }
+}
 
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 pub struct CalendarRequest {
@@ -376,6 +462,7 @@ pub struct PageCalendar {
     #[schema(value_type = i64)]
     pub id: Id,
     pub item_count: usize,
+    pub airing_count: usize,
     pub name: String,
     pub subscription_token: String,
     pub created_at: NaiveDateTime,
@@ -413,6 +500,7 @@ async fn get_calendars(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
     cache: web::Data<Cache>,
+    anilist: web::Data<Anilist>,
     claims: Claims,
     params: web::Query<PaginationParams>,
 ) -> HttpResponse {
@@ -429,13 +517,51 @@ async fn get_calendars(
         .await
     {
         Ok((calendars, total_count)) => {
+            // Collect a deduped list of item ids across all calendars so we can fetch
+            // their Anilist metadata in a single batched call. We then derive each
+            // calendar's `airing_count` from the cached metadata in-memory — see
+            // `count_airing` for the rule (any future-dated airing schedule entry).
+            let mut unique_ids: Vec<Id> = Vec::new();
+            let mut seen: std::collections::HashSet<u64> = std::collections::HashSet::new();
+            for (calendar, _) in &calendars {
+                for raw_id in &calendar.item_ids {
+                    if let Some(id) = Id::new(i64::from(*raw_id)) {
+                        if seen.insert(id.to_int()) {
+                            unique_ids.push(id);
+                        }
+                    }
+                }
+            }
+
+            let items: Vec<Item> = if unique_ids.is_empty() {
+                Vec::new()
+            } else {
+                anilist.get_items(unique_ids).await
+            };
+            let schedules_by_id: HashMap<u64, &[Schedule]> = items
+                .iter()
+                .map(|item| (item.id.to_int(), item.airing_schedule.as_slice()))
+                .collect();
+
+            #[allow(clippy::cast_sign_loss)]
+            let now_secs = Utc::now().timestamp().max(0) as u64;
+
             let mut results: Vec<PageCalendar> = Vec::new();
 
             for (calendar, recent_item_ids) in calendars {
                 if let Some(id) = Id::new(calendar.id.into()) {
+                    let calendar_item_ids: Vec<Id> = calendar
+                        .item_ids
+                        .iter()
+                        .filter_map(|raw| Id::new(i64::from(*raw)))
+                        .collect();
+                    let airing_count =
+                        count_airing(&calendar_item_ids, &schedules_by_id, now_secs);
+
                     results.push(PageCalendar {
                         id,
                         item_count: calendar.item_ids.len(),
+                        airing_count,
                         name: calendar.name,
                         subscription_token: calendar.subscription_token,
                         created_at: calendar.created_at,
@@ -796,6 +922,7 @@ mod integration_tests {
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
                 .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(web::Data::new(Anilist::default()))
                 .app_data(jwt_data())
                 .service(get_calendars),
         )
@@ -819,6 +946,7 @@ mod integration_tests {
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
                 .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(web::Data::new(Anilist::default()))
                 .app_data(jwt_data())
                 .service(get_calendars),
         )
@@ -843,6 +971,7 @@ mod integration_tests {
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
                 .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(web::Data::new(Anilist::default()))
                 .app_data(jwt_data())
                 .service(get_calendars),
         )
