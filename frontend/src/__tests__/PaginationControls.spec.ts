@@ -14,7 +14,7 @@ describe('PaginationControls', () => {
       props: { page: 1, page_size: 6, total: 3, total_pages: 1 },
       ...mountOpts
     })
-    expect(wrapper.find('.join').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="pagination"]').exists()).toBe(false)
   })
 
   it('renders page buttons', () => {

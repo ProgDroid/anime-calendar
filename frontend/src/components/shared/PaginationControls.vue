@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const { t } = useI18n()
 
@@ -32,41 +33,43 @@ const onPageChange = (newPage: number) => {
 </script>
 
 <template>
-  <div v-if="total_pages > 1">
-    <div class="join mt-8 flex justify-center">
-      <button
-        class="join-item btn"
+  <div v-if="total_pages > 1" data-testid="pagination">
+    <div class="mt-8 flex justify-center gap-1">
+      <UiButton
+        variant="ghost"
+        size="sm"
         :disabled="page === 1"
         @click="onPageChange(page - 1)"
       >
         {{ t('calendars.pagePrevious') }}
-      </button>
+      </UiButton>
 
-      <button
+      <UiButton
         v-for="p in paginationRange"
         :key="p"
-        class="join-item btn"
-        :class="{ 'btn-primary': p === page }"
+        :variant="p === page ? 'primary' : 'ghost'"
+        size="sm"
         @click="onPageChange(p)"
       >
         {{ p }}
-      </button>
+      </UiButton>
 
-      <button
-        class="join-item btn"
+      <UiButton
+        variant="ghost"
+        size="sm"
         :disabled="page === total_pages"
         @click="onPageChange(page + 1)"
       >
         {{ t('calendars.pageNext') }}
-      </button>
+      </UiButton>
     </div>
 
-    <div class="text-center mt-4 text-sm text-base-content/60">
+    <div class="text-center mt-4 text-sm text-fg-2">
       {{
         t('calendars.paginationText', {
           first: page_size * (page - 1) + 1,
           last: Math.min(page_size * page, total),
-          total
+          total,
         })
       }}
     </div>
