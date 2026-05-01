@@ -1390,6 +1390,14 @@ Tracked here so they survive the plan close-out.
 
 **Sketch:** Either extend `PageCalendar` with an `airing_count` field computed by joining against the existing `airing_schedule` cached data, or compute client-side after `recent_item_ids` resolution. Backend-side is preferred.
 
+### FU-3: UiButton success/warning variants + UiRadio primitive
+
+**Why:** C6 reskin had to drop `btn-success` (green submit on settings form) and `btn-warning` (yellow Clear on items list) because `UiButton` only ships `primary | secondary | ghost | danger`. Both call sites currently use `primary` (settings submit) and `secondary` (items clear), losing the original semantic colour. Same trip surfaced that radio inputs are duplicated 6 times across `CalendarSettingsForm` and `ItemSearchPanel` with hand-rolled `accent-accent-1` styling.
+
+**Sketch:**
+- Add `success` and `warning` variants to `UiButton`'s `tv()` map using `bg-success`/`bg-warning` tokens (already defined in `tokens.css`). Re-thread `CalendarSettingsForm` submit and `CalendarItemsList` clear.
+- Extract `UiRadio.vue` with a `{ modelValue, value, label }` prop surface. Replace the 6 hand-rolled radios in `CalendarSettingsForm` (3 language options) and `ItemSearchPanel` (3 media-type options).
+
 ### FU-2: Schedule view polish (post-C5)
 
 **Why:** C5 reviewer flagged several UX/quality items deferred as non-blocking:
