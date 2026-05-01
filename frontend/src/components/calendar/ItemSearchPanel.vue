@@ -78,7 +78,7 @@ const handleSearch = () => {
       {{ loading ? t('calendar.fetchingItems') : t('calendar.fetchItems') }}
     </UiButton>
 
-    <div v-if="searchError" class="text-sm text-danger bg-danger/10 border border-danger/30 rounded-md px-3 py-2">{{ searchError }}</div>
+    <div v-if="searchError" class="text-sm text-danger-text bg-danger/10 border border-danger/30 rounded-md px-3 py-2">{{ searchError }}</div>
 
     <!-- Results list -->
     <h3 class="font-semibold text-fg-1">{{ t('calendar.fetchedItems') }}</h3>

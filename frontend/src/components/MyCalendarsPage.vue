@@ -2,7 +2,7 @@
   <div class="min-h-[calc(100vh-6.1rem)] bg-bg-0 text-fg-1 px-6 py-8 sm:px-10 sm:py-10">
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-4">
       <div class="min-w-0 sm:flex-1">
-        <p class="text-xs uppercase tracking-wider text-fg-3">{{ $t('calendars.yourLibrary') }}</p>
+        <p class="text-xs uppercase tracking-wider text-fg-2">{{ $t('calendars.yourLibrary') }}</p>
         <h1 class="font-display text-3xl sm:text-4xl text-fg-1 mt-1">{{ $t('calendars.title') }}</h1>
       </div>
       <UiButton
@@ -18,7 +18,7 @@
     <div
       v-if="!loading && !error && calendars.length > 0"
       data-testid="my-calendars-stats"
-      class="flex flex-wrap items-center gap-3 mt-4 text-sm text-fg-3"
+      class="flex flex-wrap items-center gap-3 mt-4 text-sm text-fg-2"
     >
       <span>{{ $t('calendars.stats.calendarCount', { count: pagination.total }) }}</span>
       <span aria-hidden="true">·</span>
@@ -39,7 +39,7 @@
       v-if="error"
       data-testid="my-calendars-error"
       role="alert"
-      class="mt-6 rounded-md border border-danger/40 bg-danger/10 text-danger px-4 py-3 text-sm"
+      class="mt-6 rounded-md border border-danger/40 bg-danger/10 text-danger-text px-4 py-3 text-sm"
     >
       {{ error }}
     </div>
@@ -47,7 +47,7 @@
     <div
       v-else-if="loading"
       data-testid="my-calendars-loading"
-      class="mt-6 text-sm text-fg-3"
+      class="mt-6 text-sm text-fg-2"
     >
       {{ $t('calendars.loading') }}
     </div>

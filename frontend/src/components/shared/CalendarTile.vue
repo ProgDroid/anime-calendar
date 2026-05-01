@@ -113,7 +113,7 @@ const overflowCount = computed(() => {
         <span data-testid="calendar-tile-name" class="font-medium text-fg-1 truncate">
           {{ calendar.name }}
         </span>
-        <div class="flex items-center gap-2 text-sm text-fg-3">
+        <div class="flex items-center gap-2 text-sm text-fg-2">
           <span data-testid="calendar-tile-count">
             {{ t('calendars.tile.itemCount', { count: calendar.item_count }) }}
           </span>
@@ -148,11 +148,14 @@ const overflowCount = computed(() => {
         <IconEdit class="w-3 h-3" /> {{ $t('calendars.edit') }}
       </UiButton>
       <UiMenu align="right">
-        <template #trigger>
+        <template #trigger="{ open: menuOpen, panelId }">
           <UiButton
             data-testid="calendar-tile-export-trigger"
             variant="secondary"
             size="sm"
+            aria-haspopup="menu"
+            :aria-expanded="menuOpen"
+            :aria-controls="panelId"
           >
             <IconDownload class="w-3 h-3" /> {{ $t('calendars.export') }}
             <IconDown class="w-2.5 h-2.5" />
@@ -160,6 +163,7 @@ const overflowCount = computed(() => {
         </template>
         <button
           data-testid="calendar-tile-export-ics"
+          role="menuitem"
           class="flex items-center gap-2 px-3 py-2 text-sm text-fg-1 hover:bg-bg-2 rounded text-left"
           @click="emit('export-ics')"
         >
@@ -167,6 +171,7 @@ const overflowCount = computed(() => {
         </button>
         <button
           data-testid="calendar-tile-copy-link"
+          role="menuitem"
           class="flex items-center gap-2 px-3 py-2 text-sm text-fg-1 hover:bg-bg-2 rounded text-left"
           @click="emit('copy-link')"
         >
@@ -174,6 +179,7 @@ const overflowCount = computed(() => {
         </button>
         <button
           data-testid="calendar-tile-open-google"
+          role="menuitem"
           class="flex items-center gap-2 px-3 py-2 text-sm text-fg-1 hover:bg-bg-2 rounded text-left"
           @click="emit('open-google')"
         >
@@ -194,18 +200,22 @@ const overflowCount = computed(() => {
     <!-- Mobile kebab -->
     <div class="flex sm:hidden items-center justify-end px-4 pb-4">
       <UiMenu align="right">
-        <template #trigger>
+        <template #trigger="{ open: menuOpen, panelId }">
           <UiButton
             data-testid="calendar-tile-kebab-trigger"
             variant="ghost"
             size="sm"
             :aria-label="$t('calendars.tile.moreActions')"
+            aria-haspopup="menu"
+            :aria-expanded="menuOpen"
+            :aria-controls="panelId"
           >
             <IconMoreVertical class="w-4 h-4" />
           </UiButton>
         </template>
         <button
           data-testid="calendar-tile-kebab-edit"
+          role="menuitem"
           class="flex items-center gap-2 px-3 py-2 text-sm text-fg-1 hover:bg-bg-2 rounded text-left"
           @click="emit('edit')"
         >
@@ -213,6 +223,7 @@ const overflowCount = computed(() => {
         </button>
         <button
           data-testid="calendar-tile-kebab-export-ics"
+          role="menuitem"
           class="flex items-center gap-2 px-3 py-2 text-sm text-fg-1 hover:bg-bg-2 rounded text-left"
           @click="emit('export-ics')"
         >
@@ -220,6 +231,7 @@ const overflowCount = computed(() => {
         </button>
         <button
           data-testid="calendar-tile-kebab-copy-link"
+          role="menuitem"
           class="flex items-center gap-2 px-3 py-2 text-sm text-fg-1 hover:bg-bg-2 rounded text-left"
           @click="emit('copy-link')"
         >
@@ -227,6 +239,7 @@ const overflowCount = computed(() => {
         </button>
         <button
           data-testid="calendar-tile-kebab-open-google"
+          role="menuitem"
           class="flex items-center gap-2 px-3 py-2 text-sm text-fg-1 hover:bg-bg-2 rounded text-left"
           @click="emit('open-google')"
         >
@@ -234,7 +247,8 @@ const overflowCount = computed(() => {
         </button>
         <button
           data-testid="calendar-tile-kebab-delete"
-          class="flex items-center gap-2 px-3 py-2 text-sm text-danger hover:bg-bg-2 rounded text-left"
+          role="menuitem"
+          class="flex items-center gap-2 px-3 py-2 text-sm text-danger-text hover:bg-bg-2 rounded text-left"
           @click="emit('delete')"
         >
           <IconTrash class="w-3 h-3" /> {{ $t('calendars.delete') }}

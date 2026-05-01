@@ -39,4 +39,48 @@ describe('UiMenu', () => {
     expect(wrapper.find('[data-testid="i1"]').exists()).toBe(false);
     wrapper.unmount();
   });
+
+  it('ArrowDown moves focus to next item; ArrowUp wraps to last', async () => {
+    const wrapper = mount(UiMenu, { slots, attachTo: document.body });
+    await wrapper.find('[data-testid="t"]').trigger('click');
+    await nextTick();
+    await nextTick();
+    const i1 = wrapper.find('[data-testid="i1"]').element as HTMLElement;
+    const i2 = wrapper.find('[data-testid="i2"]').element as HTMLElement;
+    expect(document.activeElement).toBe(i1);
+    await wrapper.trigger('keydown', { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(i2);
+    await wrapper.trigger('keydown', { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(i1);
+    await wrapper.trigger('keydown', { key: 'ArrowUp' });
+    expect(document.activeElement).toBe(i2);
+    await wrapper.trigger('keydown', { key: 'Home' });
+    expect(document.activeElement).toBe(i1);
+    await wrapper.trigger('keydown', { key: 'End' });
+    expect(document.activeElement).toBe(i2);
+    wrapper.unmount();
+  });
+
+  it('exposes panelId via trigger slot props for aria-controls', async () => {
+    const triggerSlot = `
+      <template #trigger="{ open, panelId }">
+        <button data-testid="t" :aria-expanded="open" :aria-controls="panelId">open</button>
+      </template>
+    `;
+    const wrapper = mount(UiMenu, {
+      slots: {
+        ...slots,
+        trigger: triggerSlot,
+      },
+      attachTo: document.body,
+    });
+    const trigger = wrapper.find('[data-testid="t"]');
+    expect(trigger.attributes('aria-expanded')).toBe('false');
+    expect(trigger.attributes('aria-controls')).toBeTruthy();
+    const panelId = trigger.attributes('aria-controls')!;
+    await trigger.trigger('click');
+    expect(trigger.attributes('aria-expanded')).toBe('true');
+    expect(document.getElementById(panelId)).not.toBeNull();
+    wrapper.unmount();
+  });
 });

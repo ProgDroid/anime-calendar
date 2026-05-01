@@ -64,17 +64,28 @@
   --fg-2: oklch(64% 0.010 282);
   --fg-3: oklch(48% 0.012 284);
 
-  --accent-1:      oklch(72% 0.18 var(--accent-h1));
-  --accent-1-fg:   oklch(18% 0.04 var(--accent-h1));
-  --accent-1-soft: oklch(72% 0.18 var(--accent-h1) / 0.18);
-  --accent-1-glow: oklch(72% 0.18 var(--accent-h1) / 0.28);
-  --accent-2:      oklch(70% 0.17 var(--accent-h2));
-  --accent-2-fg:   oklch(18% 0.04 var(--accent-h2));
-  --accent-2-soft: oklch(70% 0.17 var(--accent-h2) / 0.18);
+  /* --accent-1-l: lightness for accent-1 surfaces (per-hue override below).
+     --accent-1-text-l: lightness for accent-1 used as text color on neutral bg.
+     Splitting these lets buttons stay vibrant while text on bg-0 hits AA 4.5:1. */
+  --accent-1-l: 72%;
+  --accent-1-text-l: 78%;
+
+  --accent-1:        oklch(var(--accent-1-l) 0.18 var(--accent-h1));
+  --accent-1-fg:     oklch(18% 0.04 var(--accent-h1));
+  --accent-1-text:   oklch(var(--accent-1-text-l) 0.18 var(--accent-h1));
+  --accent-1-soft:   oklch(var(--accent-1-l) 0.18 var(--accent-h1) / 0.18);
+  --accent-1-glow:   oklch(var(--accent-1-l) 0.18 var(--accent-h1) / 0.28);
+  --accent-2:        oklch(70% 0.17 var(--accent-h2));
+  --accent-2-fg:     oklch(18% 0.04 var(--accent-h2));
+  --accent-2-soft:   oklch(70% 0.17 var(--accent-h2) / 0.18);
 
   --success: oklch(74% 0.16 155);
   --warning: oklch(80% 0.15 80);
   --danger:  oklch(66% 0.20 25);
+  /* --danger-text: used for error microcopy (form errors, eyebrows).
+     Distinct from --danger so we keep punchy danger surfaces but still
+     pass 4.5:1 for body text on bg-0/bg-1. */
+  --danger-text: oklch(74% 0.20 25);
   --scrim:   rgba(0, 0, 0, 0.55);
 }
 
@@ -93,17 +104,26 @@
   --fg-2: oklch(50% 0.014 280);
   --fg-3: oklch(64% 0.014 280);
 
-  --accent-1:      oklch(60% 0.20 var(--accent-h1));
-  --accent-1-fg:   oklch(98% 0.01 var(--accent-h1));
-  --accent-1-soft: oklch(60% 0.20 var(--accent-h1) / 0.12);
-  --accent-1-glow: oklch(60% 0.20 var(--accent-h1) / 0.20);
-  --accent-2:      oklch(56% 0.20 var(--accent-h2));
-  --accent-2-fg:   oklch(98% 0.01 var(--accent-h2));
-  --accent-2-soft: oklch(56% 0.20 var(--accent-h2) / 0.10);
+  /* See dark-theme block for the design rationale.
+     Light theme: accent-1 surfaces darkened so accent-1-fg (white) clears 4.5:1.
+     accent-1-text is darker still for text-of-accent on bg-0. Per-hue overrides
+     under [data-accent="..."] handle hues that need extra darkening (matcha, citron). */
+  --accent-1-l: 52%;
+  --accent-1-text-l: 45%;
 
-  --success: oklch(58% 0.16 155);
-  --warning: oklch(64% 0.16 80);
-  --danger:  oklch(58% 0.22 25);
+  --accent-1:        oklch(var(--accent-1-l) 0.20 var(--accent-h1));
+  --accent-1-fg:     oklch(98% 0.01 var(--accent-h1));
+  --accent-1-text:   oklch(var(--accent-1-text-l) 0.20 var(--accent-h1));
+  --accent-1-soft:   oklch(var(--accent-1-l) 0.20 var(--accent-h1) / 0.12);
+  --accent-1-glow:   oklch(var(--accent-1-l) 0.20 var(--accent-h1) / 0.20);
+  --accent-2:        oklch(56% 0.20 var(--accent-h2));
+  --accent-2-fg:     oklch(98% 0.01 var(--accent-h2));
+  --accent-2-soft:   oklch(56% 0.20 var(--accent-h2) / 0.10);
+
+  --success: oklch(48% 0.16 155);
+  --warning: oklch(54% 0.16 80);
+  --danger:  oklch(50% 0.22 25);
+  --danger-text: oklch(45% 0.20 25);
   --scrim:   rgba(8, 6, 18, 0.35);
 }
 
@@ -119,11 +139,23 @@
 .font-mono    { font: var(--type-mono); letter-spacing: -0.01em; }
 .italic-display { font-family: var(--font-serif); font-style: italic; font-weight: 400; }
 
-/* ===== Accent hue overrides ===== */
+/* ===== Accent hue overrides =====
+   Lightness stays in --accent-1-l / --accent-1-text-l (theme-scoped above).
+   Per-hue overrides darken further for hues where the L* perceptually trends
+   bright (yellow-greens / yellows) so AA 4.5:1 is met. Light-theme only. */
 [data-accent="iris"]   { --accent-h1: 285; --accent-h2: 28;  }
 [data-accent="matcha"] { --accent-h1: 145; --accent-h2: 80;  }
 [data-accent="sakura"] { --accent-h1: 350; --accent-h2: 285; }
 [data-accent="citron"] { --accent-h1: 80;  --accent-h2: 200; }
+
+[data-theme='light'][data-accent="matcha"] {
+  --accent-1-l: 44%;
+  --accent-1-text-l: 40%;
+}
+[data-theme='light'][data-accent="citron"] {
+  --accent-1-l: 47%;
+  --accent-1-text-l: 42%;
+}
 
 /* ===== Self-hosted fonts ===== */
 @font-face {

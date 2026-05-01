@@ -4,6 +4,11 @@
     "home": "Início",
     "myCalendars": "Meus Calendários",
     "myAccount": "Minha Conta",
+    "skipToMain": "Saltar para o conteúdo principal",
+    "nav": {
+      "primary": "Principal",
+      "mobilePrimary": "Móvel principal"
+    },
     "toggleNavigation": "Alternar menu de navegação",
     "toggleTheme": "Alternar tema",
     "userMenu": "Menu do utilizador",
@@ -127,6 +132,7 @@
   },
   "calendar": {
     "tabs": {
+      "label": "Vistas do calendário",
       "editor": "Editor",
       "schedule": "Agenda"
     },
@@ -252,6 +258,7 @@
   },
   "account": {
     "tabs": {
+      "label": "Conta",
       "profile": "Perfil",
       "preferences": "Preferências",
       "password": "Palavra Passe",
@@ -304,6 +311,7 @@
     "episode": "Ep. {n}",
     "noEntries": "Sem episódios",
     "prev": "Semana anterior",
-    "next": "Próxima semana"
+    "next": "Próxima semana",
+    "weekOf": "Semana {week} de {year}"
   }
 }

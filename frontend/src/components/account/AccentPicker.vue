@@ -3,6 +3,7 @@ import { useI18n } from 'vue-i18n'
 import type { Accent } from '@/types/userSettings'
 import { PRO_ACCENTS } from '@/constants/proAccents'
 import UiChip from '@/components/ui/UiChip.vue'
+import IconCheck from '@/components/ui/icons/IconCheck.vue'
 
 defineOptions({ name: 'AccentPicker' })
 
@@ -32,7 +33,15 @@ function ariaLabel(accent: Accent): string {
       :aria-pressed="modelValue === accent"
       @click="$emit('update:modelValue', accent)"
     >
-      <span class="accent-swatch-dot w-10 h-10 rounded-full" />
+      <span class="accent-swatch-dot w-10 h-10 rounded-full relative">
+        <span
+          v-if="modelValue === accent"
+          class="absolute inset-0 flex items-center justify-center text-bg-0 [&_svg]:w-5 [&_svg]:h-5"
+          aria-hidden="true"
+        >
+          <IconCheck />
+        </span>
+      </span>
       <span class="text-sm font-medium text-fg-1">
         {{ t(`account.preferences.accents.${accent}`) }}
       </span>

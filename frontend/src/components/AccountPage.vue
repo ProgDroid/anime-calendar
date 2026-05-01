@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import api from '@/config/api'
@@ -12,7 +12,6 @@ import IconTrash from '@/components/ui/icons/IconTrash.vue'
 defineOptions({ name: 'AccountPage' })
 
 const route = useRoute()
-const router = useRouter()
 const { t } = useI18n()
 const authStore = useAuthStore()
 
@@ -54,10 +53,14 @@ onMounted(async () => {
 
 <template>
   <div class="grid grid-cols-1 md:grid-cols-[260px_1fr] gap-6 p-4">
-    <nav class="flex md:flex-col gap-1" data-testid="account-sidebar">
+    <nav
+      class="flex md:flex-col gap-1"
+      data-testid="account-sidebar"
+      :aria-label="t('account.tabs.label')"
+    >
       <div class="flex items-center gap-3 px-3 py-2 mb-4 w-full" data-testid="account-sidebar-user">
         <div
-          class="w-12 h-12 rounded-full flex items-center justify-center bg-accent-1/15 text-accent-1 font-semibold text-base shrink-0 select-none"
+          class="w-12 h-12 rounded-full flex items-center justify-center bg-accent-1/15 text-accent-1-text font-semibold text-base shrink-0 select-none"
           aria-hidden="true"
         >
           {{ initials }}
@@ -71,18 +74,18 @@ onMounted(async () => {
           </div>
         </div>
       </div>
-      <button
+      <RouterLink
         v-for="tab in tabs"
         :key="tab.name"
+        :to="{ name: tab.name }"
         :data-testid="tab.testid"
-        type="button"
-        class="flex items-center gap-2.5 px-3 py-2 rounded-md w-full text-left transition [&_svg]:w-3.5 [&_svg]:h-3.5"
+        :aria-current="route.name === tab.name ? 'page' : undefined"
+        class="flex items-center gap-2.5 px-3 py-2 rounded-md w-full text-left transition [&_svg]:w-3.5 [&_svg]:h-3.5 focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2"
         :class="route.name === tab.name ? 'bg-bg-2 text-fg-1 font-semibold' : 'text-fg-1 font-medium hover:bg-bg-3'"
-        @click="router.push({ name: tab.name })"
       >
         <component :is="tab.icon" />
         <span>{{ tab.label }}</span>
-      </button>
+      </RouterLink>
     </nav>
     <main>
       <router-view />

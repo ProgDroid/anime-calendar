@@ -7,7 +7,11 @@ defineOptions({ name: 'UiToastHost' })
 
 <template>
   <Teleport to="body">
-    <div class="fixed bottom-4 left-4 z-50 space-y-2 w-full max-w-xs">
+    <div
+      class="fixed bottom-4 left-4 z-50 space-y-2 w-full max-w-xs"
+      aria-live="polite"
+      aria-atomic="false"
+    >
       <UiToast
         v-for="t in activeToasts"
         :key="t.id"

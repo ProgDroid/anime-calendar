@@ -15,7 +15,7 @@ const chip = tv({
   variants: {
     variant: {
       default: 'bg-bg-2 text-fg-2',
-      anime: 'bg-accent-1-soft text-accent-1',
+      anime: 'bg-accent-1-soft text-accent-1-text',
       manga: 'bg-accent-2/20 text-accent-2',
       success: 'bg-success/20 text-success',
       warning: 'bg-warning/20 text-warning',

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { createRouter, createMemoryHistory } from 'vue-router'
@@ -25,7 +25,7 @@ function makeRouter() {
 }
 
 describe('CalendarPage (shell)', () => {
-  it('renders the segmented tabs', async () => {
+  it('renders the segmented tabs as RouterLinks with aria-current', async () => {
     const router = makeRouter()
     router.push('/calendar/42')
     await router.isReady()
@@ -36,6 +36,10 @@ describe('CalendarPage (shell)', () => {
     expect(wrapper.find('[data-testid="calendar-tabs"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Editor')
     expect(wrapper.text()).toContain('Schedule')
+    const links = wrapper.find('[data-testid="calendar-tabs"]').findAll('a')
+    expect(links).toHaveLength(2)
+    expect(links[0]!.attributes('aria-current')).toBe('page')
+    expect(links[1]!.attributes('aria-current')).toBeUndefined()
   })
 
   it('starts on editor tab and renders the editor outlet', async () => {
@@ -50,32 +54,30 @@ describe('CalendarPage (shell)', () => {
     expect(wrapper.find('[data-testid="schedule-stub"]').exists()).toBe(false)
   })
 
-  it('switching tab pushes to /calendar/:id/schedule', async () => {
+  it('clicking schedule link navigates to /calendar/:id/schedule', async () => {
     const router = makeRouter()
     router.push('/calendar/42')
     await router.isReady()
-    const pushSpy = vi.spyOn(router, 'push')
     const wrapper = mount(CalendarPage, {
       global: { plugins: [i18n, router, createPinia()] },
     })
     await flushPromises()
-    const buttons = wrapper.find('[data-testid="calendar-tabs"]').findAll('button')
-    // [editor, schedule]
-    await buttons[1]!.trigger('click')
-    expect(pushSpy).toHaveBeenCalledWith('/calendar/42/schedule')
+    const links = wrapper.find('[data-testid="calendar-tabs"]').findAll('a')
+    await links[1]!.trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/calendar/42/schedule')
   })
 
-  it('switching back to editor from schedule pushes to /calendar/:id', async () => {
+  it('aria-current swaps to schedule link when on schedule route', async () => {
     const router = makeRouter()
     router.push('/calendar/42/schedule')
     await router.isReady()
-    const pushSpy = vi.spyOn(router, 'push')
     const wrapper = mount(CalendarPage, {
       global: { plugins: [i18n, router, createPinia()] },
     })
     await flushPromises()
-    const buttons = wrapper.find('[data-testid="calendar-tabs"]').findAll('button')
-    await buttons[0]!.trigger('click')
-    expect(pushSpy).toHaveBeenCalledWith('/calendar/42')
+    const links = wrapper.find('[data-testid="calendar-tabs"]').findAll('a')
+    expect(links[0]!.attributes('aria-current')).toBeUndefined()
+    expect(links[1]!.attributes('aria-current')).toBe('page')
   })
 })

@@ -61,7 +61,7 @@ onMounted(async () => {
           <router-link
             to="/my-calendars"
             data-testid="verify-go-to-calendars"
-            class="text-accent-1 hover:underline text-sm"
+            class="text-accent-1-text hover:underline text-sm"
           >
             {{ t('app.myCalendars') }}
           </router-link>
@@ -77,7 +77,7 @@ onMounted(async () => {
           <router-link
             to="/login"
             data-testid="verify-back-to-login"
-            class="text-accent-1 hover:underline text-sm"
+            class="text-accent-1-text hover:underline text-sm"
           >
             {{ t('auth.verifyEmail.confirm.loginLink') }}
           </router-link>

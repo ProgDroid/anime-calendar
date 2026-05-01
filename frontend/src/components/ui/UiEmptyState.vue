@@ -9,7 +9,7 @@ defineOptions({ name: 'UiEmptyState' })
       <slot name="illustration" />
     </div>
     <h2 data-testid="empty-state-title" class="text-2xl font-display text-fg-1">{{ title }}</h2>
-    <p data-testid="empty-state-body" class="text-base text-fg-3 max-w-prose">{{ body }}</p>
+    <p data-testid="empty-state-body" class="text-base text-fg-2 max-w-prose">{{ body }}</p>
     <div v-if="$slots.action">
       <slot name="action" />
     </div>

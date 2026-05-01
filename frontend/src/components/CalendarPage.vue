@@ -1,39 +1,46 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, RouterLink } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import UiSegmented from '@/components/ui/UiSegmented.vue'
 
 defineOptions({ name: 'CalendarPage' })
 
 const route = useRoute()
-const router = useRouter()
 const { t } = useI18n()
 
-const tab = computed<'editor' | 'schedule'>(() =>
-  route.name === 'calendar.schedule' ? 'schedule' : 'editor',
-)
-
-function setTab(next: string) {
-  if (next !== 'editor' && next !== 'schedule') return
-  if (next === tab.value) return
-  const id = route.params.id
-  router.push(next === 'editor' ? `/calendar/${id}` : `/calendar/${id}/schedule`)
-}
+const calendarId = computed(() => route.params.id as string)
+const isSchedule = computed(() => route.name === 'calendar.schedule')
 </script>
 
 <template>
   <div class="flex flex-col gap-4 p-4">
     <header class="flex items-center justify-between">
-      <UiSegmented
-        :model-value="tab"
-        :options="[
-          { value: 'editor', label: t('calendar.tabs.editor') },
-          { value: 'schedule', label: t('calendar.tabs.schedule') },
-        ]"
+      <nav
+        :aria-label="t('calendar.tabs.label')"
         data-testid="calendar-tabs"
-        @update:model-value="setTab"
-      />
+        class="inline-flex rounded-md bg-bg-2 p-1 gap-1"
+      >
+        <RouterLink
+          :to="`/calendar/${calendarId}`"
+          :aria-current="!isSchedule ? 'page' : undefined"
+          :class="[
+            'h-8 px-3 text-sm rounded-sm transition-all duration-[var(--d-2)] inline-flex items-center focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2',
+            !isSchedule ? 'bg-bg-1 text-fg-1' : 'text-fg-2 hover:text-fg-1',
+          ]"
+        >
+          {{ t('calendar.tabs.editor') }}
+        </RouterLink>
+        <RouterLink
+          :to="`/calendar/${calendarId}/schedule`"
+          :aria-current="isSchedule ? 'page' : undefined"
+          :class="[
+            'h-8 px-3 text-sm rounded-sm transition-all duration-[var(--d-2)] inline-flex items-center focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2',
+            isSchedule ? 'bg-bg-1 text-fg-1' : 'text-fg-2 hover:text-fg-1',
+          ]"
+        >
+          {{ t('calendar.tabs.schedule') }}
+        </RouterLink>
+      </nav>
     </header>
     <router-view />
   </div>

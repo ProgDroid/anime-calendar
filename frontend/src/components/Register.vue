@@ -66,10 +66,14 @@ const handleSubmit = async (e: Event) => {
       <GoogleLoginButton />
     </div>
 
-    <div class="flex items-center gap-3 text-fg-3 text-sm">
-      <span class="flex-1 h-px bg-line" />
+    <div
+      class="flex items-center gap-3 text-fg-2 text-sm"
+      role="separator"
+      aria-orientation="horizontal"
+    >
+      <span class="flex-1 h-px bg-line" aria-hidden="true" />
       <span>{{ t('auth.login.or') }}</span>
-      <span class="flex-1 h-px bg-line" />
+      <span class="flex-1 h-px bg-line" aria-hidden="true" />
     </div>
 
     <form data-testid="register-form" class="flex flex-col gap-4" @submit="handleSubmit">
@@ -118,7 +122,7 @@ const handleSubmit = async (e: Event) => {
             type="button"
             :aria-label="passwordVisible ? t('auth.login.hidePassword') : t('auth.login.showPassword')"
             data-testid="register-password-toggle"
-            class="cursor-pointer hover:text-fg-1"
+            class="cursor-pointer hover:text-fg-1 inline-flex items-center justify-center w-9 h-9 rounded-sm focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2"
             @click="passwordVisible = !passwordVisible"
           >
             <IconEye />
@@ -144,7 +148,7 @@ const handleSubmit = async (e: Event) => {
             type="button"
             :aria-label="confirmPasswordVisible ? t('auth.login.hidePassword') : t('auth.login.showPassword')"
             data-testid="register-confirm-toggle"
-            class="cursor-pointer hover:text-fg-1"
+            class="cursor-pointer hover:text-fg-1 inline-flex items-center justify-center w-9 h-9 rounded-sm focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2"
             @click="confirmPasswordVisible = !confirmPasswordVisible"
           >
             <IconEye />
@@ -163,7 +167,7 @@ const handleSubmit = async (e: Event) => {
         {{ t('auth.register.submit') }}
       </UiButton>
 
-      <div v-if="error" data-testid="register-error" class="text-sm text-danger" role="alert">
+      <div v-if="error" data-testid="register-error" class="text-sm text-danger-text" role="alert">
         {{ error }}
       </div>
     </form>
@@ -173,7 +177,7 @@ const handleSubmit = async (e: Event) => {
       <router-link
         to="/login"
         data-testid="register-login-link"
-        class="text-accent-1 hover:underline ml-1"
+        class="text-accent-1-text hover:underline ml-1"
       >
         {{ t('auth.login.submit') }}
       </router-link>

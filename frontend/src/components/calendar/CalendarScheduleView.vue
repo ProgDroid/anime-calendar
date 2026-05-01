@@ -20,6 +20,12 @@ const week = computed(() => (route.query.week as string) || formatIsoWeek(new Da
 const calendarId = computed(() => Number(route.params.id))
 const { days } = useWeekRange(week)
 
+const weekLabel = computed(() => {
+  const m = week.value.match(/^(\d{4})-W(\d{2})$/)
+  if (!m) return week.value
+  return t('schedule.weekOf', { year: m[1], week: m[2] })
+})
+
 const entriesByDay = ref<ScheduleByDay>({})
 
 let seq = 0
@@ -58,7 +64,12 @@ function isoDay(d: Date) {
       <UiButton variant="ghost" size="sm" data-testid="schedule-prev" @click="shiftWeek(-1)">
         {{ t('schedule.prev') }}
       </UiButton>
-      <span data-testid="schedule-week" class="font-medium text-fg-1">{{ week }}</span>
+      <time
+        data-testid="schedule-week"
+        class="font-medium text-fg-1"
+        :datetime="week"
+        :aria-label="weekLabel"
+      >{{ week }}</time>
       <UiButton variant="ghost" size="sm" data-testid="schedule-next" @click="shiftWeek(1)">
         {{ t('schedule.next') }}
       </UiButton>

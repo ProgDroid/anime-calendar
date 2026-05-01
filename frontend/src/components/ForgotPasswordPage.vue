@@ -80,7 +80,7 @@ async function handleSubmit(e: Event) {
       <router-link
         to="/login"
         data-testid="forgot-login-link"
-        class="text-accent-1 hover:underline"
+        class="text-accent-1-text hover:underline"
       >
         {{ t('auth.login.submit') }}
       </router-link>
