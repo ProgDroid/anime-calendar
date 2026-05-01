@@ -87,8 +87,8 @@ onMounted(async () => {
         <span>{{ tab.label }}</span>
       </RouterLink>
     </nav>
-    <main>
+    <section :aria-label="t('account.tabs.label')">
       <router-view />
-    </main>
+    </section>
   </div>
 </template>

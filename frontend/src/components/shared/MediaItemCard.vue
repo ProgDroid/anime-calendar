@@ -64,9 +64,9 @@ const posterUrl = computed<string | null>(() => {
             </div>
           </div>
           <div class="flex-grow min-w-0">
-            <h4 class="font-semibold line-clamp-1 text-fg-1" :class="compact ? 'text-sm' : ''">
+            <h3 class="font-semibold line-clamp-1 text-fg-1" :class="compact ? 'text-sm' : ''">
               {{ displayTitle }}
-            </h4>
+            </h3>
             <UiChip
               :variant="item.media_type === 'MANGA' ? 'manga' : 'anime'"
               :size="compact ? 'sm' : 'sm'"

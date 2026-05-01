@@ -50,9 +50,9 @@ const handleDelete = async () => {
     />
     <header class="mb-2">
       <p class="text-xs uppercase tracking-wider text-danger-text" data-testid="account-tab-eyebrow">{{ t('account.danger.eyebrow') }}</p>
-      <h2 class="text-3xl md:text-4xl font-medium tracking-tight mt-1 text-fg-1" data-testid="account-tab-heading">
+      <h1 class="text-3xl md:text-4xl font-medium tracking-tight mt-1 text-fg-1" data-testid="account-tab-heading">
         {{ t('account.danger.headingLead') }}<span class="font-display italic"> {{ t('account.danger.headingItalic') }}</span>
-      </h2>
+      </h1>
       <p class="text-sm text-fg-2 mt-2">{{ t('account.danger.subtitle') }}</p>
     </header>
     <div class="bg-bg-1 border border-danger/30 rounded-lg p-6 mt-6 flex flex-col gap-4">

@@ -14,6 +14,9 @@ const isSchedule = computed(() => route.name === 'calendar.schedule')
 
 <template>
   <div class="flex flex-col gap-4 p-4">
+    <h1 class="sr-only">
+      {{ isSchedule ? t('calendar.tabs.schedule') : t('calendar.tabs.editor') }}
+    </h1>
     <header class="flex items-center justify-between">
       <nav
         :aria-label="t('calendar.tabs.label')"

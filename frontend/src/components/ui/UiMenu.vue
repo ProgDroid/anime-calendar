@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onBeforeUnmount, useId, nextTick } from 'vue';
+import { ref, onBeforeUnmount, useId, nextTick, watch } from 'vue';
 import { tv } from 'tailwind-variants';
 
 defineOptions({ name: 'UiMenu' });
@@ -13,6 +13,20 @@ const open = ref(false);
 const root = ref<HTMLElement | null>(null);
 const panel = ref<HTMLElement | null>(null);
 const panelId = useId();
+let invoker: HTMLElement | null = null;
+
+watch(open, (next, prev) => {
+  if (next && !prev) {
+    const active = document.activeElement;
+    invoker = active instanceof HTMLElement ? active : null;
+  } else if (!next && prev) {
+    const target = invoker;
+    invoker = null;
+    if (target && document.contains(target)) {
+      void nextTick(() => target.focus());
+    }
+  }
+});
 
 const menu = tv({
   slots: {

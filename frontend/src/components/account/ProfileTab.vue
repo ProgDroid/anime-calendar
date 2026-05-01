@@ -75,9 +75,9 @@ onMounted(() => {
   <section class="flex flex-col max-w-xl">
     <header class="mb-2">
       <p class="text-xs uppercase tracking-wider text-fg-2" data-testid="account-tab-eyebrow">{{ t('account.profile.eyebrow') }}</p>
-      <h2 class="text-3xl md:text-4xl font-medium tracking-tight mt-1 text-fg-1" data-testid="account-tab-heading">
+      <h1 class="text-3xl md:text-4xl font-medium tracking-tight mt-1 text-fg-1" data-testid="account-tab-heading">
         {{ t('account.profile.headingLead') }}<span class="font-display italic"> {{ t('account.profile.headingItalic') }}</span>
-      </h2>
+      </h1>
       <p class="text-sm text-fg-2 mt-2">{{ t('account.profile.subtitle') }}</p>
     </header>
     <div v-if="loading" class="text-fg-2 mt-6">{{ t('userDetails.loading') }}</div>
