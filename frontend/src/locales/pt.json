@@ -231,6 +231,8 @@
       "fri": "Sex",
       "sat": "Sáb",
       "sun": "Dom"
-    }
+    },
+    "episode": "Ep. {n}",
+    "noEntries": "Sem episódios"
   }
 }

@@ -231,6 +231,8 @@
       "fri": "Fri",
       "sat": "Sat",
       "sun": "Sun"
-    }
+    },
+    "episode": "Ep. {n}",
+    "noEntries": "No entries"
   }
 }
