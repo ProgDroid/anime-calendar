@@ -107,8 +107,8 @@ describe('MyCalendarsPage', () => {
     const tiles = wrapper.findAll('[data-testid="calendar-tile-delete"]')
     expect(tiles.length).toBeGreaterThan(0)
     await tiles[0]!.trigger('click')
-    expect(wrapper.find('[data-testid="modal-box"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain(en.calendars.deleteConfirmTitle)
+    expect(document.body.querySelector('[data-testid="modal-box"]')).not.toBeNull()
+    expect(document.body.textContent).toContain(en.calendars.deleteConfirmTitle)
     wrapper.unmount()
   })
 
@@ -119,7 +119,7 @@ describe('MyCalendarsPage', () => {
 
     await wrapper.findAll('[data-testid="calendar-tile-delete"]')[0]!.trigger('click')
     await wrapper.vm.$nextTick()
-    await wrapper.find('[data-testid="confirm-btn"]').trigger('click')
+    ;(document.body.querySelector('[data-testid="confirm-btn"]') as HTMLElement).click()
     await flushPromises()
 
     expect(api.delete).toHaveBeenCalledWith('/calendars/1')

@@ -233,7 +233,8 @@ describe('MyCalendarsPage — delete failure', () => {
 
     const MyCalendarsPage = (await import('@/components/MyCalendarsPage.vue')).default
     const wrapper = mount(MyCalendarsPage, {
-      global: { plugins: [i18n, router, pinia] }
+      global: { plugins: [i18n, router, pinia] },
+      attachTo: document.body,
     })
     await flushPromises()
 
@@ -241,11 +242,11 @@ describe('MyCalendarsPage — delete failure', () => {
     await wrapper.findAll('[data-testid="calendar-tile-delete"]')[0]?.trigger('click')
     await wrapper.vm.$nextTick()
 
-    // Confirm the delete
-    const confirmBtn = wrapper.find('[data-testid="confirm-btn"]')
-    await confirmBtn?.trigger('click')
+    // Confirm the delete (modal teleports to body)
+    ;(document.body.querySelector('[data-testid="confirm-btn"]') as HTMLElement).click()
     await flushPromises()
 
     expect(wrapper.text()).toContain(en.calendars.deleteFailed)
+    wrapper.unmount()
   })
 })

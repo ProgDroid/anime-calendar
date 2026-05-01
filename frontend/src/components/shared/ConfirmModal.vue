@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import UiModal from '@/components/ui/UiModal.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const { t } = useI18n()
 
@@ -19,27 +21,30 @@ const emit = defineEmits<{
 </script>
 
 <template>
-  <dialog v-if="open" class="modal modal-open">
-    <div class="modal-box" data-testid="modal-box">
-      <h3 class="font-bold text-lg">{{ title }}</h3>
-      <p class="py-4">{{ message }}</p>
-      <div class="modal-action">
-        <button
+  <UiModal :open="open" :ariaLabel="title" @close="emit('cancel')">
+    <template #header>
+      <h3 class="font-semibold text-lg text-fg-1">{{ title }}</h3>
+    </template>
+    <div data-testid="modal-box">
+      <p class="text-fg-2">{{ message }}</p>
+    </div>
+    <template #footer>
+      <div class="flex justify-end gap-2">
+        <UiButton
           data-testid="cancel-btn"
-          class="btn btn-ghost"
+          variant="ghost"
           @click="emit('cancel')"
         >
           {{ cancelLabel ?? t('app.cancel') }}
-        </button>
-        <button
+        </UiButton>
+        <UiButton
           data-testid="confirm-btn"
-          :class="['btn', danger ? 'btn-error' : 'btn-primary']"
+          :variant="danger ? 'danger' : 'primary'"
           @click="emit('confirm')"
         >
           {{ confirmLabel ?? t('app.confirm') }}
-        </button>
+        </UiButton>
       </div>
-    </div>
-    <div class="modal-backdrop" @click="emit('cancel')" />
-  </dialog>
+    </template>
+  </UiModal>
 </template>
