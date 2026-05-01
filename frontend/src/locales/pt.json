@@ -251,7 +251,17 @@
       "password": "Palavra Passe",
       "danger": "Zona Perigosa"
     },
+    "profile": {
+      "eyebrow": "Perfil",
+      "headingLead": "Os seus",
+      "headingItalic": "detalhes",
+      "subtitle": "Atualize o que os outros veem — e o que usamos para a sua conta."
+    },
     "preferences": {
+      "eyebrow": "Preferências",
+      "headingLead": "Como",
+      "headingItalic": "se vê e se lê",
+      "subtitle": "Ajuste a experiência ao seu gosto.",
       "accents": {
         "coral": "Coral",
         "iris": "Íris",
@@ -261,6 +271,18 @@
       },
       "proChip": "Pro",
       "proNote": "Gratuito durante o acesso antecipado"
+    },
+    "password": {
+      "eyebrow": "Segurança",
+      "headingLead": "Alterar",
+      "headingItalic": "palavra-passe",
+      "subtitle": "Atualize as suas credenciais de início de sessão."
+    },
+    "danger": {
+      "eyebrow": "Zona perigosa",
+      "headingLead": "Eliminar",
+      "headingItalic": "conta",
+      "subtitle": "Isto é permanente e não pode ser desfeito."
     }
   },
   "schedule": {

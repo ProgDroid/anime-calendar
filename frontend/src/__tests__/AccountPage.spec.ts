@@ -28,6 +28,17 @@ function makeRouter() {
 }
 
 describe('AccountPage (shell)', () => {
+  it('renders sidebar avatar block with initials and placeholder fields when unauth', async () => {
+    const router = makeRouter()
+    router.push('/account/profile')
+    await router.isReady()
+    const wrapper = mount(AccountPage, { global: { plugins: [i18n, router, createPinia()] } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="account-sidebar-user"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="account-sidebar-name"]').text()).toBe('—')
+    expect(wrapper.find('[data-testid="account-sidebar-email"]').text()).toBe('—')
+  })
+
   it('renders all 4 sidebar tabs', async () => {
     const router = makeRouter()
     router.push('/account/profile')

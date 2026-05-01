@@ -48,7 +48,13 @@ const handleDelete = async () => {
       @confirm="handleDelete"
       @cancel="confirmDeleteOpen = false"
     />
-    <h2 class="text-lg font-medium text-fg-1">{{ t('userDetails.accountDeleteButton') }}</h2>
+    <header class="mb-2">
+      <p class="text-xs uppercase tracking-wider text-danger" data-testid="account-tab-eyebrow">{{ t('account.danger.eyebrow') }}</p>
+      <h2 class="text-3xl md:text-4xl font-medium tracking-tight mt-1 text-fg-1" data-testid="account-tab-heading">
+        {{ t('account.danger.headingLead') }}<span class="font-display italic"> {{ t('account.danger.headingItalic') }}</span>
+      </h2>
+      <p class="text-sm text-fg-2 mt-2">{{ t('account.danger.subtitle') }}</p>
+    </header>
     <p class="text-sm text-fg-2">{{ t('userDetails.accountDeleteWarning') }}</p>
     <div v-if="error" class="text-danger" data-testid="danger-error">{{ error }}</div>
     <div class="flex justify-end">

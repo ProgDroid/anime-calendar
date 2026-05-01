@@ -251,7 +251,17 @@
       "password": "Password",
       "danger": "Danger Zone"
     },
+    "profile": {
+      "eyebrow": "Profile",
+      "headingLead": "Your",
+      "headingItalic": "details",
+      "subtitle": "Update what other people see — and what we use for your account."
+    },
     "preferences": {
+      "eyebrow": "Preferences",
+      "headingLead": "How it",
+      "headingItalic": "looks & reads",
+      "subtitle": "Tune the experience to your taste.",
       "accents": {
         "coral": "Coral",
         "iris": "Iris",
@@ -261,6 +271,18 @@
       },
       "proChip": "Pro",
       "proNote": "Free during early access"
+    },
+    "password": {
+      "eyebrow": "Security",
+      "headingLead": "Change",
+      "headingItalic": "password",
+      "subtitle": "Update your sign-in credentials."
+    },
+    "danger": {
+      "eyebrow": "Danger zone",
+      "headingLead": "Delete",
+      "headingItalic": "account",
+      "subtitle": "This is permanent and cannot be undone."
     }
   },
   "schedule": {
