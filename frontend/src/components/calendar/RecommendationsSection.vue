@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
 import MediaItemCard from '@/components/shared/MediaItemCard.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const { t } = useI18n()
 
@@ -26,11 +27,11 @@ const getTitle = (item: Item): string => {
 </script>
 
 <template>
-  <div class="card bg-base-100 shadow-md mt-4">
-    <div class="card-body">
-      <h2 class="card-title">{{ t('calendar.recommendedItems') }}</h2>
+  <div class="bg-bg-1 border border-line rounded-lg shadow-sm mt-4">
+    <div class="p-4 flex flex-col gap-3">
+      <h2 class="font-semibold text-fg-1">{{ t('calendar.recommendedItems') }}</h2>
 
-      <div v-if="recommendations.length > 0" class="grid grid-cols-5 gap-2">
+      <div v-if="recommendations.length > 0" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
         <div
           v-for="item in recommendations"
           :key="item.id"
@@ -42,23 +43,25 @@ const getTitle = (item: Item): string => {
             :is-in-calendar="false"
             compact
           >
-            <button
+            <UiButton
               :data-testid="`add-reco-${item.id}`"
-              class="btn btn-primary btn-xs mt-2 w-full"
+              variant="primary"
+              size="sm"
+              class="mt-2 w-full"
               @click.stop="emit('add', item)"
             >
               {{ t('calendar.add') }}
-            </button>
+            </UiButton>
           </MediaItemCard>
         </div>
       </div>
 
       <div v-else-if="calendarHasItems" class="flex justify-center items-center py-4">
-        <p>{{ t('calendar.noRecommendations') }}</p>
+        <p class="text-fg-2">{{ t('calendar.noRecommendations') }}</p>
       </div>
 
       <div v-else class="flex justify-center items-center py-4">
-        <p>{{ t('calendar.addItemsToSeeRecommendations') }}</p>
+        <p class="text-fg-2">{{ t('calendar.addItemsToSeeRecommendations') }}</p>
       </div>
     </div>
   </div>

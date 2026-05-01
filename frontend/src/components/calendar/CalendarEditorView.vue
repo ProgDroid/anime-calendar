@@ -1,10 +1,10 @@
 <template>
-  <div class="min-h-[calc(100vh-6.1rem)] bg-base-200 p-4">
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 max-w-6xl mx-auto">
-      <!-- Calendar settings + items list -->
-      <div class="card bg-base-100 shadow-md">
-        <div class="card-body flex flex-col gap-4">
-          <h2 class="card-title">{{ $t('calendar.edit') }}</h2>
+  <div class="min-h-[calc(100vh-6.1rem)] bg-bg-0 p-4">
+    <div class="grid grid-cols-1 lg:grid-cols-[3fr_2fr] gap-6 max-w-6xl mx-auto">
+      <!-- Left: Calendar settings + items list (3fr) -->
+      <div data-testid="editor-items-list" class="bg-bg-1 border border-line rounded-lg shadow-sm">
+        <div class="p-4 flex flex-col gap-4">
+          <h2 class="font-semibold text-fg-1 text-lg">{{ $t('calendar.edit') }}</h2>
           <CalendarSettingsForm
             :name="calendarName"
             :language="calendarLanguage"
@@ -24,33 +24,34 @@
         </div>
       </div>
 
-      <!-- Search panel -->
-      <div class="card bg-base-100 shadow-md">
-        <div class="card-body flex flex-col gap-4">
-          <h2 class="card-title">{{ $t('calendar.search') }}</h2>
-          <ItemSearchPanel
-            :fetched-items="fetchedItems"
-            :selected-items="selectedItems"
-            :items-in-calendar="itemsInCalendar"
-            :loading="loading"
+      <!-- Right: Search panel + recommendations (2fr) -->
+      <div class="flex flex-col gap-6 min-w-0">
+        <div data-testid="editor-search-panel" class="bg-bg-1 border border-line rounded-lg shadow-sm">
+          <div class="p-4 flex flex-col gap-4">
+            <h2 class="font-semibold text-fg-1 text-lg">{{ $t('calendar.search') }}</h2>
+            <ItemSearchPanel
+              :fetched-items="fetchedItems"
+              :selected-items="selectedItems"
+              :items-in-calendar="itemsInCalendar"
+              :loading="loading"
+              :calendar-language="calendarLanguage"
+              :search-error="searchError"
+              @search="handleSearch"
+              @toggle-selection="toggleItemSelection"
+              @add-selected="addItemToCalendar"
+            />
+          </div>
+        </div>
+
+        <div data-testid="editor-recommendations" class="hidden lg:block">
+          <RecommendationsSection
+            :recommendations="recommendations"
+            :calendar-has-items="itemsInCalendar.length > 0"
             :calendar-language="calendarLanguage"
-            :search-error="searchError"
-            @search="handleSearch"
-            @toggle-selection="toggleItemSelection"
-            @add-selected="addItemToCalendar"
+            @add="addItemToCalendarSingle"
           />
         </div>
       </div>
-    </div>
-
-    <!-- Recommendations (desktop only) -->
-    <div class="max-w-6xl mx-auto hidden lg:block">
-      <RecommendationsSection
-        :recommendations="recommendations"
-        :calendar-has-items="itemsInCalendar.length > 0"
-        :calendar-language="calendarLanguage"
-        @add="addItemToCalendarSingle"
-      />
     </div>
   </div>
 </template>

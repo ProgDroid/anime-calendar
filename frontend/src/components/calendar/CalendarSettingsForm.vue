@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from 'vue-i18n'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const { t } = useI18n()
 
@@ -20,72 +22,64 @@ const emit = defineEmits<{
 
 <template>
   <div class="flex flex-col gap-4">
-    <div class="form-control">
-      <label class="label">
-        <span class="label-text">{{ t('calendar.name') }}:</span>
-      </label>
-      <div class="relative mt-2">
-        <input
-          type="text"
-          :value="name"
-          :placeholder="t('calendar.namePlaceholder')"
-          class="input input-bordered w-full pr-16"
-          maxlength="100"
-          @input="emit('update:name', ($event.target as HTMLInputElement).value)"
-        />
-        <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-base-content/50">
-          {{ name.length }}/100
-        </span>
-      </div>
+    <div class="relative">
+      <UiInput
+        :model-value="name"
+        :label="t('calendar.name')"
+        :placeholder="t('calendar.namePlaceholder')"
+        :maxlength="100"
+        @update:model-value="emit('update:name', $event)"
+      />
+      <span class="absolute right-3 bottom-2 text-sm text-fg-3 pointer-events-none">
+        {{ name.length }}/100
+      </span>
     </div>
 
-    <div class="form-control">
-      <label class="label mb-2">
-        <span class="label-text">{{ t('calendar.language') }}:</span>
-      </label>
+    <div class="flex flex-col gap-2">
+      <label class="text-sm text-fg-2">{{ t('calendar.language') }}</label>
       <div class="flex gap-4 flex-wrap">
-        <label class="label cursor-pointer gap-2">
+        <label class="inline-flex items-center gap-2 cursor-pointer text-fg-1">
           <input
             type="radio"
             :checked="language === 'english'"
             value="english"
-            class="radio radio-primary"
+            class="accent-accent-1"
             @change="emit('update:language', 'english')"
           />
-          <span class="label-text">{{ t('calendar.english') }}</span>
+          <span class="text-sm">{{ t('calendar.english') }}</span>
         </label>
-        <label class="label cursor-pointer gap-2">
+        <label class="inline-flex items-center gap-2 cursor-pointer text-fg-1">
           <input
             type="radio"
             :checked="language === 'romaji'"
             value="romaji"
-            class="radio radio-primary"
+            class="accent-accent-1"
             @change="emit('update:language', 'romaji')"
           />
-          <span class="label-text">{{ t('calendar.romaji') }}</span>
+          <span class="text-sm">{{ t('calendar.romaji') }}</span>
         </label>
-        <label class="label cursor-pointer gap-2">
+        <label class="inline-flex items-center gap-2 cursor-pointer text-fg-1">
           <input
             type="radio"
             :checked="language === 'native'"
             value="native"
-            class="radio radio-primary"
+            class="accent-accent-1"
             @change="emit('update:language', 'native')"
           />
-          <span class="label-text">{{ t('calendar.native') }}</span>
+          <span class="text-sm">{{ t('calendar.native') }}</span>
         </label>
       </div>
     </div>
 
-    <div v-if="error" class="alert alert-error">{{ error }}</div>
+    <div v-if="error" class="text-sm text-danger bg-danger/10 border border-danger/30 rounded-md px-3 py-2">{{ error }}</div>
 
-    <button
+    <UiButton
       data-testid="submit-btn"
+      variant="primary"
       :disabled="loading || !canSubmit"
-      class="btn btn-success"
       @click="emit('submit')"
     >
       {{ loading ? t('calendar.submitting') : t('calendar.submit') }}
-    </button>
+    </UiButton>
   </div>
 </template>

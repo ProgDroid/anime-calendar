@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
 import MediaItemCard from '@/components/shared/MediaItemCard.vue'
+import UiButton from '@/components/ui/UiButton.vue'
+import UiInput from '@/components/ui/UiInput.vue'
 
 const { t } = useI18n()
 
@@ -41,53 +43,46 @@ const handleSearch = () => {
 <template>
   <div class="flex flex-col gap-4 flex-1 min-h-0">
     <!-- Search form -->
-    <div class="form-control">
-      <label class="label">
-        <span class="label-text">{{ t('calendar.itemName') }}:</span>
-      </label>
-      <input
-        v-model="nameInput"
-        type="text"
-        :placeholder="t('calendar.itemNamePlaceholder')"
-        class="input input-bordered mt-2 w-full"
-        @keyup.enter="handleSearch"
-      />
-    </div>
+    <UiInput
+      v-model="nameInput"
+      :label="t('calendar.itemName')"
+      :placeholder="t('calendar.itemNamePlaceholder')"
+      @keyup.enter="handleSearch"
+    />
 
-    <div class="form-control">
-      <label class="label mb-2">
-        <span class="label-text">{{ t('calendar.mediaType') }}:</span>
-      </label>
+    <div class="flex flex-col gap-2">
+      <label class="text-sm text-fg-2">{{ t('calendar.mediaType') }}</label>
       <div class="flex gap-4 flex-wrap">
-        <label class="label cursor-pointer gap-2">
-          <input v-model="mediaType" type="radio" value="" class="radio radio-primary" />
-          <span class="label-text">{{ t('calendar.mediaTypeAny') }}</span>
+        <label class="inline-flex items-center gap-2 cursor-pointer text-fg-1">
+          <input v-model="mediaType" type="radio" value="" class="accent-accent-1" />
+          <span class="text-sm">{{ t('calendar.mediaTypeAny') }}</span>
         </label>
-        <label class="label cursor-pointer gap-2">
-          <input v-model="mediaType" type="radio" value="ANIME" class="radio radio-primary" />
-          <span class="label-text">{{ t('calendar.mediaTypeAnime') }}</span>
+        <label class="inline-flex items-center gap-2 cursor-pointer text-fg-1">
+          <input v-model="mediaType" type="radio" value="ANIME" class="accent-accent-1" />
+          <span class="text-sm">{{ t('calendar.mediaTypeAnime') }}</span>
         </label>
-        <label class="label cursor-pointer gap-2">
-          <input v-model="mediaType" type="radio" value="MANGA" class="radio radio-primary" />
-          <span class="label-text">{{ t('calendar.mediaTypeManga') }}</span>
+        <label class="inline-flex items-center gap-2 cursor-pointer text-fg-1">
+          <input v-model="mediaType" type="radio" value="MANGA" class="accent-accent-1" />
+          <span class="text-sm">{{ t('calendar.mediaTypeManga') }}</span>
         </label>
       </div>
     </div>
 
-    <button
+    <UiButton
       type="button"
+      variant="primary"
       :disabled="loading"
-      class="btn btn-primary w-full"
+      class="w-full"
       @click="handleSearch"
     >
       {{ loading ? t('calendar.fetchingItems') : t('calendar.fetchItems') }}
-    </button>
+    </UiButton>
 
-    <div v-if="searchError" class="alert alert-error">{{ searchError }}</div>
+    <div v-if="searchError" class="text-sm text-danger bg-danger/10 border border-danger/30 rounded-md px-3 py-2">{{ searchError }}</div>
 
     <!-- Results list -->
-    <h3 class="font-bold">{{ t('calendar.fetchedItems') }}</h3>
-    <div class="overflow-y-auto max-h-[400px] flex-1 min-h-0 p-2 border rounded space-y-1">
+    <h3 class="font-semibold text-fg-1">{{ t('calendar.fetchedItems') }}</h3>
+    <div class="overflow-y-auto max-h-[400px] flex-1 min-h-0 p-2 border border-line rounded-md space-y-2 bg-bg-1">
       <MediaItemCard
         v-for="item in fetchedItems"
         :key="item.id"
@@ -100,13 +95,14 @@ const handleSearch = () => {
       />
     </div>
 
-    <button
+    <UiButton
       data-testid="add-selected-btn"
+      variant="primary"
       :disabled="selectedItems.length === 0"
-      class="btn btn-primary w-full"
+      class="w-full"
       @click="emit('add-selected')"
     >
       {{ t('calendar.addSelectedToCalendar') }}
-    </button>
+    </UiButton>
   </div>
 </template>

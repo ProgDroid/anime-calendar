@@ -2,6 +2,7 @@
 import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
 import MediaItemCard from '@/components/shared/MediaItemCard.vue'
+import UiButton from '@/components/ui/UiButton.vue'
 
 const { t } = useI18n()
 
@@ -27,8 +28,8 @@ const getTitle = (item: Item): string => {
 
 <template>
   <div class="flex flex-col gap-4 flex-1 min-h-0">
-    <h3 class="font-bold">{{ t('calendar.itemsInCalendar') }}</h3>
-    <div class="overflow-y-auto max-h-[400px] flex-1 min-h-0 p-2 border rounded space-y-1">
+    <h3 class="font-semibold text-fg-1">{{ t('calendar.itemsInCalendar') }}</h3>
+    <div class="overflow-y-auto max-h-[400px] flex-1 min-h-0 p-2 border border-line rounded-md space-y-2 bg-bg-1">
       <MediaItemCard
         v-for="item in items"
         :key="item.id"
@@ -37,23 +38,26 @@ const getTitle = (item: Item): string => {
         :is-selected="false"
         :is-in-calendar="false"
       >
-        <button
+        <UiButton
           :data-testid="`remove-item-${item.id}`"
-          class="btn btn-sm btn-error mt-2 w-full"
+          variant="danger"
+          size="sm"
+          class="mt-2 w-full"
           @click.stop="emit('remove', item.id)"
         >
           {{ t('calendar.remove') }}
-        </button>
+        </UiButton>
       </MediaItemCard>
     </div>
 
-    <button
+    <UiButton
       data-testid="clear-btn"
-      class="btn btn-warning w-full"
+      variant="secondary"
+      class="w-full"
       :disabled="items.length === 0"
       @click="emit('clear')"
     >
       {{ t('calendar.clear') }}
-    </button>
+    </UiButton>
   </div>
 </template>

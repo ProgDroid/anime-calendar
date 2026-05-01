@@ -42,12 +42,12 @@ describe('MediaItemCard', () => {
     expect(wrapper.text()).toContain('ANIME')
   })
 
-  it('applies border-primary class when selected', () => {
+  it('applies border-accent-1 class when selected', () => {
     const wrapper = mount(MediaItemCard, {
       props: { item, displayTitle: 'Attack on Titan', isSelected: true, isInCalendar: false },
       ...mountOpts
     })
-    expect(wrapper.classes()).toContain('border-primary')
+    expect(wrapper.classes()).toContain('border-accent-1')
   })
 
   it('applies border-success class when in calendar', () => {
@@ -85,14 +85,14 @@ describe('MediaItemCard', () => {
     expect(wrapper.find('img').exists()).toBe(false)
   })
 
-  it('shows overlay div when selected with banner image', () => {
+  it('shows banner overlay when selected with banner image', () => {
     const bannerItem = { ...item, banner_image: 'http://img.test/banner.jpg' }
     const wrapper = mount(MediaItemCard, {
       props: { item: bannerItem, displayTitle: 'Attack on Titan', isSelected: true, isInCalendar: false },
       ...mountOpts
     })
-    const overlays = wrapper.findAll('.absolute.inset-0')
-    expect(overlays.length).toBeGreaterThan(0)
-    expect(overlays.some(el => el.isVisible())).toBe(true)
+    const banner = wrapper.find('[data-testid="banner"]')
+    expect(banner.exists()).toBe(true)
+    expect(banner.classes()).toContain('opacity-100')
   })
 })

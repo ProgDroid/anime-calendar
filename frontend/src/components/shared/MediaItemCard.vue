@@ -1,10 +1,13 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
+import UiBannerFade from '@/components/ui/UiBannerFade.vue'
+import UiChip from '@/components/ui/UiChip.vue'
 
 const { t } = useI18n()
 
-defineProps<{
+const props = defineProps<{
   item: Item
   displayTitle: string
   isSelected: boolean
@@ -20,85 +23,73 @@ const onImageError = (e: Event) => {
   const img = e.target as HTMLImageElement
   img.style.display = 'none'
 }
+
+const posterUrl = computed<string | null>(() => {
+  if (props.item.banner_image) return props.item.banner_image
+  if (props.item.cover_image?.medium) return props.item.cover_image.medium
+  return null
+})
 </script>
 
 <template>
   <div
-    class="card bg-base-100 shadow-sm border relative overflow-hidden cursor-pointer"
+    class="bg-bg-1 border border-line rounded-md shadow-sm relative overflow-hidden cursor-pointer transition-colors"
     :class="{
-      'border-primary': isSelected && !isInCalendar,
+      'border-accent-1': isSelected && !isInCalendar,
       'border-success': isInCalendar
     }"
     @click="emit('click')"
   >
-    <div class="card-body p-3">
-      <div class="flex items-start gap-2">
-        <div class="flex-shrink-0">
-          <div
-            v-if="item.cover_image?.medium"
-            class="bg-base-300 border rounded w-16 h-20 overflow-hidden"
-          >
-            <img
-              :src="item.cover_image.medium"
-              :alt="item.title.romaji"
-              class="w-full h-full object-cover"
-              loading="lazy"
-              @error="onImageError"
-            />
+    <UiBannerFade :selected="isSelected && !isInCalendar" :poster-url="posterUrl">
+      <div class="p-3">
+        <div class="flex items-start gap-2">
+          <div class="flex-shrink-0">
+            <div
+              v-if="item.cover_image?.medium"
+              class="bg-bg-2 border border-line rounded w-16 h-20 overflow-hidden"
+            >
+              <img
+                :src="item.cover_image.medium"
+                :alt="item.title.romaji"
+                class="w-full h-full object-cover"
+                loading="lazy"
+                @error="onImageError"
+              />
+            </div>
+            <div
+              v-else
+              class="bg-bg-2 border border-line rounded w-16 h-20 flex items-center justify-center"
+            >
+              <span class="text-xs text-fg-3">{{ t('calendar.noImage') }}</span>
+            </div>
           </div>
-          <div
-            v-else
-            class="bg-base-300 border rounded w-16 h-20 flex items-center justify-center"
-          >
-            <span class="text-xs">{{ t('calendar.noImage') }}</span>
+          <div class="flex-grow min-w-0">
+            <h4 class="font-semibold line-clamp-1 text-fg-1" :class="compact ? 'text-sm' : ''">
+              {{ displayTitle }}
+            </h4>
+            <UiChip
+              :variant="item.media_type === 'MANGA' ? 'manga' : 'anime'"
+              :size="compact ? 'sm' : 'sm'"
+              class="mt-1"
+            >
+              {{ item.media_type }}
+            </UiChip>
+            <p v-if="item.media_type === 'ANIME' && !compact" class="text-xs text-fg-2 mt-1">
+              {{ t('calendar.episodes') }}: {{ item.episode_duration }}
+            </p>
           </div>
         </div>
-        <div class="flex-grow min-w-0">
-          <h4 class="font-bold line-clamp-1" :class="compact ? 'text-sm' : ''">
-            {{ displayTitle }}
-          </h4>
-          <div class="badge badge-secondary mt-1" :class="compact ? 'text-xs' : ''">
-            {{ item.media_type }}
-          </div>
-          <p v-if="item.media_type === 'ANIME' && !compact" class="text-xs mt-1">
-            {{ t('calendar.episodes') }}: {{ item.episode_duration }}
-          </p>
+
+        <!-- "Already in calendar" badge -->
+        <div
+          v-if="isInCalendar"
+          class="absolute top-2 right-2 bg-success text-bg-0 text-xs px-2 py-1 rounded-md"
+        >
+          {{ t('calendar.alreadyInCalendar') }}
         </div>
+
+        <slot />
       </div>
-
-      <!-- "Already in calendar" badge -->
-      <div
-        v-if="isInCalendar"
-        class="absolute top-2 right-2 bg-success text-success-content text-xs px-2 py-1 rounded"
-      >
-        {{ t('calendar.alreadyInCalendar') }}
-      </div>
-
-      <!-- Background image overlay when selected -->
-      <div
-        v-show="isSelected && !!item.banner_image"
-        class="absolute inset-0 pointer-events-none transition-opacity duration-300"
-        :style="{
-          backgroundImage: `url(${item.banner_image})`,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center',
-          backgroundRepeat: 'no-repeat',
-          maskImage: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0) 50%, rgba(0,0,0,0.2) 65%, rgba(0,0,0,1) 95%)'
-        }"
-      />
-      <div
-        v-show="isSelected && !item.banner_image && !!item.cover_image?.medium"
-        class="absolute inset-0 pointer-events-none transition-opacity duration-300"
-        :style="{
-          backgroundImage: `url(${item.cover_image?.medium})`,
-          backgroundSize: 'auto 100%',
-          backgroundPosition: 'right',
-          backgroundRepeat: 'no-repeat',
-          maskImage: 'linear-gradient(to right, rgba(0,0,0,0) 0%, rgba(0,0,0,0.0) 83.5%, rgba(0,0,0,1) 95%)'
-        }"
-      />
-
-      <slot />
-    </div>
+    </UiBannerFade>
   </div>
 </template>

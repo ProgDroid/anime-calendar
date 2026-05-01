@@ -28,6 +28,7 @@ const maskStyle = computed(() => ({
   <div class="relative w-full h-full overflow-hidden">
     <div
       data-testid="banner"
+      aria-hidden="true"
       :class="[
         'absolute inset-0 transition-opacity duration-[var(--d-3)] ease-[var(--ease-out)]',
         selected ? 'opacity-100' : 'opacity-0'
