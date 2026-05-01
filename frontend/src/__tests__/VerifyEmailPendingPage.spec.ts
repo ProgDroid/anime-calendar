@@ -43,6 +43,7 @@ describe('VerifyEmailPendingPage', () => {
   it('renders all required testids', () => {
     const wrapper = mountPage()
     expect(wrapper.find('[data-testid="verify-pending"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="verify-mail-medallion"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="verify-resend"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="verify-poster-collage"]').exists()).toBe(true)
     expect(wrapper.text()).toContain(en.auth.verifyEmail.pending.title)

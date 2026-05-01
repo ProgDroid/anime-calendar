@@ -6,6 +6,7 @@ import Wordmark from './shared/Wordmark.vue'
 import UiAuthShell from './ui/UiAuthShell.vue'
 import UiButton from './ui/UiButton.vue'
 import UiEmptyState from './ui/UiEmptyState.vue'
+import IconMail from './ui/icons/IconMail.vue'
 
 defineOptions({ name: 'VerifyEmailPendingPage' })
 
@@ -43,6 +44,14 @@ const handleResend = async () => {
       :title="t('auth.verifyEmail.pending.title')"
       :body="t('auth.verifyEmail.pending.subtitle')"
     >
+      <template #illustration>
+        <div
+          data-testid="verify-mail-medallion"
+          class="w-14 h-14 rounded-full bg-accent-1/15 text-accent-1 flex items-center justify-center [&_svg]:w-[22px] [&_svg]:h-[22px]"
+        >
+          <IconMail />
+        </div>
+      </template>
       <template #action>
         <div class="flex flex-col items-stretch gap-3 w-full">
           <UiButton

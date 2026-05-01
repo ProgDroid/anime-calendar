@@ -31,6 +31,7 @@ describe('NotFoundPage', () => {
   it('renders the not-found testid and i18n strings', () => {
     const wrapper = mountPage()
     expect(wrapper.find('[data-testid="not-found"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="not-found-numeral"]').exists()).toBe(true)
     expect(wrapper.text()).toContain(en.errors.notFound.title)
     expect(wrapper.text()).toContain(en.errors.notFound.body)
     expect(wrapper.text()).toContain(en.errors.notFound.cta)
