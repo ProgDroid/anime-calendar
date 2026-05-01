@@ -102,6 +102,10 @@
     "fetchFailed": "Failed to fetch user settings"
   },
   "calendar": {
+    "tabs": {
+      "editor": "Editor",
+      "schedule": "Schedule"
+    },
     "edit": "Edit Calendar",
     "search": "Search",
     "itemName": "Item Name",

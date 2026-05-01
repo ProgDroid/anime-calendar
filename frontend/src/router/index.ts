@@ -31,9 +31,20 @@ const router = createRouter({
     },
     {
       path: '/calendar/:id',
-      name: 'CalendarDetail',
       component: CalendarPage,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true },
+      children: [
+        {
+          path: '',
+          name: 'calendar.editor',
+          component: () => import('@/components/calendar/CalendarEditorView.vue')
+        },
+        {
+          path: 'schedule',
+          name: 'calendar.schedule',
+          component: () => import('@/components/calendar/CalendarScheduleView.vue')
+        }
+      ]
     },
     {
       path: '/user/details',

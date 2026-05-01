@@ -102,6 +102,10 @@
     "fetchFailed": "Erro a carregar configurações"
   },
   "calendar": {
+    "tabs": {
+      "editor": "Editor",
+      "schedule": "Agenda"
+    },
     "edit": "Editar Calendário",
     "search": "Procurar",
     "itemName": "Nome do Item",

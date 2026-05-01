@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHistory, createMemoryHistory } from 'vue-router'
 import en from '@/locales/en.json'
 
 // ── Global mocks ────────────────────────────────────────────────────────────
@@ -130,14 +130,14 @@ describe('CalendarPage — error paths', () => {
   it('shows loadFailed when GET /calendars/:id returns an error', async () => {
     ;(api.get as ReturnType<typeof vi.fn>).mockRejectedValue(axiosError(500))
 
-    const CalendarPage = (await import('@/components/CalendarPage.vue')).default
+    const CalendarEditorView = (await import('@/components/calendar/CalendarEditorView.vue')).default
     const router = createRouter({
-      history: createWebHistory(),
-      routes: [{ path: '/calendar/:id', component: CalendarPage }]
+      history: createMemoryHistory(),
+      routes: [{ path: '/calendar/:id', component: CalendarEditorView }]
     })
     await router.push('/calendar/42')
 
-    const wrapper = mount(CalendarPage, {
+    const wrapper = mount(CalendarEditorView, {
       global: { plugins: [i18n, router, pinia] }
     })
     await flushPromises()
@@ -148,14 +148,14 @@ describe('CalendarPage — error paths', () => {
   it('shows loadFailed when GET /calendars/:id returns 404', async () => {
     ;(api.get as ReturnType<typeof vi.fn>).mockRejectedValue(axiosError(404))
 
-    const CalendarPage = (await import('@/components/CalendarPage.vue')).default
+    const CalendarEditorView = (await import('@/components/calendar/CalendarEditorView.vue')).default
     const router = createRouter({
-      history: createWebHistory(),
-      routes: [{ path: '/calendar/:id', component: CalendarPage }]
+      history: createMemoryHistory(),
+      routes: [{ path: '/calendar/:id', component: CalendarEditorView }]
     })
     await router.push('/calendar/99')
 
-    const wrapper = mount(CalendarPage, {
+    const wrapper = mount(CalendarEditorView, {
       global: { plugins: [i18n, router, pinia] }
     })
     await flushPromises()
@@ -176,14 +176,14 @@ describe('CalendarPage — error paths', () => {
     })
     ;(api.put as ReturnType<typeof vi.fn>).mockRejectedValue(axiosError(500))
 
-    const CalendarPage = (await import('@/components/CalendarPage.vue')).default
+    const CalendarEditorView = (await import('@/components/calendar/CalendarEditorView.vue')).default
     const router = createRouter({
-      history: createWebHistory(),
-      routes: [{ path: '/calendar/:id', component: CalendarPage }]
+      history: createMemoryHistory(),
+      routes: [{ path: '/calendar/:id', component: CalendarEditorView }]
     })
     await router.push('/calendar/1')
 
-    const wrapper = mount(CalendarPage, {
+    const wrapper = mount(CalendarEditorView, {
       global: { plugins: [i18n, router, pinia] }
     })
     await flushPromises()
