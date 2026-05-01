@@ -217,5 +217,16 @@
       "body": "The page you're looking for doesn't exist or has moved.",
       "cta": "Back to home"
     }
+  },
+  "schedule": {
+    "days": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat",
+      "sun": "Sun"
+    }
   }
 }

@@ -217,5 +217,16 @@
       "body": "A página que procura não existe ou foi movida.",
       "cta": "Voltar ao início"
     }
+  },
+  "schedule": {
+    "days": {
+      "mon": "Seg",
+      "tue": "Ter",
+      "wed": "Qua",
+      "thu": "Qui",
+      "fri": "Sex",
+      "sat": "Sáb",
+      "sun": "Dom"
+    }
   }
 }
