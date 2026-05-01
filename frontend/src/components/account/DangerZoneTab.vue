@@ -38,7 +38,7 @@ const handleDelete = async () => {
 </script>
 
 <template>
-  <section class="flex flex-col gap-4 max-w-xl">
+  <section class="flex flex-col max-w-xl">
     <ConfirmModal
       :open="confirmDeleteOpen"
       :title="t('userDetails.accountDeleteButton')"
@@ -55,18 +55,20 @@ const handleDelete = async () => {
       </h2>
       <p class="text-sm text-fg-2 mt-2">{{ t('account.danger.subtitle') }}</p>
     </header>
-    <p class="text-sm text-fg-2">{{ t('userDetails.accountDeleteWarning') }}</p>
-    <div v-if="error" class="text-danger" data-testid="danger-error">{{ error }}</div>
-    <div class="flex justify-end">
-      <UiButton
-        variant="danger"
-        :loading="isDeleting"
-        :disabled="isDeleting"
-        data-testid="delete-account-button"
-        @click="confirmDeleteOpen = true"
-      >
-        {{ isDeleting ? t('userDetails.accountDeleting') : t('userDetails.accountDeleteButton') }}
-      </UiButton>
+    <div class="bg-bg-1 border border-danger/30 rounded-lg p-6 mt-6 flex flex-col gap-4">
+      <p class="text-sm text-fg-2">{{ t('userDetails.accountDeleteWarning') }}</p>
+      <div v-if="error" class="text-danger" data-testid="danger-error">{{ error }}</div>
+      <div class="flex justify-end">
+        <UiButton
+          variant="danger"
+          :loading="isDeleting"
+          :disabled="isDeleting"
+          data-testid="delete-account-button"
+          @click="confirmDeleteOpen = true"
+        >
+          {{ isDeleting ? t('userDetails.accountDeleting') : t('userDetails.accountDeleteButton') }}
+        </UiButton>
+      </div>
     </div>
   </section>
 </template>

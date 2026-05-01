@@ -9,6 +9,8 @@ import { toastService } from '@/services/toastService'
 import { i18n } from '@/plugins/i18n'
 import type { UserSettings, Accent } from '@/types/userSettings'
 import UiButton from '@/components/ui/UiButton.vue'
+import UiSegmented from '@/components/ui/UiSegmented.vue'
+import IconGlobe from '@/components/ui/icons/IconGlobe.vue'
 import AccentPicker from '@/components/account/AccentPicker.vue'
 
 defineOptions({ name: 'PreferencesTab' })
@@ -59,7 +61,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="flex flex-col gap-6 max-w-xl">
+  <section class="flex flex-col max-w-xl">
     <header class="mb-2">
       <p class="text-xs uppercase tracking-wider text-fg-2" data-testid="account-tab-eyebrow">{{ t('account.preferences.eyebrow') }}</p>
       <h2 class="text-3xl md:text-4xl font-medium tracking-tight mt-1 text-fg-1" data-testid="account-tab-heading">
@@ -67,61 +69,52 @@ onMounted(() => {
       </h2>
       <p class="text-sm text-fg-2 mt-2">{{ t('account.preferences.subtitle') }}</p>
     </header>
-    <div v-if="loading" class="text-fg-2">{{ t('app.loading') }}</div>
-    <div v-else-if="error" class="text-danger" data-testid="preferences-error">{{ error }}</div>
-    <template v-else>
+    <div v-if="loading" class="text-fg-2 mt-6">{{ t('app.loading') }}</div>
+    <div v-else-if="error" class="text-danger mt-6" data-testid="preferences-error">{{ error }}</div>
+    <div v-else class="bg-bg-1 border border-line rounded-lg p-6 mt-6 flex flex-col gap-6">
       <!-- Theme -->
       <div class="flex flex-col gap-2">
         <label class="text-sm text-fg-2">{{ t('userSettings.theme') }}</label>
-        <div class="flex gap-4">
-          <label class="flex items-center gap-2 cursor-pointer text-fg-1">
-            <input
-              v-model="settings.theme_preference"
-              type="radio"
-              name="theme"
-              value="light"
-              class="accent-accent-1"
-            />
-            <span>{{ t('userSettings.light') }}</span>
-          </label>
-          <label class="flex items-center gap-2 cursor-pointer text-fg-1">
-            <input
-              v-model="settings.theme_preference"
-              type="radio"
-              name="theme"
-              value="dark"
-              class="accent-accent-1"
-            />
-            <span>{{ t('userSettings.dark') }}</span>
-          </label>
-        </div>
+        <UiSegmented
+          v-model="settings.theme_preference"
+          :options="[
+            { value: 'light', label: t('userSettings.light') },
+            { value: 'dark', label: t('userSettings.dark') },
+          ]"
+        />
       </div>
 
       <!-- Language -->
       <div class="flex flex-col gap-2">
         <label class="text-sm text-fg-2" for="language-select">{{ t('userSettings.language') }}</label>
-        <select
-          id="language-select"
-          v-model="settings.language_preference"
-          class="h-10 px-3 rounded-md bg-bg-1 text-fg-1 border border-line max-w-xs"
-        >
-          <option value="en">{{ t('userSettings.english') }}</option>
-          <option value="pt">{{ t('userSettings.portuguese') }}</option>
-        </select>
+        <div class="relative max-w-[280px]">
+          <span
+            class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-fg-2 [&_svg]:w-3.5 [&_svg]:h-3.5"
+          >
+            <IconGlobe />
+          </span>
+          <select
+            id="language-select"
+            v-model="settings.language_preference"
+            class="w-full h-10 pl-9 pr-3 rounded-md bg-bg-1 text-fg-1 border border-line"
+          >
+            <option value="en">{{ t('userSettings.english') }}</option>
+            <option value="pt">{{ t('userSettings.portuguese') }}</option>
+          </select>
+        </div>
       </div>
 
       <!-- Title Language -->
       <div class="flex flex-col gap-2">
         <label class="text-sm text-fg-2" for="title-language-select">{{ t('userSettings.titleLanguage') }}</label>
-        <select
-          id="title-language-select"
+        <UiSegmented
           v-model="settings.title_language_preference"
-          class="h-10 px-3 rounded-md bg-bg-1 text-fg-1 border border-line max-w-xs"
-        >
-          <option value="English">{{ t('userSettings.english') }}</option>
-          <option value="Romaji">{{ t('userSettings.romaji') }}</option>
-          <option value="Native">{{ t('userSettings.native') }}</option>
-        </select>
+          :options="[
+            { value: 'English', label: t('userSettings.english') },
+            { value: 'Romaji', label: t('userSettings.romaji') },
+            { value: 'Native', label: t('userSettings.native') },
+          ]"
+        />
       </div>
 
       <!-- Timezone -->
@@ -131,7 +124,7 @@ onMounted(() => {
           id="timezone-input"
           v-model="settings.timezone"
           type="text"
-          class="h-10 px-3 rounded-md bg-bg-1 text-fg-1 border border-line max-w-xs"
+          class="h-10 px-3 rounded-md bg-bg-1 text-fg-1 border border-line max-w-[280px]"
           :placeholder="t('userSettings.timezonePlaceholder')"
         />
       </div>
@@ -148,6 +141,6 @@ onMounted(() => {
           {{ t('userSettings.save') }}
         </UiButton>
       </div>
-    </template>
+    </div>
   </section>
 </template>

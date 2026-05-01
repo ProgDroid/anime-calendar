@@ -94,7 +94,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <section class="flex flex-col gap-6 max-w-xl">
+  <section class="flex flex-col max-w-xl">
     <header class="mb-2">
       <p class="text-xs uppercase tracking-wider text-fg-2" data-testid="account-tab-eyebrow">{{ t('account.password.eyebrow') }}</p>
       <h2 class="text-3xl md:text-4xl font-medium tracking-tight mt-1 text-fg-1" data-testid="account-tab-heading">
@@ -102,12 +102,12 @@ onMounted(() => {
       </h2>
       <p class="text-sm text-fg-2 mt-2">{{ t('account.password.subtitle') }}</p>
     </header>
-    <div v-if="loading" class="text-fg-2">{{ t('userDetails.loading') }}</div>
-    <div v-else-if="user && user.is_oauth" class="text-fg-2" data-testid="password-oauth-notice">
+    <div v-if="loading" class="text-fg-2 mt-6">{{ t('userDetails.loading') }}</div>
+    <div v-else-if="user && user.is_oauth" class="bg-bg-1 border border-line rounded-lg p-6 mt-6 text-fg-2" data-testid="password-oauth-notice">
       {{ t('userDetails.passwordOauthNotice') }}
     </div>
-    <template v-else-if="user">
-      <h2 class="text-lg font-medium text-fg-1">{{ t('userDetails.changePassword') }}</h2>
+    <div v-else-if="user" class="bg-bg-1 border border-line rounded-lg p-6 mt-6 flex flex-col gap-4">
+      <h3 class="text-lg font-medium text-fg-1">{{ t('userDetails.changePassword') }}</h3>
       <div v-if="error" class="text-danger" data-testid="password-error">{{ error }}</div>
       <form class="flex flex-col gap-4" @submit="handleUpdatePassword">
         <UiInput
@@ -117,14 +117,16 @@ onMounted(() => {
           autocomplete="current-password"
           required
         />
-        <UiInput
-          v-model="newPassword"
-          :label="t('userDetails.newPassword')"
-          type="password"
-          autocomplete="new-password"
-          required
-        />
-        <p class="text-xs text-fg-2">{{ t('userDetails.passwordHint') }}</p>
+        <div>
+          <UiInput
+            v-model="newPassword"
+            :label="t('userDetails.newPassword')"
+            type="password"
+            autocomplete="new-password"
+            required
+          />
+          <p class="text-xs text-fg-2 mt-1">{{ t('userDetails.passwordHint') }}</p>
+        </div>
         <UiInput
           v-model="confirmPassword"
           :label="t('userDetails.confirmPassword')"
@@ -143,6 +145,6 @@ onMounted(() => {
           </UiButton>
         </div>
       </form>
-    </template>
+    </div>
   </section>
 </template>
