@@ -62,7 +62,7 @@ const updatedLabel = computed(() =>
 <template>
   <div
     data-testid="calendar-tile"
-    class="flex flex-col rounded-xl border border-line bg-bg-1 overflow-hidden hover:border-line-strong transition"
+    class="flex flex-col rounded-xl border border-line bg-bg-1 hover:border-line-strong transition"
   >
     <button
       data-testid="calendar-tile-body"

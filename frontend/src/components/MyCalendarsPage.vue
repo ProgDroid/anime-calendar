@@ -1,13 +1,14 @@
 <template>
   <div class="min-h-[calc(100vh-6.1rem)] bg-bg-0 text-fg-1 px-6 py-8 sm:px-10 sm:py-10">
-    <header class="flex flex-wrap items-end gap-4">
-      <div class="min-w-0 flex-1">
+    <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-4">
+      <div class="min-w-0 sm:flex-1">
         <p class="text-xs uppercase tracking-wider text-fg-3">{{ $t('calendars.yourLibrary') }}</p>
         <h1 class="font-display text-3xl sm:text-4xl text-fg-1 mt-1">{{ $t('calendars.title') }}</h1>
       </div>
       <UiButton
         data-testid="my-calendars-new"
         variant="primary"
+        class="self-start sm:self-auto"
         @click="createNewCalendar"
       >
         <IconPlus class="w-3.5 h-3.5" /> {{ $t('calendars.createNew') }}

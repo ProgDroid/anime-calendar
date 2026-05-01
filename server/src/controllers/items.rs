@@ -17,6 +17,7 @@ use crate::{
 struct Params {
     /// One or more Anilist media IDs
     #[param(rename = "id")]
+    #[serde(rename = "id")]
     ids: Vec<u64>,
 }
 
