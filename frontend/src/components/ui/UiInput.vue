@@ -89,6 +89,6 @@ function onInput(ev: Event) {
         <slot name="iconRight" />
       </span>
     </div>
-    <span v-if="error" :id="helperId" class="text-xs text-danger">{{ error }}</span>
+    <span v-if="error" :id="helperId" class="text-xs text-danger-text">{{ error }}</span>
   </div>
 </template>

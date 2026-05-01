@@ -18,9 +18,11 @@
   --color-success: var(--success);
   --color-warning: var(--warning);
   --color-danger: var(--danger);
+  --color-danger-text: var(--danger-text);
   --color-accent-1: var(--accent-1);
   --color-accent-1-soft: var(--accent-1-soft);
   --color-accent-1-glow: var(--accent-1-glow);
+  --color-accent-1-text: var(--accent-1-text);
   --color-accent-2: var(--accent-2);
 
   --font-sans: 'Geist', system-ui, sans-serif;
@@ -36,3 +38,9 @@
 }
 
 /* You can add your custom styles here */
+
+select:focus-visible {
+  outline: 2px solid var(--accent-1);
+  outline-offset: 2px;
+  border-color: var(--accent-1);
+}

@@ -20,7 +20,7 @@ const toast = tv({
       info: 'bg-bg-1 text-fg-1 border-line',
       success: 'bg-success/15 text-success border-success/30',
       warning: 'bg-warning/15 text-warning border-warning/30',
-      danger: 'bg-danger/15 text-danger border-danger/30',
+      danger: 'bg-danger/15 text-danger-text border-danger/30',
     },
   },
 })
@@ -36,5 +36,10 @@ onBeforeUnmount(() => { if (timer) clearTimeout(timer) })
 </script>
 
 <template>
-  <div role="status" :class="classes">{{ message }}</div>
+  <div
+    :role="props.variant === 'danger' || props.variant === 'warning' ? 'alert' : 'status'"
+    :class="classes"
+  >
+    {{ message }}
+  </div>
 </template>
