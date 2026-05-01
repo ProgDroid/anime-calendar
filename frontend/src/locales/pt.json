@@ -168,7 +168,14 @@
       "itemCount": "{count} itens",
       "updatedLabel": "Atualizado {date}",
       "moreActions": "Mais ações"
-    }
+    },
+    "yourLibrary": "Sua biblioteca",
+    "stats": {
+      "calendarCount": "{count} calendários",
+      "totalItems": "{count} itens no total"
+    },
+    "emptyTitle": "Ainda sem calendários",
+    "emptyBody": "Crie seu primeiro calendário para começar a acompanhar séries."
   },
   "userDetails": {
     "fetchFailed": "Falha ao obter detalhes de usuário",

@@ -215,10 +215,23 @@ describe('MyCalendarsPage — delete failure', () => {
   })
 
   it('shows deleteFailed error when DELETE /calendars/:id fails', async () => {
-    ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValue({
-      data: {
-        data: [{ id: 1, name: 'Cal 1', subscription_token: 'tok' }],
-        pagination: { page: 1, page_size: 10, total: 1, total_pages: 1 }
+    ;(api.get as ReturnType<typeof vi.fn>).mockImplementation(async (url: string) => {
+      if (typeof url === 'string' && url.startsWith('/items')) return { data: [] }
+      return {
+        data: {
+          data: [
+            {
+              id: 1,
+              name: 'Cal 1',
+              item_count: 0,
+              subscription_token: 'tok',
+              created_at: '2026-01-01T00:00:00Z',
+              updated_at: '2026-01-01T00:00:00Z',
+              recent_item_ids: [],
+            },
+          ],
+          pagination: { page: 1, page_size: 10, total: 1, total_pages: 1 },
+        },
       }
     })
     ;(api.delete as ReturnType<typeof vi.fn>).mockRejectedValue(axiosError(500))
@@ -229,8 +242,8 @@ describe('MyCalendarsPage — delete failure', () => {
     })
     await flushPromises()
 
-    // Open the confirm modal for the first calendar
-    await wrapper.findAll('.btn-error')[0]?.trigger('click')
+    // Open the confirm modal for the first calendar via the tile delete button
+    await wrapper.findAll('[data-testid="calendar-tile-delete"]')[0]?.trigger('click')
     await wrapper.vm.$nextTick()
 
     // Confirm the delete
