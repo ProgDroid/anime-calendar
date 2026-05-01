@@ -38,41 +38,36 @@ function axiosError(status: number) {
   })
 }
 
-// ── UserDetailsPage — password update status-code branching ─────────────────
+// ── PasswordTab — password update status-code branching ────────────────────
 
-describe('UserDetailsPage — password update error paths', () => {
+describe('PasswordTab — password update error paths', () => {
   const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
-  const router = createRouter({
-    history: createWebHistory(),
-    routes: [{ path: '/:p*', component: { template: '<div/>' } }]
-  })
   let pinia: ReturnType<typeof createPinia>
+  let router: ReturnType<typeof createRouter>
 
-  beforeEach(async () => {
+  beforeEach(() => {
     pinia = createPinia()
     setActivePinia(pinia)
     vi.clearAllMocks()
 
-    const { default: UserDetailsPage } = await import('@/components/UserDetailsPage.vue')
     ;(api.get as ReturnType<typeof vi.fn>).mockResolvedValue({
       data: { username: 'u', email: 'u@u.com', is_oauth: false }
     })
 
     pinia.state.value['auth'] = { user: 'mock-user', name: '', user_avatar: '' }
 
-    return { UserDetailsPage }
+    router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/:p*', component: { template: '<div/>' } }]
+    })
   })
 
-  async function mountAndOpenPasswordForm() {
-    const { default: UserDetailsPage } = await import('@/components/UserDetailsPage.vue')
-    const wrapper = mount(UserDetailsPage, {
+  async function mountPasswordTab() {
+    const { default: PasswordTab } = await import('@/components/account/PasswordTab.vue')
+    const wrapper = mount(PasswordTab, {
       global: { plugins: [i18n, router, pinia] }
     })
     await flushPromises()
-    // Open password-change section
-    const toggle = wrapper.findAll('button').find(b => b.text().includes(en.userDetails.changePassword))
-    await toggle?.trigger('click')
-    await wrapper.vm.$nextTick()
     return wrapper
   }
 
@@ -80,37 +75,37 @@ describe('UserDetailsPage — password update error paths', () => {
     ;(api.post as ReturnType<typeof vi.fn>).mockRejectedValue(axiosError(401))
     vi.spyOn(axios, 'isAxiosError').mockReturnValue(true)
 
-    const wrapper = await mountAndOpenPasswordForm()
+    const wrapper = await mountPasswordTab()
     const inputs = wrapper.findAll('input[type="password"]')
     // current / new / confirm
     await inputs[0]?.setValue('OldPass1!')
     await inputs[1]?.setValue('NewPass123!@')
     await inputs[2]?.setValue('NewPass123!@')
 
-    const forms = wrapper.findAll('form')
-    await forms[forms.length - 1]?.trigger('submit')
+    await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.text()).toContain(en.userDetails.currentPasswordIncorrect)
-    expect(wrapper.text()).not.toContain(en.userDetails.passwordUpdateFailed)
+    expect(wrapper.find('[data-testid="password-error"]').text()).toContain(
+      en.userDetails.currentPasswordIncorrect,
+    )
   })
 
   it('500 on password update shows generic "update failed" message', async () => {
     ;(api.post as ReturnType<typeof vi.fn>).mockRejectedValue(axiosError(500))
     vi.spyOn(axios, 'isAxiosError').mockReturnValue(false)
 
-    const wrapper = await mountAndOpenPasswordForm()
+    const wrapper = await mountPasswordTab()
     const inputs = wrapper.findAll('input[type="password"]')
     await inputs[0]?.setValue('OldPass1!')
     await inputs[1]?.setValue('NewPass123!@')
     await inputs[2]?.setValue('NewPass123!@')
 
-    const forms = wrapper.findAll('form')
-    await forms[forms.length - 1]?.trigger('submit')
+    await wrapper.find('form').trigger('submit')
     await flushPromises()
 
-    expect(wrapper.text()).toContain(en.userDetails.passwordUpdateFailed)
-    expect(wrapper.text()).not.toContain(en.userDetails.currentPasswordIncorrect)
+    expect(wrapper.find('[data-testid="password-error"]').text()).toContain(
+      en.userDetails.passwordUpdateFailed,
+    )
   })
 })
 

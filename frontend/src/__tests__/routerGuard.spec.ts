@@ -29,8 +29,8 @@ function makeRouter() {
       { path: '/', redirect: '/my-calendars' },
       { path: '/login', name: 'Login', component: Dummy, meta: { public: true } },
       { path: '/my-calendars', name: 'MyCalendars', component: Dummy, meta: { requiresAuth: true } },
-      { path: '/user/details', name: 'UserDetails', component: Dummy, meta: { requiresAuth: true } },
-      { path: '/user/settings', name: 'UserSettings', component: Dummy, meta: { requiresAuth: true } },
+      { path: '/account/profile', name: 'account.profile', component: Dummy, meta: { requiresAuth: true } },
+      { path: '/account/preferences', name: 'account.preferences', component: Dummy, meta: { requiresAuth: true } },
     ],
   })
 
@@ -172,7 +172,7 @@ describe('Router navigation guard', () => {
     } as unknown as ReturnType<typeof useUserSettingsStore>)
     const router = makeRouter()
     await router.push('/my-calendars')
-    await router.push('/user/details')
+    await router.push('/account/profile')
     expect(fetchSettings).toHaveBeenCalledTimes(2)
   })
 })

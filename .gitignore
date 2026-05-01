@@ -24,3 +24,12 @@ pnpm-debug.log*
 .playwright-mcp
 .worktrees
 .superpowers
+
+# Local-only design reference handoff (not part of source)
+/design_handoff_anime_calendar/
+
+# Playwright MCP screenshot artifacts at repo root
+/*.png
+
+# Claude Code runtime state
+.claude/scheduled_tasks.lock
