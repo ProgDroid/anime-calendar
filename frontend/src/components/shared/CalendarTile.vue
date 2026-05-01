@@ -4,7 +4,6 @@ import { useI18n } from 'vue-i18n';
 import api from '@/config/api';
 import type { PageCalendar } from '@/types/calendar';
 import type { Item } from '@/types/item';
-import PosterCollage from './PosterCollage.vue';
 import UiButton from '@/components/ui/UiButton.vue';
 import UiMenu from '@/components/ui/UiMenu.vue';
 import IconEdit from '@/components/ui/icons/IconEdit.vue';
@@ -57,20 +56,60 @@ const updatedLabel = computed(() =>
     date: new Date(props.calendar.updated_at).toLocaleDateString(),
   }),
 );
+
+const overflowCount = computed(() => {
+  const total = props.calendar.item_count ?? 0;
+  return Math.max(0, total - 3);
+});
 </script>
 
 <template>
   <div
     data-testid="calendar-tile"
-    class="flex flex-col rounded-xl border border-line bg-bg-1 hover:border-line-strong transition"
+    class="flex flex-col overflow-hidden rounded-xl border border-line bg-bg-1 hover:border-line-strong transition"
   >
     <button
       data-testid="calendar-tile-body"
-      class="text-left flex flex-col gap-3 p-4 cursor-pointer"
+      class="text-left flex flex-col cursor-pointer"
       @click="emit('open')"
     >
-      <PosterCollage :urls="coverUrls" />
-      <div class="flex flex-col min-w-0">
+      <!-- 96px header strip -->
+      <div
+        class="relative h-24 overflow-hidden bg-bg-2"
+        data-testid="tile-header-strip"
+      >
+        <img
+          v-if="coverUrls[0]"
+          :src="coverUrls[0]"
+          class="absolute inset-0 w-full h-full object-cover scale-110 blur-md opacity-60"
+          alt=""
+          aria-hidden="true"
+        />
+        <div
+          class="absolute inset-0"
+          style="background: linear-gradient(180deg, transparent 30%, var(--bg-1) 100%);"
+        />
+        <div class="absolute top-3 left-3 right-3 flex items-end gap-1">
+          <template v-for="(url, i) in coverUrls.slice(0, 3)" :key="i">
+            <img
+              :src="url"
+              :data-testid="`tile-mini-poster-${i}`"
+              class="w-7 h-[38px] rounded-sm object-cover ring-1 ring-white/20"
+              loading="lazy"
+              alt=""
+            />
+          </template>
+          <span
+            v-if="overflowCount > 0"
+            data-testid="tile-overflow"
+            class="ml-1 text-[11px] font-mono text-white drop-shadow self-end"
+          >
+            +{{ overflowCount }}
+          </span>
+        </div>
+      </div>
+
+      <div class="flex flex-col min-w-0 p-4">
         <span data-testid="calendar-tile-name" class="font-medium text-fg-1 truncate">
           {{ calendar.name }}
         </span>
