@@ -4,6 +4,7 @@ import { useAuthStore } from './stores/auth'
 import { useUserSettingsStore } from './stores/userSettingsStore'
 import { ref } from 'vue'
 import { applySettings } from './services/applySettings'
+import UiToastHost from './components/ui/UiToastHost.vue'
 
 const authStore = useAuthStore()
 const drawerToggle = ref<HTMLInputElement | null>(null)
@@ -71,6 +72,7 @@ const handleLogout = () => {
     <main class="container mx-auto p-4">
       <RouterView />
     </main>
+    <UiToastHost />
   </div>
 </template>
 
