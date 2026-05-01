@@ -222,6 +222,19 @@
       "cta": "Voltar ao início"
     }
   },
+  "account": {
+    "preferences": {
+      "accents": {
+        "coral": "Coral",
+        "iris": "Íris",
+        "matcha": "Matcha",
+        "sakura": "Sakura",
+        "citron": "Citron"
+      },
+      "proChip": "Pro",
+      "proNote": "Gratuito durante o acesso antecipado"
+    }
+  },
   "schedule": {
     "days": {
       "mon": "Seg",
