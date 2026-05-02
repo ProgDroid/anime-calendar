@@ -180,6 +180,126 @@ impl SubscriptionMapper {
         })
         .await
     }
+
+    /// Same as `upsert_from_stripe` but participates in an existing sqlx
+    /// transaction so the webhook handler can commit the idempotency insert
+    /// (`stripe_events`) and the subscription write atomically.
+    ///
+    /// # Errors
+    /// Returns an error if the database query fails.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn upsert_from_stripe_in_tx(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+        status: &str,
+        stripe_customer_id: &str,
+        stripe_subscription_id: &str,
+        stripe_price_id: &str,
+        current_period_start: chrono::NaiveDateTime,
+        current_period_end: chrono::NaiveDateTime,
+        trial_end: Option<chrono::NaiveDateTime>,
+        cancel_at_period_end: bool,
+    ) -> ServerResult<()> {
+        sqlx::query!(
+            "INSERT INTO subscriptions \
+             (user_id, tier, status, stripe_customer_id, stripe_subscription_id, \
+              stripe_price_id, current_period_start, current_period_end, trial_end, \
+              cancel_at_period_end) \
+             VALUES ($1, 'paid', $2, $3, $4, $5, $6, $7, $8, $9) \
+             ON CONFLICT (stripe_subscription_id) DO UPDATE SET \
+               status = EXCLUDED.status, \
+               stripe_price_id = EXCLUDED.stripe_price_id, \
+               current_period_start = EXCLUDED.current_period_start, \
+               current_period_end = EXCLUDED.current_period_end, \
+               trial_end = EXCLUDED.trial_end, \
+               cancel_at_period_end = EXCLUDED.cancel_at_period_end, \
+               updated_at = NOW()",
+            user_id,
+            status,
+            stripe_customer_id,
+            stripe_subscription_id,
+            stripe_price_id,
+            current_period_start,
+            current_period_end,
+            trial_end,
+            cancel_at_period_end,
+        )
+        .execute(conn)
+        .await?;
+        Ok(())
+    }
+
+    /// Resolve a `user_id` from a Stripe customer id by looking at any prior
+    /// subscription row. Used by subscription/invoice webhook events that
+    /// don't carry `client_reference_id` and don't have user metadata
+    /// populated (legacy rows or out-of-band Stripe activity).
+    ///
+    /// # Errors
+    /// Returns an error if the database query fails.
+    pub async fn find_user_id_by_customer_in_tx(
+        conn: &mut sqlx::PgConnection,
+        stripe_customer_id: &str,
+    ) -> ServerResult<Option<i32>> {
+        let row = sqlx::query_scalar!(
+            "SELECT user_id FROM subscriptions \
+             WHERE stripe_customer_id = $1 \
+             ORDER BY created_at DESC \
+             LIMIT 1",
+            stripe_customer_id,
+        )
+        .fetch_optional(conn)
+        .await?;
+        Ok(row)
+    }
+
+    /// Update only the `status` column for a subscription, by stripe id.
+    /// Used by `customer.subscription.deleted` (→ `canceled`) and
+    /// `invoice.payment_failed` (→ `past_due`). Returns the number of rows
+    /// affected so callers can decide whether to log a "row not found" warning.
+    ///
+    /// # Errors
+    /// Returns an error if the database query fails.
+    pub async fn update_status_by_subscription_id_in_tx(
+        conn: &mut sqlx::PgConnection,
+        stripe_subscription_id: &str,
+        status: &str,
+    ) -> ServerResult<u64> {
+        let result = sqlx::query!(
+            "UPDATE subscriptions SET status = $1, updated_at = NOW() \
+             WHERE stripe_subscription_id = $2",
+            status,
+            stripe_subscription_id,
+        )
+        .execute(conn)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
+    /// Update `current_period_end` on a successful renewal invoice. Also
+    /// flips `status` to `active` if the subscription was previously in
+    /// `past_due` — a successful charge clears the dunning state. Returns
+    /// rows affected for the same reason as `update_status_by_subscription_id_in_tx`.
+    ///
+    /// # Errors
+    /// Returns an error if the database query fails.
+    pub async fn update_period_end_by_subscription_id_in_tx(
+        conn: &mut sqlx::PgConnection,
+        stripe_subscription_id: &str,
+        current_period_end: chrono::NaiveDateTime,
+    ) -> ServerResult<u64> {
+        let result = sqlx::query!(
+            "UPDATE subscriptions SET \
+                current_period_end = $1, \
+                status = CASE WHEN status = 'past_due' THEN 'active' ELSE status END, \
+                updated_at = NOW() \
+             WHERE stripe_subscription_id = $2",
+            current_period_end,
+            stripe_subscription_id,
+        )
+        .execute(conn)
+        .await?;
+        Ok(result.rows_affected())
+    }
 }
 
 #[cfg(test)]

@@ -86,8 +86,16 @@ pub async fn create_checkout_session(
     let cancel_url = format!("{frontend}/upgrade/canceled");
 
     // Card is required up front — no "trial-then-vanish" abuse pattern.
+    // Stamp user_id into the subscription metadata so every downstream
+    // `customer.subscription.*` and `invoice.*` webhook event carries the
+    // mapping back to our user — no need to fetch the original Checkout
+    // session or rely on the customer-id lookup table.
     let mut subscription_data = CreateCheckoutSessionSubscriptionData::new();
     subscription_data.trial_period_days = Some(14);
+    subscription_data.metadata = Some(std::collections::HashMap::from([(
+        "user_id".to_string(),
+        user.id.to_string(),
+    )]));
 
     let mut create = CreateCheckoutSession::new()
         .mode(CheckoutSessionMode::Subscription)

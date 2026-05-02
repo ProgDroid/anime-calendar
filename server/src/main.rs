@@ -6,8 +6,8 @@ use server::{
     mappers::{
         anilist::Anilist, calendar::CalendarMapper, email_verification::EmailVerificationMapper,
         google_oauth::GoogleOauth, password_reset::PasswordResetMapper,
-        refresh_token::RefreshTokenMapper, subscription::SubscriptionMapper, user::UserMapper,
-        user_settings::UserSettingsMapper,
+        refresh_token::RefreshTokenMapper, stripe_event::StripeEventMapper,
+        subscription::SubscriptionMapper, user::UserMapper, user_settings::UserSettingsMapper,
     },
     services::{email::EmailService, entitlement::EntitlementService},
 };
@@ -30,6 +30,7 @@ async fn main() -> ServerResult<()> {
     let verification_mapper = EmailVerificationMapper::new(db_config.clone()).await?;
     let refresh_token_mapper = RefreshTokenMapper::new(db_config.clone()).await?;
     let subscription_mapper = SubscriptionMapper::new(db_config.clone()).await?;
+    let stripe_event_mapper = StripeEventMapper::new(db_config.clone()).await?;
     let email_service = EmailService::new(settings.smtp.clone());
     let entitlement_service = EntitlementService::new(subscription_mapper.clone());
 
@@ -68,6 +69,7 @@ async fn main() -> ServerResult<()> {
         verification_mapper,
         refresh_token_mapper,
         subscription_mapper,
+        stripe_event_mapper,
         email_service,
         entitlement_service,
         stripe_client,

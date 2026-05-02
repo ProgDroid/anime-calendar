@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE subscriptions SET current_period_end = $1, status = CASE WHEN status = 'past_due' THEN 'active' ELSE status END, updated_at = NOW() WHERE stripe_subscription_id = $2",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamp",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "135d3c6fee45610c1f898ae1309706f10fb53b1b43a14ea6f3f5bfc5309b6191"
+}

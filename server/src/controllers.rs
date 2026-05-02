@@ -7,5 +7,6 @@ pub mod oauth;
 pub mod password_reset;
 pub mod refresh;
 pub mod stripe;
+pub mod stripe_webhook;
 pub mod subscription;
 pub mod user;

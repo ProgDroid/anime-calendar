@@ -1,7 +1,12 @@
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::str::FromStr;
 
 use actix_cors::Cors;
-use actix_governor::{Governor, GovernorConfigBuilder};
+use actix_governor::{
+    governor::{clock::QuantaInstant, NotUntil},
+    Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError,
+};
+use actix_web::dev::ServiceRequest;
 use actix_web::{
     dev::Server,
     middleware::{Compress, Condition, DefaultHeaders, Logger},
@@ -17,20 +22,73 @@ use crate::{
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig, StripeConfig},
     controllers::{
         auth, calendar, email_verification, item, items, oauth, password_reset, refresh,
-        stripe as stripe_controller, subscription as subscription_controller, user,
+        stripe as stripe_controller, stripe_webhook as stripe_webhook_controller,
+        subscription as subscription_controller, user,
     },
     error::Error,
     mappers::{
         anilist::Anilist, calendar::CalendarMapper, email_verification::EmailVerificationMapper,
         google_oauth::GoogleOauth, password_reset::PasswordResetMapper,
-        refresh_token::RefreshTokenMapper, subscription::SubscriptionMapper, user::UserMapper,
-        user_settings::UserSettingsMapper,
+        refresh_token::RefreshTokenMapper, stripe_event::StripeEventMapper,
+        subscription::SubscriptionMapper, user::UserMapper, user_settings::UserSettingsMapper,
     },
     openapi::ApiDoc,
     services::{email::EmailService, entitlement::EntitlementService},
     ServerResult,
 };
 use stripe::Client as StripeClient;
+
+/// Stripe webhook endpoint must not be rate-limited: Stripe retries failed
+/// deliveries in bursts, and an HTTP 429 here would just trip its
+/// "endpoint disabled" heuristic. We exempt the path by mapping it to a
+/// sentinel key that's added to the governor whitelist.
+///
+/// All other paths fall through to the default per-peer-IP behavior (with the
+/// IPv6 /56-prefix grouping the upstream `PeerIpKeyExtractor` uses).
+const WEBHOOK_WHITELIST_KEY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+
+#[derive(Clone, Copy, Debug)]
+struct WebhookExemptKeyExtractor;
+
+impl KeyExtractor for WebhookExemptKeyExtractor {
+    type Key = IpAddr;
+    type KeyExtractionError = SimpleKeyExtractionError<&'static str>;
+
+    fn extract(&self, req: &ServiceRequest) -> Result<Self::Key, Self::KeyExtractionError> {
+        if req.path() == "/stripe/webhook" {
+            return Ok(WEBHOOK_WHITELIST_KEY);
+        }
+        let mut ip = req.peer_addr().map(|s| s.ip()).ok_or_else(|| {
+            SimpleKeyExtractionError::new("Could not extract peer IP address from request")
+        })?;
+        // Mirror PeerIpKeyExtractor's IPv6 /56-prefix bucketing so a single
+        // user with a routed prefix doesn't get hit by their own neighbours.
+        if let IpAddr::V6(ipv6) = ip {
+            let mut octets = ipv6.octets();
+            octets[7..16].fill(0);
+            ip = IpAddr::V6(Ipv6Addr::from(octets));
+        }
+        Ok(ip)
+    }
+
+    fn exceed_rate_limit_response(
+        &self,
+        negative: &NotUntil<QuantaInstant>,
+        mut response: actix_web::HttpResponseBuilder,
+    ) -> actix_web::HttpResponse {
+        use actix_governor::governor::clock::{Clock as _, DefaultClock};
+        let wait = negative
+            .wait_time_from(DefaultClock::default().now())
+            .as_secs();
+        response.content_type("application/json").body(format!(
+            r#"{{"error":"rate limited","retry_after":{wait}}}"#
+        ))
+    }
+
+    fn whitelisted_keys(&self) -> Vec<Self::Key> {
+        vec![WEBHOOK_WHITELIST_KEY]
+    }
+}
 
 #[allow(clippy::too_many_arguments)]
 /// # Errors
@@ -47,6 +105,7 @@ pub fn start(
     verification_mapper: EmailVerificationMapper,
     refresh_token_mapper: RefreshTokenMapper,
     subscription_mapper: SubscriptionMapper,
+    stripe_event_mapper: StripeEventMapper,
     email_service: EmailService,
     entitlement_service: EntitlementService,
     stripe_client: StripeClient,
@@ -86,6 +145,7 @@ pub fn start(
     let governor_conf = GovernorConfigBuilder::default()
         .seconds_per_request(1)
         .burst_size(60)
+        .key_extractor(WebhookExemptKeyExtractor)
         .finish()
         .ok_or(Error::GovernorConfig)?;
 
@@ -146,6 +206,7 @@ pub fn start(
             .app_data(web::Data::new(verification_mapper.clone()))
             .app_data(web::Data::new(refresh_token_mapper.clone()))
             .app_data(web::Data::new(subscription_mapper.clone()))
+            .app_data(web::Data::new(stripe_event_mapper.clone()))
             .app_data(web::Data::new(email_service.clone()))
             .app_data(web::Data::new(entitlement_service.clone()))
             .app_data(web::Data::new(stripe_client.clone()))
@@ -178,6 +239,7 @@ pub fn start(
             .service(user::get_user_settings)
             .service(user::update_user_settings)
             .service(stripe_controller::create_checkout_session)
+            .service(stripe_webhook_controller::stripe_webhook)
             .service(subscription_controller::get_my_subscription)
     })
     .bind(format!("{host}:{port}"))?

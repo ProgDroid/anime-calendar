@@ -16,7 +16,7 @@ async-stripe-checkout = { version = "=1.0.0-rc.5", features = ["checkout_session
 async-stripe-core = { version = "=1.0.0-rc.5", features = ["customer", "serialize", "deserialize"] }
 async-stripe-shared = { version = "=1.0.0-rc.5", features = ["serialize", "deserialize"] }
 async-stripe-types = { version = "=1.0.0-rc.5", features = ["serialize", "deserialize"] }
-async-stripe-webhook = "=1.0.0-rc.5"
+async-stripe-webhook = { version = "=1.0.0-rc.5", features = ["deserialize", "async-stripe-checkout", "async-stripe-billing", "async-stripe-core"] }
 chrono = { version = "0.4", features = [ "serde" ] }
 common = { path = "../common", features = ["utoipa"] }
 config = "0.15"

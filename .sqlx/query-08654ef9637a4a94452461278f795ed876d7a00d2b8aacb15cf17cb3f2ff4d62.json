@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO stripe_events (stripe_event_id, event_type) VALUES ($1, $2) ON CONFLICT (stripe_event_id) DO NOTHING RETURNING stripe_event_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "stripe_event_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "08654ef9637a4a94452461278f795ed876d7a00d2b8aacb15cf17cb3f2ff4d62"
+}
