@@ -15,6 +15,7 @@ use actix_web::{HttpResponse, ResponseError, post, web};
 use log::error;
 use serde::{Deserialize, Serialize};
 use stripe::Client as StripeClient;
+use stripe_billing::billing_portal_session::CreateBillingPortalSession;
 use stripe_checkout::checkout_session::{
     CreateCheckoutSession, CreateCheckoutSessionLineItems,
     CreateCheckoutSessionPaymentMethodCollection, CreateCheckoutSessionSubscriptionData,
@@ -141,4 +142,86 @@ pub async fn create_checkout_session(
     };
 
     HttpResponse::Ok().json(CheckoutResponse { url })
+}
+
+#[derive(Serialize, utoipa::ToSchema)]
+pub struct PortalResponse {
+    /// Stripe-hosted Customer Portal page; the frontend should
+    /// `window.location.href` to it.
+    pub url: String,
+}
+
+/// `POST /api/stripe/portal` — generate a Stripe Customer Portal session for
+/// the calling user and return its hosted URL.
+///
+/// The user must already have a `stripe_customer_id` on a previous
+/// subscription row — i.e. they must have completed at least one Checkout.
+/// Free users hitting this endpoint receive 400; the frontend gates the
+/// "Manage subscription" CTA so this should never trip in the happy path.
+///
+/// **Authorization defense in depth:** the lookup goes through
+/// `find_latest_customer_id_for_user(claims.user_id)`, so the resulting
+/// portal session can only ever target the calling user's customer. There's
+/// no caller-supplied customer id to validate against — that's by design.
+#[utoipa::path(
+    post,
+    path = "/stripe/portal",
+    tag = "stripe",
+    responses(
+        (status = 200, body = PortalResponse),
+        (status = 400, body = crate::controllers::auth::ErrorResponse,
+         description = "Caller has no Stripe customer id (never subscribed)"),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+        (status = 500, body = crate::controllers::auth::ErrorResponse,
+         description = "Stripe is not configured or returned an error"),
+    ),
+    security(("bearer_auth" = []))
+)]
+#[post("/stripe/portal")]
+#[allow(clippy::future_not_send)]
+pub async fn create_portal_session(
+    user_mapper: web::Data<UserMapper>,
+    sub_mapper: web::Data<SubscriptionMapper>,
+    stripe_client: web::Data<StripeClient>,
+    stripe_config: web::Data<StripeConfig>,
+    app_base_url: web::Data<AppBaseUrl>,
+    claims: Claims,
+) -> HttpResponse {
+    if !stripe_config.is_configured() {
+        return Error::StripeNotConfigured.error_response();
+    }
+
+    let user = match user_mapper.get_user_from_claims(&claims).await {
+        Ok(u) => u,
+        Err(e) => return e.error_response(),
+    };
+
+    let customer_id = match sub_mapper.find_latest_customer_id_for_user(user.id).await {
+        Ok(Some(id)) => id,
+        Ok(None) => {
+            // User has never subscribed — nothing for the portal to manage.
+            // 400 with a clear error matches the frontend's expectation that
+            // the Manage CTA is only shown to paid/past_due/trialing users.
+            return Error::InvalidRequest.error_response();
+        }
+        Err(e) => return e.error_response(),
+    };
+
+    let frontend = app_base_url.as_str().trim_end_matches('/');
+    let return_url = format!("{frontend}/account/subscription");
+
+    let session = match CreateBillingPortalSession::new()
+        .customer(customer_id.as_str())
+        .return_url(return_url.as_str())
+        .send(stripe_client.get_ref())
+        .await
+    {
+        Ok(s) => s,
+        Err(e) => {
+            error!("stripe create billing portal session failed: {e}");
+            return Error::Stripe(e.to_string()).error_response();
+        }
+    };
+
+    HttpResponse::Ok().json(PortalResponse { url: session.url })
 }

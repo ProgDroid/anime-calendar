@@ -37,3 +37,15 @@ export async function getMySubscription(sessionId?: string): Promise<Entitlement
   })
   return res.data
 }
+
+/**
+ * Phase 4: ask the server to mint a Stripe Customer Portal session. The
+ * server looks up our `stripe_customer_id` from JWT claims — we never pass
+ * one in, which is defense in depth (no caller-supplied customer id to
+ * tamper with). Caller redirects to `result.url` via `window.location.href`.
+ * Stripe sends the user back to `/account/subscription` when they finish.
+ */
+export async function createPortalSession(): Promise<{ url: string }> {
+  const res = await api.post<{ url: string }>('/stripe/portal')
+  return res.data
+}

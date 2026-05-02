@@ -239,6 +239,7 @@ pub fn start(
             .service(user::get_user_settings)
             .service(user::update_user_settings)
             .service(stripe_controller::create_checkout_session)
+            .service(stripe_controller::create_portal_session)
             .service(stripe_webhook_controller::stripe_webhook)
             .service(subscription_controller::get_my_subscription)
     })

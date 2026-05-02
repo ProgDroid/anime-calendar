@@ -12,7 +12,7 @@ use crate::{
             CalendarRequest, PageCalendar, PaginatedResponse, PaginationInfo, PaginationParams,
         },
         oauth::{GoogleOAuthRequest, GoogleOAuthResponse},
-        stripe::{BillingInterval, CheckoutRequest, CheckoutResponse},
+        stripe::{BillingInterval, CheckoutRequest, CheckoutResponse, PortalResponse},
         subscription::SubscriptionResponse,
         user::{UpdatePasswordRequest, UpdateUserRequest, UserResponse},
     },
@@ -84,6 +84,7 @@ impl Modify for BearerAuth {
         crate::controllers::items::search,
         // stripe / subscription
         crate::controllers::stripe::create_checkout_session,
+        crate::controllers::stripe::create_portal_session,
         crate::controllers::subscription::get_my_subscription,
     ),
     components(schemas(
@@ -120,6 +121,7 @@ impl Modify for BearerAuth {
         BillingInterval,
         CheckoutRequest,
         CheckoutResponse,
+        PortalResponse,
         SubscriptionResponse,
         // common types
         common::calendar::Calendar,
