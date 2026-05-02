@@ -261,6 +261,7 @@
       "label": "Conta",
       "profile": "Perfil",
       "preferences": "Preferências",
+      "subscription": "Subscrição",
       "password": "Palavra Passe",
       "danger": "Zona Perigosa"
     },
@@ -284,6 +285,38 @@
       },
       "proChip": "Pro",
       "proNote": "Gratuito durante o acesso antecipado"
+    },
+    "subscription": {
+      "eyebrow": "Subscrição",
+      "headingLead": "O seu",
+      "headingItalic": "plano",
+      "subtitle": "Faça a gestão da sua subscrição, método de pagamento e renovação.",
+      "tier": {
+        "free": "Gratuito",
+        "paid": "Pro"
+      },
+      "interval": {
+        "monthly": "Mensal",
+        "annual": "Anual"
+      },
+      "freeState": {
+        "title": "Está no plano gratuito",
+        "description": "Faça upgrade para Pro para desbloquear acentos premium, suporte prioritário e todas as funcionalidades.",
+        "cta": "Ver planos"
+      },
+      "paid": {
+        "renewsOn": "Renova a {date}",
+        "cancelsOn": "Cancela a {date}",
+        "trialEndsOn": "Período experimental termina {date}",
+        "manage": "Gerir subscrição",
+        "managing": "A abrir Stripe…"
+      },
+      "pastDueBanner": "Pagamento falhou — atualize o cartão para manter acesso.",
+      "trialBanner": "Está num período experimental gratuito.",
+      "errors": {
+        "fetchFailed": "Não foi possível carregar os detalhes da subscrição.",
+        "portalFailed": "Não foi possível abrir o portal Stripe. Tente novamente."
+      }
     },
     "password": {
       "eyebrow": "Segurança",

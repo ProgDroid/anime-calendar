@@ -261,6 +261,7 @@
       "label": "Account",
       "profile": "Profile",
       "preferences": "Preferences",
+      "subscription": "Subscription",
       "password": "Password",
       "danger": "Danger Zone"
     },
@@ -284,6 +285,38 @@
       },
       "proChip": "Pro",
       "proNote": "Free during early access"
+    },
+    "subscription": {
+      "eyebrow": "Subscription",
+      "headingLead": "Your",
+      "headingItalic": "plan",
+      "subtitle": "Manage your subscription, payment method, and renewal.",
+      "tier": {
+        "free": "Free",
+        "paid": "Pro"
+      },
+      "interval": {
+        "monthly": "Monthly",
+        "annual": "Annual"
+      },
+      "freeState": {
+        "title": "You're on the free plan",
+        "description": "Upgrade to Pro to unlock premium accents, priority support, and the full feature set.",
+        "cta": "See plans"
+      },
+      "paid": {
+        "renewsOn": "Renews on {date}",
+        "cancelsOn": "Cancels on {date}",
+        "trialEndsOn": "Trial ends {date}",
+        "manage": "Manage subscription",
+        "managing": "Opening Stripe…"
+      },
+      "pastDueBanner": "Payment failed — update your card to keep access.",
+      "trialBanner": "You're on a free trial.",
+      "errors": {
+        "fetchFailed": "Couldn't load your subscription details.",
+        "portalFailed": "Couldn't open the Stripe portal. Try again in a moment."
+      }
     },
     "password": {
       "eyebrow": "Security",
