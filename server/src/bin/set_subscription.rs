@@ -3,6 +3,7 @@
 //! Usage:
 //!   set_subscription --email <email> <state>
 //!   set_subscription --user-id <id>  <state>
+//!   set_subscription --email <email> --reconcile-from-stripe
 //!
 //! States:
 //!   free                    Delete all subscription rows for the user.
@@ -13,13 +14,22 @@
 //!   canceled-expired        status=canceled, period_end=now-1d.
 //!   incomplete              status=incomplete, period_end=now+30d.
 //!
+//! `--reconcile-from-stripe` pulls Stripe truth for the user's active
+//! subscription and applies the same drift correction the hourly loop would.
+//! Useful for debugging webhook delivery gaps or hand-checking a customer
+//! after the fact.
+//!
 //! Safety: refuses to run when APP_ENV=production. Reads database.toml from CWD.
-//! This bin is excluded from the production Docker image.
+//! `--reconcile-from-stripe` additionally reads config.toml for the Stripe
+//! secret key. This bin is excluded from the production Docker image.
 
 use std::{env, process::ExitCode};
 
 use chrono::{Duration, NaiveDateTime, Utc};
 use server::config::database::Database as DatabaseConfig;
+use server::config::server::Server as ServerConfig;
+use server::mappers::subscription::SubscriptionMapper;
+use server::services::reconcile::{LiveStripeFetcher, reconcile_for_user};
 use sqlx::PgPool;
 
 #[derive(Debug)]
@@ -56,16 +66,25 @@ enum UserSelector {
 
 fn print_usage() {
     eprintln!(
-        "Usage: set_subscription (--email <email> | --user-id <id>) <state>\n\
+        "Usage:\n  \
+           set_subscription (--email <email> | --user-id <id>) <state>\n  \
+           set_subscription (--email <email> | --user-id <id>) --reconcile-from-stripe\n\
          States: free | trialing | active | past-due | cancel-at-period-end | \
          canceled-expired | incomplete"
     );
 }
 
-fn parse_args() -> Result<(UserSelector, State), String> {
+#[derive(Debug)]
+enum Mode {
+    SetState(State),
+    ReconcileFromStripe,
+}
+
+fn parse_args() -> Result<(UserSelector, Mode), String> {
     let mut args = env::args().skip(1);
     let mut selector: Option<UserSelector> = None;
     let mut state: Option<State> = None;
+    let mut reconcile = false;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -77,6 +96,9 @@ fn parse_args() -> Result<(UserSelector, State), String> {
                 let v = args.next().ok_or("--user-id requires a value")?;
                 let id: i32 = v.parse().map_err(|_| "--user-id must be an integer")?;
                 selector = Some(UserSelector::UserId(id));
+            }
+            "--reconcile-from-stripe" => {
+                reconcile = true;
             }
             "-h" | "--help" => {
                 print_usage();
@@ -94,8 +116,15 @@ fn parse_args() -> Result<(UserSelector, State), String> {
     }
 
     let selector = selector.ok_or("missing --email or --user-id")?;
-    let state = state.ok_or("missing state argument")?;
-    Ok((selector, state))
+    let mode = match (reconcile, state) {
+        (true, None) => Mode::ReconcileFromStripe,
+        (true, Some(_)) => {
+            return Err("--reconcile-from-stripe is exclusive with a <state> argument".into());
+        }
+        (false, Some(s)) => Mode::SetState(s),
+        (false, None) => return Err("missing state argument or --reconcile-from-stripe".into()),
+    };
+    Ok((selector, mode))
 }
 
 async fn resolve_user_id(pool: &PgPool, selector: &UserSelector) -> Result<i32, String> {
@@ -227,6 +256,28 @@ async fn apply(pool: &PgPool, user_id: i32, state: &State) -> Result<String, Str
     ))
 }
 
+async fn apply_reconcile(pool: &PgPool, user_id: i32) -> Result<String, String> {
+    use secrecy::ExposeSecret;
+
+    let cfg = ServerConfig::new().map_err(|e| format!("could not load config.toml: {e}"))?;
+    if !cfg.stripe.is_configured() {
+        return Err("stripe is not configured in config.toml".into());
+    }
+    let client = stripe::Client::new(cfg.stripe.secret_key.expose_secret().to_string());
+    let fetcher = LiveStripeFetcher::new(client);
+    let mapper = SubscriptionMapper::from_pool(pool.clone());
+
+    match reconcile_for_user(&mapper, &fetcher, user_id).await? {
+        None => Ok(format!(
+            "user {user_id}: no active subscription row to reconcile"
+        )),
+        Some(true) => Ok(format!("user {user_id}: drift corrected from Stripe")),
+        Some(false) => Ok(format!(
+            "user {user_id}: no drift detected (local matches Stripe, or fresher)"
+        )),
+    }
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     // Hard guard: never run against prod.
@@ -237,7 +288,7 @@ async fn main() -> ExitCode {
         return ExitCode::from(2);
     }
 
-    let (selector, state) = match parse_args() {
+    let (selector, mode) = match parse_args() {
         Ok(v) => v,
         Err(e) => {
             eprintln!("error: {e}");
@@ -279,7 +330,12 @@ async fn main() -> ExitCode {
         }
     };
 
-    match apply(&pool, user_id, &state).await {
+    let result = match mode {
+        Mode::SetState(state) => apply(&pool, user_id, &state).await,
+        Mode::ReconcileFromStripe => apply_reconcile(&pool, user_id).await,
+    };
+
+    match result {
         Ok(msg) => {
             println!("{msg}");
             ExitCode::SUCCESS
