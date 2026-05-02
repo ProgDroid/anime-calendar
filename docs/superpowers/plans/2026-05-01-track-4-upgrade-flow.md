@@ -101,20 +101,20 @@ This plan turns the Track 4 spec into ordered, ship-able batches. Phases are seq
 **Goal:** Stripe's webhook events drive the local `subscriptions` table from now on. Drop the Phase-2 stopgap.
 
 ### Tasks
-- [ ] `POST /api/stripe/webhook` (public, no JWT): reads raw body + `Stripe-Signature` header, calls `stripe::Webhook::construct_event(body, sig, webhook_secret)` to verify. 400 on signature failure.
-- [ ] Whitelist `/api/stripe/webhook` from `actix-governor` rate-limiting (Stripe sends bursts on retries).
-- [ ] Idempotency: insert `stripe_event_id` into `stripe_events` with `INSERT ... ON CONFLICT DO NOTHING RETURNING 1`. If 0 rows returned, return 200 immediately without further processing.
-- [ ] Multi-table writes (event + subscription) inside a single sqlx transaction with explicit rollback on error (CLAUDE.md rule).
-- [ ] Handler routes by `event.type`:
-  - `checkout.session.completed`: pull `client_reference_id` (= user_id) and `subscription` (= stripe_subscription_id) from the session, then upsert `subscriptions` row.
-  - `customer.subscription.created`: defensive upsert (Stripe sometimes fires before checkout completion).
-  - `customer.subscription.updated`: update status, period boundaries, `cancel_at_period_end`, `trial_end`.
-  - `customer.subscription.deleted`: status → `canceled`, leave row in place for history.
-  - `invoice.payment_succeeded`: update `current_period_end` (renewal).
+- [x] `POST /api/stripe/webhook` (public, no JWT): reads raw body + `Stripe-Signature` header, calls `stripe::Webhook::construct_event(body, sig, webhook_secret)` to verify. 400 on signature failure.
+- [x] Whitelist `/api/stripe/webhook` from `actix-governor` rate-limiting (Stripe sends bursts on retries). *Implemented via custom `WebhookExemptKeyExtractor` in `server.rs` — maps the path to a sentinel-IP that's added to `whitelisted_keys`. Default per-peer-IP behavior preserved for everything else.*
+- [x] Idempotency: insert `stripe_event_id` into `stripe_events` with `INSERT ... ON CONFLICT DO NOTHING RETURNING 1`. If 0 rows returned, return 200 immediately without further processing.
+- [x] Multi-table writes (event + subscription) inside a single sqlx transaction with explicit rollback on error (CLAUDE.md rule).
+- [x] Handler routes by `event.type`:
+  - `checkout.session.completed`: deliberately a no-op — `customer.subscription.created` carries the same data plus our metadata, so we just record the event id and 200. *(Diverges from plan; cleaner since both events fire together and the subscription event has the full object inline.)*
+  - `customer.subscription.created`: upsert from full payload, resolving `user_id` from `subscription.metadata.user_id` (stamped during Checkout creation) with customer→user fallback.
+  - `customer.subscription.updated`: same path as `created` — `upsert_from_stripe_in_tx`.
+  - `customer.subscription.deleted`: status → `canceled` via `update_status_by_subscription_id_in_tx`, row preserved for history.
+  - `invoice.payment_succeeded`: update `current_period_end` from `lines.data[0].period.end`; flip `past_due` → `active` if previously dunning.
   - `invoice.payment_failed`: status → `past_due`.
   - All other events: idempotency insert + 200 (Stripe stops retrying).
-- [ ] Remove the Phase-2 `?session_id=` stopgap from `GET /api/subscription/me`. Comment it out first, deploy, observe — *then* delete in a follow-up commit.
-- [ ] Backend tests: a fixture per event type (replayed payloads). For each event, assert resulting `subscriptions` row state. Replay the same event twice, assert no duplicate write (idempotency).
+- [x] Remove the Phase-2 `?session_id=` stopgap from `GET /api/subscription/me`. *Removed cleanly in this same Phase-3 landing rather than the staged "comment-then-delete" path, since the webhook + stopgap-removal land in one PR.*
+- [ ] Backend tests: a fixture per event type (replayed payloads). For each event, assert resulting `subscriptions` row state. Replay the same event twice, assert no duplicate write (idempotency). *Not yet — only the `record_first_time` mapper has unit tests. Filed as follow-up.*
 
 ### Acceptance
 - End-to-end test: complete a Stripe Checkout in test mode → webhook fires → `subscriptions` row appears. Verify via `psql`.
