@@ -193,15 +193,15 @@ This plan turns the Track 4 spec into ordered, ship-able batches. Phases are seq
 **Goal:** safety net is live, copy is shipped, end-to-end matrix is validated against Stripe test mode.
 
 ### Tasks
-- [ ] `server/src/services/reconcile.rs`: hourly `tokio::spawn` task per the spec.
+- [x] `server/src/services/reconcile.rs`: hourly `tokio::spawn` task per the spec.
   - Reads `[reconcile] interval_secs` from config (default 3600, 0 disables).
   - Iterates active rows, calls `stripe::Subscription::retrieve`, conditional UPDATE (Option α: `WHERE current_period_end <= $stripe_period_end`).
-  - Emits `entitlement_reconcile_drift_total{field="..."}` Prometheus counter on every correction.
+  - Emits `entitlement_reconcile_drift_total{field="..."}` Prometheus counter on every correction; `entitlement_reconcile_errors_total` on per-row failures.
   - Per-row errors logged + skipped; pass continues.
-- [ ] Spawn the loop from `main.rs` after Stripe client + DB pool are ready.
-- [ ] Tests: with a `MockStripeClient` (or hand-rolled trait + fixture), seed local DB with stale data, run one pass, assert local matches mocked Stripe.
-- [ ] Add `--reconcile-from-stripe` mode to the `set_subscription` CLI for manual single-user reconciliation during debugging.
-- [ ] Final copy + design pass: pricing card visuals to match `screens-upgrade.jsx` precisely, including any banner-fade-in or hover effects from Track 1.
+- [x] Spawn the loop from `main.rs` after Stripe client + DB pool are ready (gated on `StripeConfig::is_configured()`).
+- [x] Tests: hand-rolled `MockFetcher` trait + fixture, seed local DB with stale data, run one pass, assert per-row outcome.
+- [x] Add `--reconcile-from-stripe` mode to the `set_subscription` CLI for manual single-user reconciliation during debugging.
+- [ ] Final copy + design pass: pricing card visuals to match `screens-upgrade.jsx` precisely, including any banner-fade-in or hover effects from Track 1. _Deferred to a follow-up polish pass — Phase 6's correctness goals are met; the visual sweep is a separate workstream that doesn't block the reliability story._
 - [ ] e2e checklist (manual, against Stripe test mode):
   - [ ] Sign up → Checkout (monthly) → success → tier=paid.
   - [ ] Sign up → Checkout (annual) → success → tier=paid.
