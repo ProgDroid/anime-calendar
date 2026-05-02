@@ -9,10 +9,26 @@ defineOptions({ name: 'AccentPicker' })
 
 const ACCENTS: readonly Accent[] = ['coral', 'iris', 'matcha', 'sakura', 'citron'] as const
 
-defineProps<{ modelValue: Accent }>()
-defineEmits<{ 'update:modelValue': [Accent] }>()
+const props = withDefaults(defineProps<{ modelValue: Accent; isPaid?: boolean }>(), {
+  isPaid: false,
+})
+const emit = defineEmits<{
+  'update:modelValue': [Accent]
+  // Free user clicked a Pro accent — caller is expected to surface the
+  // upgrade interrupt modal. The accent is NOT applied; v-model is left
+  // unchanged so the picker stays visually in its previous state.
+  interrupt: [Accent]
+}>()
 
 const { t } = useI18n()
+
+function handleClick(accent: Accent) {
+  if (PRO_ACCENTS.has(accent) && !props.isPaid) {
+    emit('interrupt', accent)
+    return
+  }
+  emit('update:modelValue', accent)
+}
 
 function ariaLabel(accent: Accent): string {
   const name = t(`account.preferences.accents.${accent}`)
@@ -31,7 +47,7 @@ function ariaLabel(accent: Accent): string {
       :aria-label="ariaLabel(accent)"
       class="relative flex flex-col items-center gap-2 p-3 rounded-lg bg-bg-2 hover:bg-bg-3 transition"
       :aria-pressed="modelValue === accent"
-      @click="$emit('update:modelValue', accent)"
+      @click="handleClick(accent)"
     >
       <span class="accent-swatch-dot w-10 h-10 rounded-full relative">
         <span
