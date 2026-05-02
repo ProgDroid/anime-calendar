@@ -41,10 +41,9 @@ pub async fn refresh(
             if let Ok(Some(user_id)) = refresh_mapper
                 .find_user_id_for_used_token(&token_hash)
                 .await
+                && let Err(inv_err) = refresh_mapper.invalidate_all_for_user(user_id).await
             {
-                if let Err(inv_err) = refresh_mapper.invalidate_all_for_user(user_id).await {
-                    error!("Failed to invalidate token family for user {user_id}: {inv_err}");
-                }
+                error!("Failed to invalidate token family for user {user_id}: {inv_err}");
             }
             return e.error_response();
         }

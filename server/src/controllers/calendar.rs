@@ -1,7 +1,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
-    cache::{CACHE_TTL_CALENDAR, CACHE_TTL_ITEM, CACHE_TTL_SEARCH, Cache},
+    cache::{Cache, CACHE_TTL_CALENDAR, CACHE_TTL_ITEM, CACHE_TTL_SEARCH},
     entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
     error::Error,
     mappers::{anilist::Anilist, calendar::CalendarMapper, user::UserMapper},
@@ -9,7 +9,7 @@ use crate::{
     services::calendar_export::generate_calendar_export,
 };
 
-use actix_web::{HttpResponse, ResponseError, delete, get, put, web};
+use actix_web::{delete, get, put, web, HttpResponse, ResponseError};
 use chrono::{NaiveDateTime, Utc};
 use common::{
     calendar::Calendar,
@@ -434,9 +434,7 @@ async fn put(
             if let Some(id) = Id::new(calendar.id.into()) {
                 // Invalidate cache for this calendar (controller-level invalidation)
                 let _ = cache.invalidate_calendar(calendar.id).await;
-                let _ = cache
-                    .invalidate_pattern(format!("{}:calendars:page:*", user.id).as_str())
-                    .await;
+                let _ = cache.invalidate_user_paged_calendars(user.id).await;
                 let _ = cache
                     .invalidate_subscription(&calendar.subscription_token)
                     .await;
@@ -525,10 +523,10 @@ async fn get_calendars(
             let mut seen: std::collections::HashSet<u64> = std::collections::HashSet::new();
             for (calendar, _) in &calendars {
                 for raw_id in &calendar.item_ids {
-                    if let Some(id) = Id::new(i64::from(*raw_id)) {
-                        if seen.insert(id.to_int()) {
-                            unique_ids.push(id);
-                        }
+                    if let Some(id) = Id::new(i64::from(*raw_id))
+                        && seen.insert(id.to_int())
+                    {
+                        unique_ids.push(id);
                     }
                 }
             }
@@ -555,8 +553,7 @@ async fn get_calendars(
                         .iter()
                         .filter_map(|raw| Id::new(i64::from(*raw)))
                         .collect();
-                    let airing_count =
-                        count_airing(&calendar_item_ids, &schedules_by_id, now_secs);
+                    let airing_count = count_airing(&calendar_item_ids, &schedules_by_id, now_secs);
 
                     results.push(PageCalendar {
                         id,
@@ -747,7 +744,7 @@ mod integration_tests {
     use crate::mappers::calendar::CalendarMapper;
     use crate::mappers::user::UserMapper;
     use crate::services::auth::hash_password;
-    use actix_web::{App, http::StatusCode, test, web};
+    use actix_web::{http::StatusCode, test, web, App};
     use secrecy::SecretString;
     use serde_json::Value;
     use sqlx::Row;
