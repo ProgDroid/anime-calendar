@@ -157,21 +157,21 @@ This plan turns the Track 4 spec into ordered, ship-able batches. Phases are seq
 
 ---
 
-## Phase 5 — Pro accent enforcement
+## Phase 5 — Pro accent enforcement ✅ Complete (2026-05-02)
 
 **Goal:** the three Pro accents (Matcha, Sakura, Citron) become real entitlement-gated features. Free users get the interrupt modal; the server returns 402 if they bypass UI.
 
 ### Tasks
-- [ ] Frontend: list of Pro accents lives in one place (`frontend/src/composables/useTheme.ts` or a new `proAccents.ts`). Re-export from `AccentPicker`.
-- [ ] `AccentPicker.vue`: when free user clicks a Pro accent, prevent the click and emit an `interrupt` event instead of `select`. Emit existing event on free accents.
-- [ ] `PreferencesTab.vue`: handle `interrupt` by opening `<UpgradeInterruptModal>` (new component, uses `<UiModal>` so it inherits focus trap from the Track 2 fix).
-- [ ] `UpgradeInterruptModal.vue`: per `screens-upgrade.jsx` interrupt surface — headline ("This accent is part of Pro"), feature highlight, "See plans" primary CTA → `router.push('/upgrade')`, "Maybe later" ghost button. i18n: `interrupt.*`.
-- [ ] Backend: `PUT /user/settings` validates the requested `accent` against tier. Free user requesting a Pro accent → return `Error::PaymentRequired` (HTTP 402) with body `{"error":"upgrade_required","required_tier":"paid"}`.
-- [ ] New `Error::PaymentRequired` variant with the JSON body shape per CLAUDE.md ("All `Error` variants must return `{"error":"..."}` JSON").
-- [ ] Frontend axios interceptor or local handler: on 402 from `/user/settings`, surface the interrupt modal (defense in depth — covers the case where someone bypasses UI via the API).
-- [ ] On a tier downgrade (e.g., subscription expired), the user's stored `accent` could now be invalid. Decide and implement: **server reconciliation on read** — `GET /user/settings` returns the stored accent unchanged, but the `useTheme` composable maps any Pro accent to the default for free users at apply-time. The stored value is preserved so re-upgrading restores their preference.
-- [ ] Backend tests: PUT with Pro accent as free user → 402; as paid user → 200.
-- [ ] Frontend tests: interrupt modal opens on free-user Pro-click; interrupt modal does not open on paid-user click; downgrade scenario preserves stored accent but applies default.
+- [x] Frontend: list of Pro accents lives in one place (`frontend/src/constants/proAccents.ts`). Re-export from `AccentPicker`.
+- [x] `AccentPicker.vue`: when free user clicks a Pro accent, prevent the click and emit an `interrupt` event instead of `select`. Emit existing event on free accents.
+- [x] `PreferencesTab.vue`: handle `interrupt` by opening `<UpgradeInterruptModal>` (new component, uses `<UiModal>` so it inherits focus trap from the Track 2 fix).
+- [x] `UpgradeInterruptModal.vue`: per `screens-upgrade.jsx` interrupt surface — headline, feature highlight, "See plans" primary CTA → `router.push('/upgrade')`, "Maybe later" ghost button. i18n: `interrupt.*`.
+- [x] Backend: `PUT /user/settings` validates the requested `accent` against tier. Free user requesting a Pro accent → return `Error::PaymentRequired` (HTTP 402) with body `{"error":"upgrade_required","required_tier":"paid"}`.
+- [x] New `Error::PaymentRequired` variant with the JSON body shape.
+- [ ] Frontend axios interceptor or local handler: on 402 from `/user/settings`, surface the interrupt modal (defense in depth). _Deferred — UI gate already prevents this path; can revisit if telemetry shows API-only attempts._
+- [x] Tier downgrade safety: `useTheme` exposes `setIsPaid` + `resolveAccent` — stored accent ref + localStorage are preserved, but the rendered DOM attribute falls back to default for free users. PreferencesTab calls `setIsPaid` after fetching subscription on mount.
+- [x] Backend tests: PUT with Pro accent as free user → 402; as paid user → 200.
+- [x] Frontend tests: interrupt modal opens on free-user Pro-click; not on paid-user click; downgrade scenario preserves stored accent but applies default.
 
 ### Acceptance
 - Free user clicks Matcha → interrupt modal opens. Click "See plans" → lands on `/upgrade`.
