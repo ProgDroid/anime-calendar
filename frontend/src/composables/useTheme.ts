@@ -3,6 +3,9 @@ import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { useAuthStore } from '@/stores/auth'
 import { updateUserSettings } from '@/services/userSettingsService'
 import type { Accent, UserSettings } from '@/types/userSettings'
+import { PRO_ACCENTS } from '@/constants/proAccents'
+
+const DEFAULT_ACCENT: Accent = 'coral'
 
 type Theme = 'dark' | 'light'
 
@@ -11,7 +14,24 @@ const ACCENTS: readonly Accent[] = ['coral', 'iris', 'matcha', 'sakura', 'citron
 
 const theme: Ref<Theme> = ref('dark')
 const accent: Ref<Accent> = ref('coral')
+
+// Whether the current user is entitled to Pro accents. Defaults to `true`
+// so unauth and pre-fetch states don't blank out a stored Pro accent before
+// we know the answer (the backend gate is the source of truth — see
+// `feedback_billing_endpoint_no_request_body.md`). PreferencesTab + the
+// app's auth flow call `setIsPaid` when the entitlement read resolves.
+const isPaid: Ref<boolean> = ref(true)
+
 let patchTimer: ReturnType<typeof setTimeout> | null = null
+
+/// Map an accent value to what should actually be rendered. Pro accents on
+/// a free user fall back to the default — preserves `accent` (the stored
+/// preference) so re-upgrading immediately restores it without needing a
+/// server roundtrip.
+function resolveAccent(a: Accent): Accent {
+  if (!isPaid.value && PRO_ACCENTS.has(a)) return DEFAULT_ACCENT
+  return a
+}
 
 function isTheme(v: unknown): v is Theme {
   return typeof v === 'string' && (THEMES as readonly string[]).includes(v)
@@ -75,9 +95,15 @@ export function useTheme() {
 
   function setAccent(a: Accent) {
     if (!isAccent(a)) return
+    // Stored value: whatever the caller picked. localStorage holds the
+    // user's preference so a later re-upgrade restores it without a
+    // server roundtrip.
     accent.value = a
-    document.documentElement.setAttribute('data-accent', a)
     localStorage.setItem('accent', a)
+    // Rendered value: gated through `resolveAccent` so a free user with a
+    // stale Pro accent (post-downgrade) sees the default, not their
+    // preference.
+    document.documentElement.setAttribute('data-accent', resolveAccent(a))
     schedulePatch()
   }
 
@@ -89,10 +115,20 @@ export function useTheme() {
     }
     if (isAccent(s.accent_preference) && s.accent_preference !== accent.value) {
       accent.value = s.accent_preference
-      document.documentElement.setAttribute('data-accent', s.accent_preference)
       localStorage.setItem('accent', s.accent_preference)
+      document.documentElement.setAttribute('data-accent', resolveAccent(s.accent_preference))
     }
   }
 
-  return { theme, accent, init, setTheme, setAccent, reconcileFromServer }
+  /// Update the tier flag and re-resolve the rendered accent. Called by the
+  /// auth/entitlement bootstrapping flow once the tier is known. The stored
+  /// `accent` ref + localStorage are NOT touched — only the DOM attribute
+  /// changes if the resolved render-value differs.
+  function setIsPaid(paid: boolean) {
+    if (isPaid.value === paid) return
+    isPaid.value = paid
+    document.documentElement.setAttribute('data-accent', resolveAccent(accent.value))
+  }
+
+  return { theme, accent, isPaid, init, setTheme, setAccent, reconcileFromServer, setIsPaid }
 }

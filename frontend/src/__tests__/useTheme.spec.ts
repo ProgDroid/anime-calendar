@@ -101,4 +101,36 @@ describe('useTheme', () => {
     await vi.advanceTimersByTimeAsync(500)
     expect(updateUserSettings).toHaveBeenCalledTimes(1)
   })
+
+  // Downgrade-safe accent apply: stored preference is preserved, but the
+  // rendered DOM attribute falls back to default for free users.
+  it('setIsPaid(false) re-resolves the rendered accent for stale Pro values', () => {
+    const t = useTheme()
+    t.init()
+    t.setIsPaid(true)
+    t.setAccent('matcha')
+    expect(document.documentElement.getAttribute('data-accent')).toBe('matcha')
+    expect(localStorage.getItem('accent')).toBe('matcha')
+
+    // Simulate downgrade
+    t.setIsPaid(false)
+    expect(document.documentElement.getAttribute('data-accent')).toBe('coral')
+    // Stored preference unchanged — re-upgrade should restore it.
+    expect(localStorage.getItem('accent')).toBe('matcha')
+    expect(t.accent.value).toBe('matcha')
+
+    // Re-upgrade: rendered attribute restores to the stored Pro value.
+    t.setIsPaid(true)
+    expect(document.documentElement.getAttribute('data-accent')).toBe('matcha')
+  })
+
+  it('setAccent on a Pro accent renders default for a free user but stores the picked value', () => {
+    const t = useTheme()
+    t.init()
+    t.setIsPaid(false)
+    t.setAccent('citron')
+    expect(document.documentElement.getAttribute('data-accent')).toBe('coral')
+    expect(localStorage.getItem('accent')).toBe('citron')
+    expect(t.accent.value).toBe('citron')
+  })
 })
