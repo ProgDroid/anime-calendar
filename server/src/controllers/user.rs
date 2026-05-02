@@ -297,6 +297,7 @@ pub async fn get_user_settings(
 pub async fn update_user_settings(
     user_mapper: web::Data<UserMapper>,
     user_settings_mapper: web::Data<UserSettingsMapper>,
+    entitlement: web::Data<crate::services::entitlement::EntitlementService>,
     cache: web::Data<Cache>,
     claims: Claims,
     settings_data: web::Json<UserSettings>,
@@ -306,6 +307,23 @@ pub async fn update_user_settings(
         Err(e) => return e.error_response(),
     };
     let user_id = user.id;
+
+    // Pro accent gate. The frontend should never POST a Pro accent for a
+    // free user (AccentPicker emits 'interrupt' instead), but this is the
+    // defense-in-depth path for direct API callers.
+    if settings_data.accent_preference.is_pro() {
+        match entitlement.effective_tier(user_id).await {
+            Ok(crate::entity::subscription::Tier::Free) => {
+                return crate::error::Error::PaymentRequired { required_tier: "paid" }
+                    .error_response();
+            }
+            Ok(_) => { /* paid tier — allowed */ }
+            Err(e) => {
+                error!("entitlement check failed during settings update: {e:?}");
+                return e.error_response();
+            }
+        }
+    }
 
     info!("{settings_data:?}");
     match user_settings_mapper
@@ -776,10 +794,14 @@ mod integration_tests {
         let user = seed_user(&pool).await;
         let cache = web::Data::new(Cache::for_tests().await);
         let mapper = web::Data::new(UserSettingsMapper::from_pool(pool.clone()));
+        let entitlement = web::Data::new(crate::services::entitlement::EntitlementService::new(
+            crate::mappers::subscription::SubscriptionMapper::from_pool(pool.clone()),
+        ));
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(mapper.clone())
+                .app_data(entitlement)
                 .app_data(jwt_data())
                 .app_data(cache)
                 .service(update_user_settings)
@@ -815,5 +837,107 @@ mod integration_tests {
         assert_eq!(body["theme_preference"], "light");
         assert_eq!(body["language_preference"], "pt");
         assert_eq!(body["timezone"], "Europe/Lisbon");
+    }
+
+    /// Free user requesting a Pro accent → 402 with the documented body
+    /// shape `{"error":"upgrade_required","required_tier":"paid"}`. Defense
+    /// in depth — the frontend AccentPicker also gates this, but a direct
+    /// API caller hits this path.
+    #[tokio::test]
+    async fn update_user_settings_free_user_pro_accent_returns_402() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let cache = web::Data::new(Cache::for_tests().await);
+        let mapper = web::Data::new(UserSettingsMapper::from_pool(pool.clone()));
+        let entitlement = web::Data::new(crate::services::entitlement::EntitlementService::new(
+            crate::mappers::subscription::SubscriptionMapper::from_pool(pool.clone()),
+        ));
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(mapper.clone())
+                .app_data(entitlement)
+                .app_data(jwt_data())
+                .app_data(cache)
+                .service(update_user_settings),
+        )
+        .await;
+
+        let put_req = test::TestRequest::put()
+            .uri("/user/settings")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "theme_preference": "dark",
+                "accent_preference": "matcha",
+                "language_preference": "en",
+                "title_language_preference": "Romaji",
+                "timezone": "UTC"
+            }))
+            .to_request();
+        let resp = test::call_service(&app, put_req).await;
+        assert_eq!(resp.status(), StatusCode::PAYMENT_REQUIRED);
+        let body: Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"], "upgrade_required");
+        assert_eq!(body["required_tier"], "paid");
+    }
+
+    /// Paid user requesting a Pro accent → 200. Uses an active subscription
+    /// row so EntitlementService returns Tier::Paid.
+    #[tokio::test]
+    async fn update_user_settings_paid_user_pro_accent_returns_200() {
+        use chrono::{Duration, Utc};
+
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+
+        // Seed an active subscription row so the user reads as paid.
+        let now = Utc::now().naive_utc();
+        sqlx::query(
+            "INSERT INTO subscriptions \
+             (user_id, tier, status, stripe_customer_id, stripe_subscription_id, \
+              stripe_price_id, current_period_start, current_period_end, \
+              cancel_at_period_end) \
+             VALUES ($1, 'paid', 'active', $2, $3, 'price_test', $4, $5, false)",
+        )
+        .bind(user.id)
+        .bind(format!("cus_test_{}", user.id))
+        .bind(format!("sub_test_{}", user.id))
+        .bind(now)
+        .bind(now + Duration::days(30))
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let cache = web::Data::new(Cache::for_tests().await);
+        let mapper = web::Data::new(UserSettingsMapper::from_pool(pool.clone()));
+        let entitlement = web::Data::new(crate::services::entitlement::EntitlementService::new(
+            crate::mappers::subscription::SubscriptionMapper::from_pool(pool.clone()),
+        ));
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(mapper.clone())
+                .app_data(entitlement)
+                .app_data(jwt_data())
+                .app_data(cache)
+                .service(update_user_settings),
+        )
+        .await;
+
+        let put_req = test::TestRequest::put()
+            .uri("/user/settings")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "theme_preference": "dark",
+                "accent_preference": "matcha",
+                "language_preference": "en",
+                "title_language_preference": "Romaji",
+                "timezone": "UTC"
+            }))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, put_req).await.status(),
+            StatusCode::OK
+        );
     }
 }

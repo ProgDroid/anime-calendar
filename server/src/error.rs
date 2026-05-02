@@ -38,10 +38,25 @@ pub enum Error {
     StripeNotConfigured,
     #[error("Stripe API error: {0}")]
     Stripe(String),
+    /// HTTP 402: caller's tier doesn't allow the requested resource
+    /// (e.g. a free user trying to set a Pro accent on `PUT /user/settings`).
+    /// The body shape extends the `{"error": "..."}` convention with a
+    /// `required_tier` field so the frontend can route the user to the right
+    /// upgrade surface without parsing the message string.
+    #[error("upgrade_required")]
+    PaymentRequired { required_tier: &'static str },
 }
 
 impl ResponseError for Error {
     fn error_response(&self) -> actix_web::HttpResponse<actix_web::body::BoxBody> {
+        // PaymentRequired carries an extra structured field. Other variants
+        // keep the documented `{"error":"..."}` shape from CLAUDE.md.
+        if let Self::PaymentRequired { required_tier } = self {
+            return HttpResponse::build(self.status_code()).json(serde_json::json!({
+                "error": "upgrade_required",
+                "required_tier": *required_tier,
+            }));
+        }
         HttpResponse::build(self.status_code()).json(serde_json::json!({
             "error": self.to_string()
         }))
@@ -52,6 +67,7 @@ impl ResponseError for Error {
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Unauthorised | Self::InvalidToken(_) => StatusCode::UNAUTHORIZED,
             Self::EmailNotVerified => StatusCode::FORBIDDEN,
+            Self::PaymentRequired { .. } => StatusCode::PAYMENT_REQUIRED,
             Self::InvalidRequest
             | Self::UserAlreadyExists
             | Self::InvalidPassword

@@ -69,6 +69,15 @@ pub enum Accent {
     Citron,
 }
 
+impl Accent {
+    /// Pro accents are gated behind a paid tier. Must stay in lockstep with
+    /// `frontend/src/constants/proAccents.ts::PRO_ACCENTS`.
+    #[must_use]
+    pub const fn is_pro(self) -> bool {
+        matches!(self, Self::Matcha | Self::Sakura | Self::Citron)
+    }
+}
+
 impl FromStr for Accent {
     type Err = Infallible;
 
