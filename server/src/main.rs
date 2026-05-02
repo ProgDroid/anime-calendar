@@ -47,6 +47,20 @@ async fn main() -> ServerResult<()> {
         // to a crashloop.
     }
 
+    // Reconcile loop: hourly safety net for the Stripe webhook path. Skips
+    // itself if Stripe isn't configured (no point hitting Stripe with an
+    // empty secret). `interval_secs = 0` also disables it, used in tests.
+    if settings.stripe.is_configured() {
+        let fetcher = server::services::reconcile::LiveStripeFetcher::new(stripe_client.clone());
+        server::services::reconcile::spawn_loop(
+            subscription_mapper.clone(),
+            fetcher,
+            settings.reconcile.interval_secs,
+        );
+    } else {
+        log::info!("reconcile: stripe not configured, loop not spawned");
+    }
+
     // Initialize Redis cache
     let cache = Cache::new(
         &settings.redis.host,

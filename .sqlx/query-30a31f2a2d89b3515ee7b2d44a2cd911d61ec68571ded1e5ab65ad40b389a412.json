@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT status FROM subscriptions WHERE stripe_subscription_id = 'sub_real'",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "status",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "30a31f2a2d89b3515ee7b2d44a2cd911d61ec68571ded1e5ab65ad40b389a412"
+}

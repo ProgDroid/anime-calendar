@@ -18,9 +18,12 @@ pub const EMAIL_VERIFICATIONS_SENT_TOTAL: &str = "email_verifications_sent_total
 pub const EMAIL_VERIFICATIONS_CONFIRMED_TOTAL: &str = "email_verifications_confirmed_total";
 pub const PASSWORD_RESETS_REQUESTED_TOTAL: &str = "password_resets_requested_total";
 pub const PASSWORD_RESETS_COMPLETED_TOTAL: &str = "password_resets_completed_total";
+pub const ENTITLEMENT_RECONCILE_DRIFT_TOTAL: &str = "entitlement_reconcile_drift_total";
+pub const ENTITLEMENT_RECONCILE_ERRORS_TOTAL: &str = "entitlement_reconcile_errors_total";
 
 // Label keys
 pub const LABEL_OP: &str = "op";
+pub const LABEL_FIELD: &str = "field";
 pub const LABEL_OUTCOME: &str = "outcome";
 pub const LABEL_METHOD: &str = "method";
 pub const LABEL_PATH: &str = "path";

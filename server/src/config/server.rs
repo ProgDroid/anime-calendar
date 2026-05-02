@@ -29,6 +29,8 @@ pub struct Server {
     pub app: AppConfig,
     #[serde(default)]
     pub stripe: StripeConfig,
+    #[serde(default)]
+    pub reconcile: ReconcileConfig,
 }
 
 #[must_use]
@@ -66,6 +68,7 @@ impl Default for Server {
             enable_docs: false,
             app: AppConfig::default(),
             stripe: StripeConfig::default(),
+            reconcile: ReconcileConfig::default(),
         }
     }
 }
@@ -138,6 +141,27 @@ impl StripeConfig {
         !self.secret_key.expose_secret().is_empty()
             && (!self.price_id_monthly.is_empty() || !self.price_id_annual.is_empty())
     }
+}
+
+/// Reconcile loop config — hourly safety net for the Stripe webhook path.
+/// `interval_secs = 0` disables the loop (used in tests and in deployments
+/// that don't want background work).
+#[derive(Debug, Deserialize, Clone)]
+pub struct ReconcileConfig {
+    #[serde(default = "default_reconcile_interval_secs")]
+    pub interval_secs: u64,
+}
+
+impl Default for ReconcileConfig {
+    fn default() -> Self {
+        Self {
+            interval_secs: default_reconcile_interval_secs(),
+        }
+    }
+}
+
+const fn default_reconcile_interval_secs() -> u64 {
+    3600
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]

@@ -3,6 +3,19 @@ use crate::{
     mappers::database::Database,
 };
 
+/// Slim row used by the reconcile loop. We only project the fields that
+/// participate in drift detection — adding more columns here means more
+/// work per pass on the DB and Stripe side.
+#[derive(Debug, Clone)]
+pub struct ReconcileRow {
+    pub id: i32,
+    pub stripe_subscription_id: String,
+    pub status: String,
+    pub current_period_end: chrono::NaiveDateTime,
+    pub cancel_at_period_end: bool,
+    pub trial_end: Option<chrono::NaiveDateTime>,
+}
+
 /// Repository for the `subscriptions` table. Handles the read path used by the
 /// entitlement service plus the writes used by webhook handlers and the
 /// reconcile loop.
@@ -20,8 +33,10 @@ impl SubscriptionMapper {
         })
     }
 
-    /// Construct from a bare pool — for integration tests only.
-    #[cfg(test)]
+    /// Construct from a bare pool — used by integration tests and by the
+    /// `set_subscription` CLI's `--reconcile-from-stripe` mode (where the
+    /// pool comes from the same dev `database.toml` and we don't want a
+    /// second mapper-construction round-trip).
     #[must_use]
     pub const fn from_pool(pool: sqlx::PgPool) -> Self {
         Self {
@@ -299,6 +314,66 @@ impl SubscriptionMapper {
         .execute(conn)
         .await?;
         Ok(result.rows_affected())
+    }
+
+
+    /// Snapshot of a subscription row used by the reconcile loop. Slim
+    /// projection so the loop doesn't drag the full Subscription entity
+    /// (and its calendar of unused columns) through every pass.
+    pub async fn list_for_reconcile(&self) -> ServerResult<Vec<ReconcileRow>> {
+        crate::metrics::db::timed("subscription.list_for_reconcile", async {
+            let rows = sqlx::query_as!(
+                ReconcileRow,
+                "SELECT id, stripe_subscription_id, status, current_period_end, \
+                        cancel_at_period_end, trial_end \
+                 FROM subscriptions \
+                 WHERE status <> 'canceled' \
+                 ORDER BY updated_at ASC",
+            )
+            .fetch_all(&self.db.pool)
+            .await?;
+            Ok(rows)
+        })
+        .await
+    }
+
+    /// Apply a Stripe-side truth update to a local row, guarded so a webhook
+    /// write that landed mid-pass doesn't get clobbered. Skips the update
+    /// when the local `current_period_end` has already moved past Stripe's
+    /// (rows_affected = 0). Caller should treat 0 as "newer write won, no
+    /// drift correction needed."
+    ///
+    /// # Errors
+    /// Returns an error if the database query fails.
+    pub async fn apply_reconcile_update(
+        &self,
+        id: i32,
+        stripe_status: &str,
+        stripe_period_end: chrono::NaiveDateTime,
+        stripe_cancel_at_period_end: bool,
+        stripe_trial_end: Option<chrono::NaiveDateTime>,
+    ) -> ServerResult<u64> {
+        crate::metrics::db::timed("subscription.apply_reconcile_update", async {
+            let result = sqlx::query!(
+                "UPDATE subscriptions SET \
+                    status = $2, \
+                    current_period_end = $3, \
+                    cancel_at_period_end = $4, \
+                    trial_end = $5, \
+                    updated_at = NOW() \
+                 WHERE id = $1 \
+                   AND current_period_end <= $3",
+                id,
+                stripe_status,
+                stripe_period_end,
+                stripe_cancel_at_period_end,
+                stripe_trial_end,
+            )
+            .execute(&self.db.pool)
+            .await?;
+            Ok(result.rows_affected())
+        })
+        .await
     }
 }
 
