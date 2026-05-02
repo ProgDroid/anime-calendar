@@ -52,6 +52,7 @@ const router = createRouter({
         { path: '', redirect: { name: 'account.profile' } },
         { path: 'profile', name: 'account.profile', component: () => import('@/components/account/ProfileTab.vue') },
         { path: 'preferences', name: 'account.preferences', component: () => import('@/components/account/PreferencesTab.vue') },
+        { path: 'subscription', name: 'account.subscription', component: () => import('@/components/account/SubscriptionTab.vue') },
         { path: 'password', name: 'account.password', component: () => import('@/components/account/PasswordTab.vue') },
         { path: 'danger', name: 'account.danger', component: () => import('@/components/account/DangerZoneTab.vue') }
       ]

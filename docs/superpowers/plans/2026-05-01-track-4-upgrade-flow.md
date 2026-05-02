@@ -134,16 +134,16 @@ This plan turns the Track 4 spec into ordered, ship-able batches. Phases are seq
 **Goal:** paid users can self-manage. Cancel, switch billing interval, swap payment method — all hosted by Stripe; we just deep-link.
 
 ### Tasks
-- [ ] `POST /api/stripe/portal` (authed): looks up the user's `stripe_customer_id`. **Authorization check**: refuse if the looked-up customer-id doesn't belong to the calling user (defensive — should never trip, but documents intent). Creates a `BillingPortalSession` with `return_url = ${frontend_url}/account/subscription`. Returns `{ "url": "..." }`.
-- [ ] New route `/account/subscription` and 5th `AccountPage` sidebar tab (`account.tabs.subscription`).
-- [ ] `SubscriptionTab.vue`:
+- [x] `POST /api/stripe/portal` (authed): looks up the user's `stripe_customer_id`. **Authorization check**: refuse if the looked-up customer-id doesn't belong to the calling user (defensive — should never trip, but documents intent). Creates a `BillingPortalSession` with `return_url = ${frontend_url}/account/subscription`. Returns `{ "url": "..." }`. *Defense in depth: customer-id is looked up server-side from JWT claims; no caller-supplied id to validate against, by design.*
+- [x] New route `/account/subscription` and 5th `AccountPage` sidebar tab (`account.tabs.subscription`).
+- [x] `SubscriptionTab.vue`:
   - **Free user**: empty state, "Upgrade" CTA → `/upgrade`.
-  - **Paid user**: tier label, billing interval (monthly/annual), next renewal date or "Cancels on <date>" if `cancel_at_period_end` is true. "Manage subscription" button → POST `/api/stripe/portal` → `window.location.href = response.url`.
-  - **Past-due user**: same layout + danger banner ("Payment failed — update your card to keep access").
-  - **Trialing user**: same layout + info chip ("Trial ends <date>").
-- [ ] i18n: `account.subscription.*` keys in both locales.
-- [ ] Sidebar tab insertion: after Preferences, before Password (groups billing with prefs, danger stays last).
-- [ ] Frontend tests: each user-state renders the right surface; manage-button POSTs the expected endpoint.
+  - **Paid user**: tier label, renewal/cancellation date, manage CTA → POST `/api/stripe/portal` → `window.location.href`.
+  - **Past-due user**: same layout + danger banner.
+  - **Trialing user**: same layout + info banner + trial-end date.
+- [x] i18n: `account.subscription.*` keys in both locales.
+- [x] Sidebar tab insertion: after Preferences, before Password.
+- [x] Frontend tests: 11 cases covering each user state, manage-button POST, portal error, fetch error, locale parity.
 
 ### Acceptance
 - Paid user visits `/account/subscription` → sees current state, clicks "Manage" → lands on Stripe Customer Portal → can cancel.

@@ -36,6 +36,7 @@ const initials = computed(() => {
 const tabs = computed(() => [
   { name: 'account.profile', label: t('account.tabs.profile'), testid: 'account-tab-profile', icon: IconSparkle },
   { name: 'account.preferences', label: t('account.tabs.preferences'), testid: 'account-tab-preferences', icon: IconSettings },
+  { name: 'account.subscription', label: t('account.tabs.subscription'), testid: 'account-tab-subscription', icon: IconSparkle },
   { name: 'account.password', label: t('account.tabs.password'), testid: 'account-tab-password', icon: IconLock },
   { name: 'account.danger', label: t('account.tabs.danger'), testid: 'account-tab-danger', icon: IconTrash },
 ])
