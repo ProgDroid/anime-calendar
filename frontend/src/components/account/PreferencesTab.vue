@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
@@ -12,17 +12,26 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import IconGlobe from '@/components/ui/icons/IconGlobe.vue'
 import AccentPicker from '@/components/account/AccentPicker.vue'
+import UpgradeInterruptModal from '@/components/UpgradeInterruptModal.vue'
+import { getMySubscription, type Tier } from '@/services/subscription'
 
 defineOptions({ name: 'PreferencesTab' })
 
 const { t } = useI18n()
 const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
-const { setAccent } = useTheme()
+const { setAccent, setIsPaid } = useTheme()
 
 const loading = ref(true)
 const error = ref<string | null>(null)
 const settings = ref<UserSettings>(userSettingsStore.getDefaultSettings())
+
+// Pro accent gating: tier is fetched once on mount; AccentPicker uses
+// `isPaid` to decide whether to apply or emit interrupt. Past_due users still
+// read as paid here — the entitlement service grants access during dunning.
+const tier = ref<Tier>('free')
+const isPaid = computed(() => tier.value === 'paid')
+const upgradeModalOpen = ref(false)
 
 const fetchUserSettings = async () => {
   try {
@@ -54,9 +63,28 @@ const handleAccentChange = (accent: Accent) => {
   setAccent(accent)
 }
 
-onMounted(() => {
+// Free user clicked a Pro accent. AccentPicker prevents the apply; here we
+// just open the upgrade modal. The accent stays at its previous value.
+const handleAccentInterrupt = () => {
+  upgradeModalOpen.value = true
+}
+
+onMounted(async () => {
   if (!authStore.isAuthenticated()) return
   fetchUserSettings()
+  // Tier fetch is fire-and-forget. If it fails, we default to free which is
+  // the safer fallback (the backend gate would still 402 a Pro accent
+  // attempt — see `feedback_billing_endpoint_no_request_body.md` for the
+  // defense-in-depth pattern).
+  try {
+    const ent = await getMySubscription()
+    tier.value = ent.tier
+    // Tell useTheme so the rendered accent gets re-resolved if the user is
+    // on a stale Pro preference (downgrade scenario).
+    setIsPaid(ent.tier === 'paid')
+  } catch {
+    /* silent — defaults to free */
+  }
 })
 </script>
 
@@ -134,7 +162,12 @@ onMounted(() => {
       <!-- Accent -->
       <div class="flex flex-col gap-2">
         <label class="text-sm text-fg-2">{{ t('userSettings.accent') }}</label>
-        <AccentPicker :model-value="settings.accent_preference" @update:model-value="handleAccentChange" />
+        <AccentPicker
+          :model-value="settings.accent_preference"
+          :is-paid="isPaid"
+          @update:model-value="handleAccentChange"
+          @interrupt="handleAccentInterrupt"
+        />
         <p class="text-sm text-fg-2">{{ t('account.preferences.proNote') }}</p>
       </div>
 
@@ -145,4 +178,5 @@ onMounted(() => {
       </div>
     </div>
   </section>
+  <UpgradeInterruptModal v-model:open="upgradeModalOpen" />
 </template>

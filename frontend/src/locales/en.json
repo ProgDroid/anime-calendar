@@ -401,5 +401,17 @@
       "retry": "View plans",
       "back": "Back to my calendars"
     }
+  },
+  "interrupt": {
+    "ariaLabel": "Upgrade to Pro",
+    "heading": "This accent is part of Pro",
+    "description": "Pro unlocks premium accents and the rest of the polished feature set.",
+    "features": {
+      "accents": "Premium accents (Matcha, Sakura, Citron)",
+      "priority": "Priority support",
+      "fullSet": "Full feature set as it grows"
+    },
+    "cta": "See plans",
+    "maybeLater": "Maybe later"
   }
 }

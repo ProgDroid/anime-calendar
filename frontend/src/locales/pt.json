@@ -401,5 +401,17 @@
       "retry": "Ver planos",
       "back": "Voltar para meus calendários"
     }
+  },
+  "interrupt": {
+    "ariaLabel": "Fazer upgrade para Pro",
+    "heading": "Este acento faz parte do Pro",
+    "description": "O Pro desbloqueia acentos premium e o resto do conjunto de funcionalidades.",
+    "features": {
+      "accents": "Acentos premium (Matcha, Sakura, Citron)",
+      "priority": "Suporte prioritário",
+      "fullSet": "Conjunto completo de funcionalidades à medida que crescem"
+    },
+    "cta": "Ver planos",
+    "maybeLater": "Talvez mais tarde"
   }
 }
