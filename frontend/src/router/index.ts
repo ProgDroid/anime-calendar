@@ -87,6 +87,24 @@ const router = createRouter({
       meta: { public: true }
     },
     {
+      path: '/upgrade',
+      name: 'Upgrade',
+      component: () => import('@/components/UpgradePage.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/upgrade/success',
+      name: 'UpgradeSuccess',
+      component: () => import('@/components/UpgradeSuccessPage.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/upgrade/canceled',
+      name: 'UpgradeCanceled',
+      component: () => import('@/components/UpgradeCanceledPage.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
       component: () => import('@/components/NotFoundPage.vue'),

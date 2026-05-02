@@ -313,5 +313,60 @@
     "prev": "Semana anterior",
     "next": "Próxima semana",
     "weekOf": "Semana {week} de {year}"
+  },
+  "pricing": {
+    "eyebrow": "Plano Pro",
+    "heading": "Faça upgrade para a experiência completa",
+    "subtitle": "Desbloqueie acentos Pro, atualização prioritária e exportações flexíveis.",
+    "interval": {
+      "ariaLabel": "Intervalo de cobrança",
+      "monthly": "Mensal",
+      "annual": "Anual"
+    },
+    "plan": {
+      "title": "Anime Calendar Pro",
+      "subtitle": "Tudo do Free, mais o kit Pro."
+    },
+    "price": {
+      "monthly": "R$ 24,90",
+      "annual": "R$ 249,00",
+      "perMonth": "por mês",
+      "perYear": "por ano",
+      "savings": "2 meses grátis"
+    },
+    "features": {
+      "ariaLabel": "Recursos do plano",
+      "proAccents": "Acentos Pro (Matcha, Sakura, Citron)",
+      "unlimitedCalendars": "Calendários ilimitados",
+      "priorityRefresh": "Atualização prioritária da agenda",
+      "exportFlexibility": "Múltiplos perfis de exportação",
+      "support": "Suporte prioritário por e-mail"
+    },
+    "footer": "14 dias grátis. Cancele a qualquer momento nas configurações da conta."
+  },
+  "upgrade": {
+    "cta": {
+      "startTrial": "Iniciar teste grátis de 14 dias"
+    },
+    "errors": {
+      "checkoutFailed": "Não foi possível iniciar o checkout. Tente novamente em alguns instantes.",
+      "unauthorized": "Faça login para iniciar um teste."
+    },
+    "success": {
+      "heading": "Bem-vindo ao Pro!",
+      "processingHeading": "Finalizando sua assinatura",
+      "polling": "Aguarde — a Stripe está confirmando o pagamento.",
+      "body": "Seus recursos Pro foram desbloqueados. Redirecionando…",
+      "timeout": "Isso está demorando mais que o esperado. O pagamento ainda pode ser concluído — atualize em alguns instantes ou volte para seus calendários.",
+      "toast": "Bem-vindo ao Pro!",
+      "refresh": "Verificar novamente",
+      "back": "Voltar para meus calendários"
+    },
+    "canceled": {
+      "heading": "Checkout cancelado",
+      "body": "Nenhuma cobrança foi feita. Você pode tentar novamente quando quiser.",
+      "retry": "Ver planos",
+      "back": "Voltar para meus calendários"
+    }
   }
 }

@@ -313,5 +313,60 @@
     "prev": "Previous week",
     "next": "Next week",
     "weekOf": "Week {week} of {year}"
+  },
+  "pricing": {
+    "eyebrow": "Pro plan",
+    "heading": "Upgrade for the full experience",
+    "subtitle": "Unlock Pro accents, priority refresh, and more flexible exports.",
+    "interval": {
+      "ariaLabel": "Billing interval",
+      "monthly": "Monthly",
+      "annual": "Annual"
+    },
+    "plan": {
+      "title": "Anime Calendar Pro",
+      "subtitle": "Everything in Free, plus the Pro toolkit."
+    },
+    "price": {
+      "monthly": "$4.99",
+      "annual": "$49.90",
+      "perMonth": "per month",
+      "perYear": "per year",
+      "savings": "2 months free"
+    },
+    "features": {
+      "ariaLabel": "Plan features",
+      "proAccents": "Pro accents (Matcha, Sakura, Citron)",
+      "unlimitedCalendars": "Unlimited calendars",
+      "priorityRefresh": "Priority schedule refresh",
+      "exportFlexibility": "Multiple export profiles",
+      "support": "Priority email support"
+    },
+    "footer": "14-day free trial. Cancel anytime from your account settings."
+  },
+  "upgrade": {
+    "cta": {
+      "startTrial": "Start 14-day free trial"
+    },
+    "errors": {
+      "checkoutFailed": "We couldn't start checkout. Please try again in a moment.",
+      "unauthorized": "Please sign in to start a trial."
+    },
+    "success": {
+      "heading": "Welcome to Pro!",
+      "processingHeading": "Finalizing your subscription",
+      "polling": "Hang tight — Stripe is confirming your payment.",
+      "body": "Your Pro features are unlocked. Redirecting…",
+      "timeout": "This is taking longer than expected. Your payment may still go through — refresh in a minute, or head back to your calendars.",
+      "toast": "Welcome to Pro!",
+      "refresh": "Check again",
+      "back": "Back to my calendars"
+    },
+    "canceled": {
+      "heading": "Checkout canceled",
+      "body": "No charge was made. You can try again whenever you're ready.",
+      "retry": "View plans",
+      "back": "Back to my calendars"
+    }
   }
 }
