@@ -1,8 +1,8 @@
 #![allow(clippy::needless_for_each)]
 
 use utoipa::{
-    Modify, OpenApi,
     openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+    Modify, OpenApi,
 };
 
 use crate::{
@@ -12,6 +12,8 @@ use crate::{
             CalendarRequest, PageCalendar, PaginatedResponse, PaginationInfo, PaginationParams,
         },
         oauth::{GoogleOAuthRequest, GoogleOAuthResponse},
+        stripe::{BillingInterval, CheckoutRequest, CheckoutResponse},
+        subscription::SubscriptionResponse,
         user::{UpdatePasswordRequest, UpdateUserRequest, UserResponse},
     },
     entity::{
@@ -80,6 +82,9 @@ impl Modify for BearerAuth {
         crate::controllers::item::get,
         crate::controllers::items::get,
         crate::controllers::items::search,
+        // stripe / subscription
+        crate::controllers::stripe::create_checkout_session,
+        crate::controllers::subscription::get_my_subscription,
     ),
     components(schemas(
         // auth types
@@ -111,6 +116,11 @@ impl Modify for BearerAuth {
         PaginatedResponse,
         PaginationInfo,
         EntityLanguage,
+        // subscription / stripe types
+        BillingInterval,
+        CheckoutRequest,
+        CheckoutResponse,
+        SubscriptionResponse,
         // common types
         common::calendar::Calendar,
         common::item::Item,
@@ -128,6 +138,8 @@ impl Modify for BearerAuth {
         (name = "user", description = "User profile and settings management"),
         (name = "calendars", description = "Calendar CRUD, iCal export, and subscription feeds"),
         (name = "items", description = "Anilist media item search and retrieval"),
+        (name = "stripe", description = "Stripe Checkout and billing integration"),
+        (name = "subscription", description = "Effective tier / entitlement read endpoints"),
     )
 )]
 pub struct ApiDoc;

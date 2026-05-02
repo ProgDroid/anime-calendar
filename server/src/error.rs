@@ -1,4 +1,4 @@
-use actix_web::{HttpResponse, ResponseError, http::StatusCode};
+use actix_web::{http::StatusCode, HttpResponse, ResponseError};
 
 #[derive(thiserror::Error, Debug)]
 pub enum Error {
@@ -34,6 +34,10 @@ pub enum Error {
     InvalidVerificationToken,
     #[error("Failed to send email: {0}")]
     EmailError(String),
+    #[error("Stripe is not configured on this deployment")]
+    StripeNotConfigured,
+    #[error("Stripe API error: {0}")]
+    Stripe(String),
 }
 
 impl ResponseError for Error {
@@ -59,7 +63,9 @@ impl ResponseError for Error {
             | Self::Config(_)
             | Self::Server(_)
             | Self::GovernorConfig
-            | Self::EmailError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | Self::EmailError(_)
+            | Self::StripeNotConfigured
+            | Self::Stripe(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }

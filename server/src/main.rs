@@ -1,3 +1,4 @@
+use secrecy::ExposeSecret as _;
 use server::{
     ServerResult,
     cache::Cache,
@@ -5,10 +6,12 @@ use server::{
     mappers::{
         anilist::Anilist, calendar::CalendarMapper, email_verification::EmailVerificationMapper,
         google_oauth::GoogleOauth, password_reset::PasswordResetMapper,
-        refresh_token::RefreshTokenMapper, user::UserMapper, user_settings::UserSettingsMapper,
+        refresh_token::RefreshTokenMapper, subscription::SubscriptionMapper, user::UserMapper,
+        user_settings::UserSettingsMapper,
     },
-    services::email::EmailService,
+    services::{email::EmailService, entitlement::EntitlementService},
 };
+use stripe::Client as StripeClient;
 
 #[actix_web::main]
 async fn main() -> ServerResult<()> {
@@ -26,7 +29,16 @@ async fn main() -> ServerResult<()> {
     let token_mapper = PasswordResetMapper::new(db_config.clone()).await?;
     let verification_mapper = EmailVerificationMapper::new(db_config.clone()).await?;
     let refresh_token_mapper = RefreshTokenMapper::new(db_config.clone()).await?;
+    let subscription_mapper = SubscriptionMapper::new(db_config.clone()).await?;
     let email_service = EmailService::new(settings.smtp.clone());
+    let entitlement_service = EntitlementService::new(subscription_mapper.clone());
+
+    // Stripe client uses an empty secret when not configured — this keeps
+    // dev environments where Stripe isn't set up runnable. Handlers that need
+    // Stripe gate on `StripeConfig::is_configured()` and surface a 500 with
+    // `Error::StripeNotConfigured` rather than panic at startup.
+    let stripe_client = StripeClient::new(settings.stripe.secret_key.expose_secret().to_string());
+    let stripe_config = settings.stripe.clone();
 
     if let Err(e) = server::metrics::init(&settings.metrics) {
         log::error!("failed to initialise metrics: {e}");
@@ -55,7 +67,11 @@ async fn main() -> ServerResult<()> {
         token_mapper,
         verification_mapper,
         refresh_token_mapper,
+        subscription_mapper,
         email_service,
+        entitlement_service,
+        stripe_client,
+        stripe_config,
     )?
     .await?)
 }

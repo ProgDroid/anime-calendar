@@ -17,6 +17,25 @@ db = 0
 
 app_base_url = "http://localhost:5173"
 
+[app]
+# "development" | "staging" | "production". The dev set_subscription CLI
+# refuses to run when this is "production".
+environment = "development"
+# Public base URL the frontend is served from. Used to build the Stripe
+# Checkout success/cancel return URLs and the Customer Portal return URL.
+frontend_url = "http://localhost:5173"
+
+[stripe]
+# Test-mode credentials from your Stripe Dashboard. Live-mode keys MUST
+# only ever live in your production secrets store, never in this file.
+# Rotate webhook_secret when you re-create the webhook endpoint in Stripe.
+publishable_key = ""
+secret_key = ""
+webhook_secret = ""
+# Recurring price IDs created in Stripe Dashboard for the Pro tier.
+price_id_monthly = ""
+price_id_annual = ""
+
 [smtp]
 host = ""
 port = 587

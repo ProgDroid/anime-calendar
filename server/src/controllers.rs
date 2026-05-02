@@ -6,4 +6,6 @@ pub mod items;
 pub mod oauth;
 pub mod password_reset;
 pub mod refresh;
+pub mod stripe;
+pub mod subscription;
 pub mod user;

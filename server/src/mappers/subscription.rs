@@ -102,6 +102,84 @@ impl SubscriptionMapper {
         .await?;
         Ok(row)
     }
+
+    /// Returns the user's most recent `stripe_customer_id`, regardless of
+    /// status. Used at Checkout time to reuse a Stripe customer when a user
+    /// re-subscribes after cancellation — keeps payment-method history
+    /// attached to the same Stripe customer object.
+    ///
+    /// # Errors
+    /// Returns an error if the database query fails.
+    pub async fn find_latest_customer_id_for_user(
+        &self,
+        user_id: i32,
+    ) -> ServerResult<Option<String>> {
+        crate::metrics::db::timed("subscription.find_latest_customer_id_for_user", async {
+            let row = sqlx::query_scalar!(
+                "SELECT stripe_customer_id FROM subscriptions \
+                 WHERE user_id = $1 \
+                 ORDER BY created_at DESC \
+                 LIMIT 1",
+                user_id,
+            )
+            .fetch_optional(&self.db.pool)
+            .await?;
+            Ok(row)
+        })
+        .await
+    }
+
+    /// Insert or refresh a subscription row from a Stripe payload. Phase-2-only
+    /// stopgap used by `GET /api/subscription/me?session_id=` when the
+    /// webhook hasn't arrived yet; Phase 3's webhook handler will become the
+    /// canonical writer and this stays for safety/replay.
+    ///
+    /// # Errors
+    /// Returns an error if the database query fails.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn upsert_from_stripe(
+        &self,
+        user_id: i32,
+        status: &str,
+        stripe_customer_id: &str,
+        stripe_subscription_id: &str,
+        stripe_price_id: &str,
+        current_period_start: chrono::NaiveDateTime,
+        current_period_end: chrono::NaiveDateTime,
+        trial_end: Option<chrono::NaiveDateTime>,
+        cancel_at_period_end: bool,
+    ) -> ServerResult<()> {
+        crate::metrics::db::timed("subscription.upsert_from_stripe", async {
+            sqlx::query!(
+                "INSERT INTO subscriptions \
+                 (user_id, tier, status, stripe_customer_id, stripe_subscription_id, \
+                  stripe_price_id, current_period_start, current_period_end, trial_end, \
+                  cancel_at_period_end) \
+                 VALUES ($1, 'paid', $2, $3, $4, $5, $6, $7, $8, $9) \
+                 ON CONFLICT (stripe_subscription_id) DO UPDATE SET \
+                   status = EXCLUDED.status, \
+                   stripe_price_id = EXCLUDED.stripe_price_id, \
+                   current_period_start = EXCLUDED.current_period_start, \
+                   current_period_end = EXCLUDED.current_period_end, \
+                   trial_end = EXCLUDED.trial_end, \
+                   cancel_at_period_end = EXCLUDED.cancel_at_period_end, \
+                   updated_at = NOW()",
+                user_id,
+                status,
+                stripe_customer_id,
+                stripe_subscription_id,
+                stripe_price_id,
+                current_period_start,
+                current_period_end,
+                trial_end,
+                cancel_at_period_end,
+            )
+            .execute(&self.db.pool)
+            .await?;
+            Ok(())
+        })
+        .await
+    }
 }
 
 #[cfg(test)]

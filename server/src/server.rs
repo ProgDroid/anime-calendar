@@ -14,20 +14,23 @@ use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
     cache::Cache,
-    config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig},
+    config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig, StripeConfig},
     controllers::{
-        auth, calendar, email_verification, item, items, oauth, password_reset, refresh, user,
+        auth, calendar, email_verification, item, items, oauth, password_reset, refresh,
+        stripe as stripe_controller, subscription as subscription_controller, user,
     },
     error::Error,
     mappers::{
         anilist::Anilist, calendar::CalendarMapper, email_verification::EmailVerificationMapper,
         google_oauth::GoogleOauth, password_reset::PasswordResetMapper,
-        refresh_token::RefreshTokenMapper, user::UserMapper, user_settings::UserSettingsMapper,
+        refresh_token::RefreshTokenMapper, subscription::SubscriptionMapper, user::UserMapper,
+        user_settings::UserSettingsMapper,
     },
     openapi::ApiDoc,
-    services::email::EmailService,
+    services::{email::EmailService, entitlement::EntitlementService},
     ServerResult,
 };
+use stripe::Client as StripeClient;
 
 #[allow(clippy::too_many_arguments)]
 /// # Errors
@@ -43,7 +46,11 @@ pub fn start(
     token_mapper: PasswordResetMapper,
     verification_mapper: EmailVerificationMapper,
     refresh_token_mapper: RefreshTokenMapper,
+    subscription_mapper: SubscriptionMapper,
     email_service: EmailService,
+    entitlement_service: EntitlementService,
+    stripe_client: StripeClient,
+    stripe_config: StripeConfig,
 ) -> ServerResult<Server> {
     let level_filter = match LevelFilter::from_str(&config.log_level) {
         Ok(filter) => filter,
@@ -138,7 +145,11 @@ pub fn start(
             .app_data(web::Data::new(token_mapper.clone()))
             .app_data(web::Data::new(verification_mapper.clone()))
             .app_data(web::Data::new(refresh_token_mapper.clone()))
+            .app_data(web::Data::new(subscription_mapper.clone()))
             .app_data(web::Data::new(email_service.clone()))
+            .app_data(web::Data::new(entitlement_service.clone()))
+            .app_data(web::Data::new(stripe_client.clone()))
+            .app_data(web::Data::new(stripe_config.clone()))
             .app_data(web::Data::new(app_base_url.clone()))
             .service(item::get)
             .service(items::get)
@@ -166,6 +177,8 @@ pub fn start(
             .service(oauth::google_oauth)
             .service(user::get_user_settings)
             .service(user::update_user_settings)
+            .service(stripe_controller::create_checkout_session)
+            .service(subscription_controller::get_my_subscription)
     })
     .bind(format!("{host}:{port}"))?
     .run())

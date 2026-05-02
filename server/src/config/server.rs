@@ -25,6 +25,10 @@ pub struct Server {
     pub metrics: MetricsConfig,
     #[serde(default)]
     pub enable_docs: bool,
+    #[serde(default)]
+    pub app: AppConfig,
+    #[serde(default)]
+    pub stripe: StripeConfig,
 }
 
 #[must_use]
@@ -60,6 +64,8 @@ impl Default for Server {
             smtp: SmtpConfig::default(),
             metrics: MetricsConfig::default(),
             enable_docs: false,
+            app: AppConfig::default(),
+            stripe: StripeConfig::default(),
         }
     }
 }
@@ -72,6 +78,65 @@ impl Default for RedisConfig {
             password: String::new(),
             db: 0,
         }
+    }
+}
+
+/// Top-level app config — runtime mode + the canonical frontend URL used to
+/// build Stripe redirect URLs.
+///
+/// `environment` is the kill-switch the dev `set_subscription` CLI checks; it
+/// also influences which redirect URLs we expose to Stripe.
+#[derive(Debug, Deserialize, Clone)]
+pub struct AppConfig {
+    #[serde(default = "default_environment")]
+    pub environment: String,
+    #[serde(default = "default_frontend_url")]
+    pub frontend_url: String,
+}
+
+fn default_environment() -> String {
+    "development".to_string()
+}
+
+fn default_frontend_url() -> String {
+    "http://localhost:5173".to_string()
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            environment: default_environment(),
+            frontend_url: default_frontend_url(),
+        }
+    }
+}
+
+/// Stripe credentials and product price ids. All fields default to empty
+/// strings so a partial config doesn't crash startup; handlers that need
+/// Stripe will surface a clear "stripe not configured" error instead of
+/// failing at the deserialise layer.
+#[derive(Debug, Deserialize, Clone, Default)]
+pub struct StripeConfig {
+    #[serde(default)]
+    pub publishable_key: String,
+    #[serde(default)]
+    pub secret_key: SecretString,
+    #[serde(default)]
+    pub webhook_secret: SecretString,
+    #[serde(default)]
+    pub price_id_monthly: String,
+    #[serde(default)]
+    pub price_id_annual: String,
+}
+
+impl StripeConfig {
+    /// True when both the secret key and at least one price id are set —
+    /// minimum requirement for Checkout to function.
+    #[must_use]
+    pub fn is_configured(&self) -> bool {
+        use secrecy::ExposeSecret as _;
+        !self.secret_key.expose_secret().is_empty()
+            && (!self.price_id_monthly.is_empty() || !self.price_id_annual.is_empty())
     }
 }
 
