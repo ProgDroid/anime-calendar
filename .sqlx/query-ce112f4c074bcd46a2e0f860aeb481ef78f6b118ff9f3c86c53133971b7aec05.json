@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO calendar_items (calendar_id, item_id, added_at) VALUES ($1, $2, NOW() + ($3 || ' seconds')::interval)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ce112f4c074bcd46a2e0f860aeb481ef78f6b118ff9f3c86c53133971b7aec05"
+}
