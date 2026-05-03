@@ -26,7 +26,7 @@ const { t } = useI18n()
           </div>
         </template>
         <template #action>
-          <UiButton variant="primary" @click="router.push('/')">
+          <UiButton variant="primary" class="w-full sm:w-auto" @click="router.push('/')">
             {{ t('errors.notFound.cta') }}
           </UiButton>
         </template>
