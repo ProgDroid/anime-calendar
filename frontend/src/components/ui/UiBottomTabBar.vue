@@ -29,7 +29,7 @@ const activeTab = computed<'library' | 'account' | null>(() => {
     v-if="visible"
     data-testid="bottom-tab-bar"
     :aria-label="t('mobile.tabBar.label')"
-    class="sticky bottom-0 left-0 right-0 z-30 flex justify-around border-t border-line-soft bg-bg-0/80 pt-2 backdrop-blur-md"
+    class="fixed bottom-0 left-0 right-0 z-30 flex justify-around border-t border-line-soft bg-bg-0/80 pt-2 backdrop-blur-md"
     :style="{ paddingBottom: 'max(22px, calc(env(safe-area-inset-bottom) + 8px))' }"
   >
     <RouterLink

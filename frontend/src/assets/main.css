@@ -65,3 +65,9 @@ html, body {
 .scroll-padding-tab-bar {
   scroll-padding-bottom: 90px;
 }
+
+/* Track 3: clear-bottom utility for surfaces that coexist with the
+   mobile bottom tab bar (~62px) plus iOS safe-area-inset. */
+.pb-tab-bar {
+  padding-bottom: calc(72px + env(safe-area-inset-bottom));
+}

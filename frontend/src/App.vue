@@ -5,6 +5,7 @@ import { useUserSettingsStore } from './stores/userSettingsStore'
 import { computed, ref, watch } from 'vue'
 import { applySettings } from './services/applySettings'
 import { useTheme } from './composables/useTheme'
+import { useViewportLayout } from './composables/useViewportLayout'
 import UiToastHost from './components/ui/UiToastHost.vue'
 import UiMenu from './components/ui/UiMenu.vue'
 import UiBottomTabBar from './components/ui/UiBottomTabBar.vue'
@@ -17,6 +18,11 @@ const userSettingsStore = useUserSettingsStore()
 const route = useRoute()
 const mobileOpen = ref(false)
 const { theme, setTheme } = useTheme()
+const { isMobile } = useViewportLayout()
+
+const bottomBarVisible = computed(
+  () => isMobile.value && route.meta.bottomTabBar !== false,
+)
 
 const handleLogout = () => {
   authStore.logout()
@@ -46,7 +52,7 @@ watch(
 </script>
 
 <template>
-  <div class="min-h-screen bg-bg-0 text-fg-1">
+  <div class="min-h-screen bg-bg-0 text-fg-1 overflow-x-hidden">
     <a
       href="#main"
       class="sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:px-3 focus:py-2 focus:rounded-md focus:bg-bg-1 focus:border focus:border-line focus:text-fg-1 focus:shadow-lg"
@@ -207,7 +213,11 @@ watch(
       </nav>
     </header>
 
-    <main id="main" tabindex="-1" class="container mx-auto p-4 focus:outline-none">
+    <main
+      id="main"
+      tabindex="-1"
+      :class="['container mx-auto p-4 focus:outline-none', bottomBarVisible ? 'pb-tab-bar' : '']"
+    >
       <RouterView />
     </main>
     <UiBottomTabBar />
