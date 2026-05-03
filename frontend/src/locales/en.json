@@ -1,4 +1,7 @@
 {
+  "common": {
+    "close": "Close"
+  },
   "app": {
     "title": "Anime Calendar",
     "home": "Home",

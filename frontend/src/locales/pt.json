@@ -1,4 +1,7 @@
 {
+  "common": {
+    "close": "Fechar"
+  },
   "app": {
     "title": "Calendário de Anime",
     "home": "Início",
