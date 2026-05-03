@@ -5,16 +5,16 @@ import { useViewportLayout } from '@/composables/useViewportLayout'
 
 defineOptions({ name: 'UiAuthShell' })
 
-defineProps<{
+const props = defineProps<{
   /** Test id applied to the left poster collage pane. Pane is hidden when omitted. */
   posterTestid?: string
   /** Optional test id applied to the inner card wrapper. */
   cardTestid?: string
-  /** Optional eyebrow micro-text rendered above the heading on the right pane. */
+  /** Optional eyebrow micro-text rendered above the heading. */
   eyebrow?: string
-  /** Optional h1 heading rendered on the right pane. */
+  /** Optional h1 heading. */
   heading?: string
-  /** Optional subtitle rendered under the heading on the right pane. */
+  /** Optional subtitle rendered under the heading. */
   subtitle?: string
 }>()
 
@@ -23,7 +23,12 @@ const { isMobile } = useViewportLayout()
 
 <template>
   <!-- Mobile fan-poster shell -->
-  <UiAuthShellMobile v-if="isMobile">
+  <UiAuthShellMobile
+    v-if="isMobile"
+    :eyebrow="props.eyebrow"
+    :heading="props.heading"
+    :subtitle="props.subtitle"
+  >
     <slot />
   </UiAuthShellMobile>
 

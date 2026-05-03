@@ -35,17 +35,15 @@ describe('UiAuthShellMobile', () => {
     vi.clearAllMocks()
   })
 
-  it('renders 3 poster elements with aria-label from i18n key', async () => {
+  it('renders 3 decorative poster elements (aria-hidden via container)', async () => {
     const wrapper = mountShell()
     await flushPromises()
 
     const posters = wrapper.findAll('[data-testid^="auth-mobile-poster-"]')
     expect(posters).toHaveLength(3)
-
-    const expectedLabel = en.auth.mobile.posterAlt
-    for (const poster of posters) {
-      expect(poster.attributes('aria-label')).toBe(expectedLabel)
-    }
+    // The fan is purely decorative — the wrapping container carries
+    // aria-hidden="true" so screen readers skip the entire fan.
+    expect(wrapper.find('[aria-hidden="true"]').exists()).toBe(true)
   })
 
   it('renders slot content inside the bottom form area', async () => {
@@ -55,5 +53,20 @@ describe('UiAuthShellMobile', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-testid="login-form"]').exists()).toBe(true)
+  })
+
+  it('renders eyebrow / heading / subtitle props above the form slot', async () => {
+    const wrapper = mountShell({
+      props: {
+        eyebrow: 'Welcome back',
+        heading: 'Sign in',
+        subtitle: 'Pick up where you left off.',
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="auth-eyebrow"]').text()).toBe('Welcome back')
+    expect(wrapper.find('[data-testid="auth-heading"]').text()).toBe('Sign in')
+    expect(wrapper.find('[data-testid="auth-subtitle"]').text()).toBe('Pick up where you left off.')
   })
 })
