@@ -6,9 +6,7 @@
 //! landed — the webhook is now the canonical writer.
 
 use crate::{
-    entity::subscription::Entitlement,
-    mappers::user::UserMapper,
-    middleware::auth::Claims,
+    entity::subscription::Entitlement, mappers::user::UserMapper, middleware::auth::Claims,
     services::entitlement::EntitlementService,
 };
 use actix_web::{HttpResponse, ResponseError, get, web};

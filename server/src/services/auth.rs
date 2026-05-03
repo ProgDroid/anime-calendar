@@ -5,16 +5,16 @@
 )]
 
 use argon2::{
-    password_hash::{rand_core::OsRng, SaltString},
     Argon2, Params, PasswordHash, PasswordHasher, PasswordVerifier,
+    password_hash::{SaltString, rand_core::OsRng},
 };
-use jsonwebtoken::{encode, DecodingKey, EncodingKey, Header};
+use jsonwebtoken::{DecodingKey, EncodingKey, Header, encode};
 use log::error;
 use rand::RngCore as _;
 use sha2::{Digest as _, Sha256};
 use std::fmt::Write;
 
-use crate::{middleware::auth::Claims, ServerResult};
+use crate::{ServerResult, middleware::auth::Claims};
 
 /// # Errors
 /// Fails if password cannot be hashed

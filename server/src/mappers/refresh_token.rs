@@ -162,11 +162,8 @@ impl RefreshTokenMapper {
     /// Returns an error if the database query fails.
     pub async fn find_user_id_for_used_token(&self, token_hash: &str) -> ServerResult<Option<i32>> {
         crate::metrics::db::timed("refresh_token.find_used_token", async {
-            Self::find_user_id_for_used_token_with(
-                &mut *self.db.pool.acquire().await?,
-                token_hash,
-            )
-            .await
+            Self::find_user_id_for_used_token_with(&mut *self.db.pool.acquire().await?, token_hash)
+                .await
         })
         .await
     }

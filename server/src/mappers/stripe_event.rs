@@ -122,15 +122,22 @@ mod tests {
         let id = format!("evt_replay_{n}");
         // First-time insert: inserted.
         assert!(
-            StripeEventMapper::record_first_time_in_tx(&mut tx, &id, "customer.subscription.updated")
-                .await
-                .unwrap()
+            StripeEventMapper::record_first_time_in_tx(
+                &mut tx,
+                &id,
+                "customer.subscription.updated"
+            )
+            .await
+            .unwrap()
         );
         // Replay: must short-circuit.
-        let replayed =
-            StripeEventMapper::record_first_time_in_tx(&mut tx, &id, "customer.subscription.updated")
-                .await
-                .unwrap();
+        let replayed = StripeEventMapper::record_first_time_in_tx(
+            &mut tx,
+            &id,
+            "customer.subscription.updated",
+        )
+        .await
+        .unwrap();
         assert!(!replayed, "second insert with same id must return false");
         tx.rollback().await.unwrap();
     }

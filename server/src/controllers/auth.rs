@@ -244,8 +244,7 @@ pub async fn register(
         if existing.email_verified_at.is_none() {
             let raw_token = generate_random_token();
             let token_hash = hash_token(&raw_token);
-            let verify_url =
-                format!("{}/verify-email?token={raw_token}", app_base_url.as_str());
+            let verify_url = format!("{}/verify-email?token={raw_token}", app_base_url.as_str());
             if let Err(e) = verification_mapper
                 .replace_token(existing.id, &token_hash)
                 .await
@@ -685,7 +684,11 @@ mod integration_tests {
         let n: u64 = rand::random();
         let unverified_email = format!("dup_unverified_{n}@test.com");
         let user = UserMapper::from_pool(pool.clone())
-            .create_user(&format!("dup_{n}"), &unverified_email, Some(&hash_password(STRONG_PW).unwrap()))
+            .create_user(
+                &format!("dup_{n}"),
+                &unverified_email,
+                Some(&hash_password(STRONG_PW).unwrap()),
+            )
             .await
             .unwrap();
         let ev_mapper = EmailVerificationMapper::from_pool(pool.clone());
@@ -723,7 +726,10 @@ mod integration_tests {
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!(count, 1, "verification token must be refreshed on duplicate registration");
+        assert_eq!(
+            count, 1,
+            "verification token must be refreshed on duplicate registration"
+        );
     }
 
     #[tokio::test]
@@ -735,7 +741,9 @@ mod integration_tests {
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(EmailVerificationMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(EmailVerificationMapper::from_pool(
+                    pool.clone(),
+                )))
                 .app_data(web::Data::new(EmailService::new(
                     crate::config::server::SmtpConfig::default(),
                 )))

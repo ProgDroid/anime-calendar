@@ -9,7 +9,7 @@ use crate::{
 use crate::entity::user_settings::UserSettings;
 use crate::mappers::refresh_token::RefreshTokenMapper;
 use crate::mappers::user_settings::UserSettingsMapper;
-use actix_web::{delete, get, post, put, web, HttpResponse, ResponseError};
+use actix_web::{HttpResponse, ResponseError, delete, get, post, put, web};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 
@@ -357,7 +357,7 @@ mod integration_tests {
     use crate::mappers::user::UserMapper;
     use crate::mappers::user_settings::UserSettingsMapper;
     use crate::services::auth::{generate_token, hash_password};
-    use actix_web::{http::StatusCode, test, web, App};
+    use actix_web::{App, http::StatusCode, test, web};
     use secrecy::SecretString;
     use serde_json::Value;
 

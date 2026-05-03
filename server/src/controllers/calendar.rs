@@ -1,7 +1,7 @@
 #![allow(clippy::cast_possible_truncation)]
 
 use crate::{
-    cache::{Cache, CACHE_TTL_CALENDAR, CACHE_TTL_ITEM, CACHE_TTL_SEARCH},
+    cache::{CACHE_TTL_CALENDAR, CACHE_TTL_ITEM, CACHE_TTL_SEARCH, Cache},
     entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
     error::Error,
     mappers::{anilist::Anilist, calendar::CalendarMapper, user::UserMapper},
@@ -9,7 +9,7 @@ use crate::{
     services::calendar_export::generate_calendar_export,
 };
 
-use actix_web::{delete, get, put, web, HttpResponse, ResponseError};
+use actix_web::{HttpResponse, ResponseError, delete, get, put, web};
 use chrono::{NaiveDateTime, Utc};
 use common::{
     calendar::Calendar,
@@ -745,7 +745,7 @@ mod integration_tests {
     use crate::mappers::calendar::CalendarMapper;
     use crate::mappers::user::UserMapper;
     use crate::services::auth::hash_password;
-    use actix_web::{http::StatusCode, test, web, App};
+    use actix_web::{App, http::StatusCode, test, web};
     use secrecy::SecretString;
     use serde_json::Value;
     use sqlx::Row;

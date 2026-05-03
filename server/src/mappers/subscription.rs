@@ -1,6 +1,6 @@
 use crate::{
-    config::database::Database as DatabaseConfig, entity::subscription::Subscription,
-    mappers::database::Database, ServerResult,
+    ServerResult, config::database::Database as DatabaseConfig, entity::subscription::Subscription,
+    mappers::database::Database,
 };
 
 /// Slim row used by the reconcile loop. We only project the fields that

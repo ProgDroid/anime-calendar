@@ -16,9 +16,9 @@ use chrono::NaiveDateTime;
 use log::{error, info, warn};
 use metrics::counter;
 
+use crate::ServerResult;
 use crate::mappers::subscription::{ReconcileRow, SubscriptionMapper};
 use crate::metrics::names;
-use crate::ServerResult;
 
 /// What the reconcile loop needs from Stripe. Generic + native AFIT so we
 /// stay free of the `async-trait` macro and let the live + mock impls

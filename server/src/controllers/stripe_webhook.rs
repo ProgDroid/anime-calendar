@@ -38,7 +38,7 @@
 //! - We don't fetch any extra data via the Stripe API. Every field we need is
 //!   already in the webhook payload.
 
-use actix_web::{post, web, HttpRequest, HttpResponse};
+use actix_web::{HttpRequest, HttpResponse, post, web};
 use chrono::DateTime;
 use log::{error, warn};
 use stripe_types::Timestamp;

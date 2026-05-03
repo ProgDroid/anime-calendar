@@ -29,9 +29,9 @@ impl EntitlementService {
     /// Returns an error if the database query fails.
     pub async fn effective_tier(&self, user_id: i32) -> ServerResult<Tier> {
         let sub = self.mapper.find_active_for_user(user_id).await?;
-        Ok(sub
-            .as_ref()
-            .map_or(Tier::Free, |s| Tier::from_str(&s.tier).unwrap_or(Tier::Free)))
+        Ok(sub.as_ref().map_or(Tier::Free, |s| {
+            Tier::from_str(&s.tier).unwrap_or(Tier::Free)
+        }))
     }
 
     /// Return the full entitlement view — for the Subscription tab and

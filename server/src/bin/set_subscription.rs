@@ -108,9 +108,7 @@ fn parse_args() -> Result<(UserSelector, Mode), String> {
                 if state.is_some() {
                     return Err(format!("unexpected argument: {other}"));
                 }
-                state = Some(
-                    State::parse(other).ok_or_else(|| format!("unknown state: {other}"))?,
-                );
+                state = Some(State::parse(other).ok_or_else(|| format!("unknown state: {other}"))?);
             }
         }
     }
@@ -130,21 +128,19 @@ fn parse_args() -> Result<(UserSelector, Mode), String> {
 async fn resolve_user_id(pool: &PgPool, selector: &UserSelector) -> Result<i32, String> {
     match selector {
         UserSelector::UserId(id) => {
-            let exists: Option<i32> =
-                sqlx::query_scalar("SELECT id FROM users WHERE id = $1")
-                    .bind(id)
-                    .fetch_optional(pool)
-                    .await
-                    .map_err(|e| format!("db error: {e}"))?;
+            let exists: Option<i32> = sqlx::query_scalar("SELECT id FROM users WHERE id = $1")
+                .bind(id)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| format!("db error: {e}"))?;
             exists.ok_or_else(|| format!("no user with id {id}"))
         }
         UserSelector::Email(email) => {
-            let id: Option<i32> =
-                sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
-                    .bind(email)
-                    .fetch_optional(pool)
-                    .await
-                    .map_err(|e| format!("db error: {e}"))?;
+            let id: Option<i32> = sqlx::query_scalar("SELECT id FROM users WHERE email = $1")
+                .bind(email)
+                .fetch_optional(pool)
+                .await
+                .map_err(|e| format!("db error: {e}"))?;
             id.ok_or_else(|| format!("no user with email {email}"))
         }
     }

@@ -183,7 +183,10 @@ mod tests {
 
         // Confirm the second (active) token exists before the replay.
         let active_before = mapper.find_valid_token(&new_hash).await;
-        assert!(active_before.is_ok(), "active token must exist before replay");
+        assert!(
+            active_before.is_ok(),
+            "active token must exist before replay"
+        );
 
         let app = test::init_service(
             App::new()
@@ -211,6 +214,9 @@ mod tests {
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!(count, 0, "all tokens for the user must be invalidated on replay");
+        assert_eq!(
+            count, 0,
+            "all tokens for the user must be invalidated on replay"
+        );
     }
 }
