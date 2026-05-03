@@ -10,6 +10,14 @@ vi.mock('@/config/api', () => ({
   default: { post: vi.fn(), get: vi.fn(), delete: vi.fn(), put: vi.fn() }
 }))
 
+// The component now reads `googleClientId` synchronously at setup via
+// `getPublicConfig()`, which throws if the bootstrap cache is empty. Stub
+// the service so component setup succeeds without a real bootstrap fetch.
+vi.mock('@/services/publicConfig', () => ({
+  getPublicConfig: () => ({ googleClientId: 'test-cid' }),
+  loadPublicConfig: () => Promise.resolve({ googleClientId: 'test-cid' }),
+}))
+
 import api from '@/config/api'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })

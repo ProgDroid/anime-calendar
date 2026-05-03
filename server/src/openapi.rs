@@ -1,8 +1,8 @@
 #![allow(clippy::needless_for_each)]
 
 use utoipa::{
-    Modify, OpenApi,
     openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+    Modify, OpenApi,
 };
 
 use crate::{
@@ -10,6 +10,7 @@ use crate::{
         auth::{AuthResponse, ErrorResponse, LoginRequest, RegisterRequest},
         calendar::{CalendarRequest, PageCalendar, PaginatedResponse, PaginationInfo},
         oauth::{GoogleOAuthRequest, GoogleOAuthResponse},
+        public_config::PublicConfig,
         stripe::{BillingInterval, CheckoutRequest, CheckoutResponse, PortalResponse},
         subscription::SubscriptionResponse,
         user::{UpdatePasswordRequest, UpdateUserRequest, UserResponse},
@@ -88,6 +89,8 @@ impl Modify for BearerAuth {
         crate::controllers::stripe::create_checkout_session,
         crate::controllers::stripe::create_portal_session,
         crate::controllers::subscription::get_my_subscription,
+        // public config
+        crate::controllers::public_config::get,
     ),
     components(schemas(
         // auth types
@@ -127,6 +130,8 @@ impl Modify for BearerAuth {
         CheckoutResponse,
         PortalResponse,
         SubscriptionResponse,
+        // public config types
+        PublicConfig,
         // common types
         common::calendar::Calendar,
         common::item::Item,
@@ -146,6 +151,7 @@ impl Modify for BearerAuth {
         (name = "items", description = "Anilist media item search and retrieval"),
         (name = "stripe", description = "Stripe Checkout and billing integration"),
         (name = "subscription", description = "Effective tier / entitlement read endpoints"),
+        (name = "config", description = "Public bootstrap configuration for the SPA"),
     )
 )]
 pub struct ApiDoc;

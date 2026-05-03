@@ -7,10 +7,9 @@ RUN npm ci
 
 COPY . .
 
-ARG VITE_API_BASE_URL=http://localhost:8080
-ARG VITE_GOOGLE_CLIENT_ID
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
-ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+# No build-time env vars: public config is delivered at runtime by the backend
+# (GET /api/public-config). Keeps the resulting image environment-agnostic so
+# the same artefact deploys to staging and production.
 
 RUN npm run build
 

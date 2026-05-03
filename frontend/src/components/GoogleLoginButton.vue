@@ -3,8 +3,9 @@ import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { i18n } from '@/plugins/i18n'
+import { getPublicConfig } from '@/services/publicConfig'
 
-const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+const googleClientId = getPublicConfig().googleClientId
 
 const GSI_SRC = 'https://accounts.google.com/gsi/client'
 const GSI_SCRIPT_ID = 'google-gsi-client'

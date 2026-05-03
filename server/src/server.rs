@@ -3,28 +3,26 @@ use std::str::FromStr;
 
 use actix_cors::Cors;
 use actix_governor::{
+    governor::{clock::QuantaInstant, NotUntil},
     Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError,
-    governor::{NotUntil, clock::QuantaInstant},
 };
 use actix_web::dev::ServiceRequest;
 use actix_web::{
-    App, HttpServer,
     dev::Server,
     middleware::{Compress, Condition, DefaultHeaders, Logger},
-    web,
+    web, App, HttpServer,
 };
 use env_logger::Builder;
-use log::{LevelFilter, error};
+use log::{error, LevelFilter};
 use utoipa::OpenApi as _;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
-    ServerResult,
     cache::Cache,
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig, StripeConfig},
     controllers::{
-        auth, calendar, email_verification, item, items, oauth, password_reset, refresh,
-        stripe as stripe_controller, stripe_webhook as stripe_webhook_controller,
+        auth, calendar, email_verification, item, items, oauth, password_reset, public_config,
+        refresh, stripe as stripe_controller, stripe_webhook as stripe_webhook_controller,
         subscription as subscription_controller, user,
     },
     error::Error,
@@ -36,6 +34,7 @@ use crate::{
     },
     openapi::ApiDoc,
     services::{email::EmailService, entitlement::EntitlementService},
+    ServerResult,
 };
 use stripe::Client as StripeClient;
 
@@ -143,6 +142,12 @@ pub fn start(
     };
     let app_base_url = AppBaseUrl::new(config.app_base_url);
 
+    // Snapshot the subset of config we expose to the SPA at bootstrap. Built
+    // once here so the controller can't reach into other ServerConfig fields.
+    let public_config = public_config::PublicConfig {
+        google_client_id: config.google_client_id.clone(),
+    };
+
     let governor_conf = GovernorConfigBuilder::default()
         .seconds_per_request(1)
         .burst_size(60)
@@ -213,6 +218,8 @@ pub fn start(
             .app_data(web::Data::new(stripe_client.clone()))
             .app_data(web::Data::new(stripe_config.clone()))
             .app_data(web::Data::new(app_base_url.clone()))
+            .app_data(web::Data::new(public_config.clone()))
+            .service(public_config::get)
             .service(item::get)
             .service(items::get)
             .service(items::search)
