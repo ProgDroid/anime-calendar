@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
+import { mockViewport, resetViewportMock } from '@/__tests__/test-utils/viewport'
 
 import en from '@/locales/en.json'
 import pt from '@/locales/pt.json'
@@ -132,6 +133,21 @@ describe('UpgradePage', () => {
     const wrapper = mountPage('pt')
     expect(wrapper.text()).toContain(renderedHeading(ptMessages))
     expect(wrapper.text()).toContain(ptMessages.upgrade.cta.startTrial)
+  })
+})
+
+describe('UpgradePage — mobile layout', () => {
+  afterEach(() => {
+    resetViewportMock()
+  })
+
+  it('renders both tier articles at 390 px (single-column stacking)', async () => {
+    await mockViewport(390)
+    const wrapper = mountPage()
+    const articles = wrapper.findAll('article')
+    expect(articles).toHaveLength(2)
+    // The grid section is always present regardless of viewport (CSS handles stacking).
+    expect(wrapper.find('section').exists()).toBe(true)
   })
 })
 
