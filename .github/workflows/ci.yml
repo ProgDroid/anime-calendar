@@ -16,24 +16,66 @@ permissions:
 jobs:
   # ---------------------------------------------------------------------------
   # Rust backend
+  #
+  # SQLX_OFFLINE=true uses the committed .sqlx/ query cache for compile-time
+  # macro verification (no live DB needed for compilation). Regenerate locally
+  # with `cargo sqlx prepare --workspace -- --all-targets` after any query
+  # change — the `--all-targets` is required so test-module queries get cached.
+  #
+  # Postgres + Redis run as services so the integration / mapper / cache tests
+  # can connect at runtime. Migrations are applied before tests via sqlx-cli.
+  #
+  # Speed wins vs the previous layout:
+  #   - dropped redundant `cargo check` (clippy --all-targets is a superset)
+  #   - lld linker via RUSTFLAGS (faster relinks)
+  #   - cargo-nextest for parallel test execution
+  #   - CARGO_INCREMENTAL=0 keeps the Swatinem cache compact for better hits
   # ---------------------------------------------------------------------------
   backend:
     name: Backend
     runs-on: ubuntu-24.04
 
-    # SQLX_OFFLINE=true uses the committed .sqlx/ query cache for compile-time
-    # type-checking without requiring a live database. Run `cargo sqlx prepare
-    # --workspace` locally (with DATABASE_URL set) and commit .sqlx/ when queries change.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: anime_calendar
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     env:
       SQLX_OFFLINE: true
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/anime_calendar
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: '0'
+      RUSTFLAGS: -C link-arg=-fuse-ld=lld
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - name: Install system dependencies
+      - name: Install system dependencies (nasm for aws-lc-sys, lld for fast linking)
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y nasm cmake
+          sudo apt-get install -y nasm cmake lld
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
@@ -44,17 +86,22 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@c19371144df3bb44fab255c43d04cbc2ab54d1c4
 
-      - name: Check (type-check + sqlx offline query verification)
-        run: cargo check --workspace
+      - name: Install cargo-nextest + sqlx-cli (prebuilt binaries)
+        uses: taiki-e/install-action@db5fb34fa772531a3ece57ca434f579eb334e0fb
+        with:
+          tool: cargo-nextest,sqlx-cli
 
-      - name: Clippy (deny warnings)
-        run: cargo clippy --workspace --all-targets -- -W clippy::all -W clippy::pedantic -W clippy::nursery -A clippy::missing_docs_in_private_items -A clippy::separated_literal_suffix -A clippy::implicit_return -A clippy::print_stderr -A clippy::exhaustive_enums -A clippy::exhaustive_structs -A clippy::single_char_lifetime_names -A clippy::missing_inline_in_public_items -A clippy::self_named_module_files -A clippy::wildcard_enum_match_arm -A clippy::pattern_type_mismatch -A clippy::std-instead-of-core
-
-      - name: Tests
-        run: cargo test --workspace
+      - name: Run database migrations
+        run: sqlx migrate run
 
       - name: Format check
         run: cargo fmt --all -- --check
+
+      - name: Clippy (deny warnings) — also type-checks all targets including tests
+        run: cargo clippy --workspace --all-targets -- -W clippy::all -W clippy::pedantic -W clippy::nursery -A clippy::missing_docs_in_private_items -A clippy::separated_literal_suffix -A clippy::implicit_return -A clippy::print_stderr -A clippy::exhaustive_enums -A clippy::exhaustive_structs -A clippy::single_char_lifetime_names -A clippy::missing_inline_in_public_items -A clippy::self_named_module_files -A clippy::wildcard_enum_match_arm -A clippy::pattern_type_mismatch -A clippy::std-instead-of-core
+
+      - name: Tests (cargo nextest)
+        run: cargo nextest run --workspace --all-targets
 
   # ---------------------------------------------------------------------------
   # Vue / TypeScript frontend
@@ -162,14 +209,17 @@ jobs:
 
     env:
       SQLX_OFFLINE: true
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: '0'
+      RUSTFLAGS: -C link-arg=-fuse-ld=lld
 
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
-      - name: Install system dependencies
+      - name: Install system dependencies (nasm for aws-lc-sys, lld for fast linking)
         run: |
           sudo apt-get update -q
-          sudo apt-get install -y nasm cmake
+          sudo apt-get install -y nasm cmake lld
 
       - name: Install Rust (stable)
         uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9
