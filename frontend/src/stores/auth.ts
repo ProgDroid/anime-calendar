@@ -9,7 +9,6 @@ export const useAuthStore = defineStore('auth', () => {
   const user = ref('')
   const name = ref('')
   const user_avatar = ref('')
-  const router = useRouter()
 
   let initPromise: Promise<void> | null = null
   let initialized = false
@@ -113,7 +112,11 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('name')
     localStorage.removeItem('avatar')
     invalidateSettingsCache()
-    router.push('/login')
+    // Resolve the router lazily inside the action. Top-level useRouter() in a
+    // setup-store body warns when the store is touched before the Vue app
+    // installs the router plugin (notably in tests that seed store state
+    // before mount).
+    useRouter().push('/login')
   }
 
   return {

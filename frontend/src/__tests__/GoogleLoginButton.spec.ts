@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import { createI18n } from 'vue-i18n'
 import GoogleLoginButton from '@/components/GoogleLoginButton.vue'
 import en from '@/locales/en.json'
@@ -13,13 +13,12 @@ vi.mock('@/config/api', () => ({
 import api from '@/config/api'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
-const router = createRouter({ history: createWebHistory(), routes: [{ path: '/:p*', component: { template: '<div/>' } }] })
+const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p*', component: { template: '<div/>' } }] })
 
 function mountBtn() {
   return mount(GoogleLoginButton, {
     global: {
       plugins: [i18n, router, createPinia()],
-      stubs: { script: true }
     }
   })
 }

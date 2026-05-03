@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 // Sanity-check the env(safe-area-inset-*) pattern used by the mobile
 // auth shell + full-page surfaces. We can't truly emulate a notched

@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 // Viewport flip on a public surface: shell branches but URL state and
 // form values persist across the resize. Real-world equivalent of

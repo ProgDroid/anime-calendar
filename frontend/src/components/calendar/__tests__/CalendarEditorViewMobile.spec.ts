@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { defineComponent, h } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import { createMemoryHistory, createRouter } from 'vue-router'
+import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import en from '@/locales/en.json'
 import pt from '@/locales/pt.json'
@@ -34,11 +35,15 @@ vi.mock('@/stores/userSettingsStore', () => ({
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en, pt } })
 
-function makeRouter() {
+function makeRouter(viewComponent: unknown) {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
-      { path: '/calendar/:id', component: { template: '<div/>' } },
+      // Mount the View as the matched route's component. onBeforeRouteUpdate /
+      // onBeforeRouteLeave only have an active route record when the component
+      // is rendered as a child of <RouterView>, so we mount RouterView and
+      // route to this entry rather than mounting the View directly.
+      { path: '/calendar/:id', component: viewComponent as never },
       { path: '/my-calendars', component: { template: '<div/>' } },
     ],
   })
@@ -55,11 +60,15 @@ describe('CalendarEditorViewMobile', () => {
   })
 
   async function mountView(calendarId = 'new') {
-    const router = makeRouter()
+    const { default: View } = await import('../CalendarEditorViewMobile.vue')
+    const router = makeRouter(View)
     await router.push(`/calendar/${calendarId}`)
     await router.isReady()
-    const { default: View } = await import('../CalendarEditorViewMobile.vue')
-    const wrapper = mount(View, {
+    const Host = defineComponent({
+      components: { RouterView },
+      render: () => h(RouterView),
+    })
+    const wrapper = mount(Host, {
       attachTo: document.body,
       global: { plugins: [i18n, router] },
     })

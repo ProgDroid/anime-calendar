@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 // Auth surface (login + register) — public, no backend mocking required.
 

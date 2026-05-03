@@ -6,6 +6,9 @@ import { i18n } from '@/plugins/i18n'
 
 const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
 
+const GSI_SRC = 'https://accounts.google.com/gsi/client'
+const GSI_SCRIPT_ID = 'google-gsi-client'
+
 interface GoogleResponse {
   client_id: string,
   credential: string,
@@ -25,17 +28,13 @@ const authStore = useAuthStore()
 const loading = ref(false)
 const error = ref<string | null>(null)
 
-// Define the callback function to be used by Google Sign-In
 const handleGoogleLogin = async (data: GoogleResponse) => {
   loading.value = true
   error.value = null
 
   try {
     const googleToken = data.credential
-    
-    // Use the auth store's oauthLogin function
     await authStore.oauthLogin('google', googleToken)
-    
     router.push('/my-calendars')
   } catch {
     error.value = t('auth.google.failed')
@@ -44,10 +43,19 @@ const handleGoogleLogin = async (data: GoogleResponse) => {
   }
 }
 
-// Initialize Google Sign-In properly
 onMounted(() => {
-  // Make the function globally available for Google's GSI library
   window.handleGoogleLogin = handleGoogleLogin
+
+  // Inject the GSI client programmatically. Avoids `<component :is="'script'">`,
+  // which triggers Vue's "reserved HTML element as component id" warning.
+  if (!document.getElementById(GSI_SCRIPT_ID)) {
+    const s = document.createElement('script')
+    s.id = GSI_SCRIPT_ID
+    s.src = GSI_SRC
+    s.async = true
+    s.defer = true
+    document.head.appendChild(s)
+  }
 })
 
 onBeforeUnmount(() => {
@@ -56,8 +64,6 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <component :is="'script'" src="https://accounts.google.com/gsi/client" async />
-  
   <div class="flex flex-col items-center">
     <div id="g_id_onload"
       :data-client_id="googleClientId"

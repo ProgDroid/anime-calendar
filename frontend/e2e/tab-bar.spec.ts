@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from './fixtures'
 
 // The bottom tab bar is gated by the `meta.bottomTabBar: true` route flag.
 // Public routes (login/register) must NOT show it. Authenticated routes do —
