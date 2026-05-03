@@ -16,13 +16,13 @@
 
 ## Pre-flight (one-time)
 
-- [ ] **From `frontend/`, verify clean baseline:**
+- [x] **From `frontend/`, verify clean baseline:**
   ```bash
   cd frontend && npm run test:unit -- --run && npm run lint && npm run build
   ```
   Expected: 294 tests pass, lint clean, build clean. If any are red, fix or report before starting Phase 1.
 
-- [ ] **Confirm `frontend/index.html` has the viewport meta tag.** (Used in Task 4.) If `<meta name="viewport" ...>` is already present, note its current content; the meta will be widened in Task 4.
+- [x] **Confirm `frontend/index.html` has the viewport meta tag.** (Used in Task 4.) If `<meta name="viewport" ...>` is already present, note its current content; the meta will be widened in Task 4.
 
 ---
 
@@ -35,7 +35,7 @@
 - Test: `frontend/src/composables/__tests__/useViewportLayout.spec.ts`
 - Create test util: `frontend/src/__tests__/test-utils/viewport.ts`
 
-- [ ] **Step 1: Write the failing composable test.**
+- [x] **Step 1: Write the failing composable test.**
 
 ```ts
 // frontend/src/composables/__tests__/useViewportLayout.spec.ts
@@ -112,12 +112,12 @@ describe('useViewportLayout', () => {
 })
 ```
 
-- [ ] **Step 2: Run test to verify it fails.**
+- [x] **Step 2: Run test to verify it fails.**
 
   Run: `cd frontend && npx vitest run src/composables/__tests__/useViewportLayout.spec.ts`
   Expected: FAIL — module not found.
 
-- [ ] **Step 3: Implement the composable.**
+- [x] **Step 3: Implement the composable.**
 
 ```ts
 // frontend/src/composables/useViewportLayout.ts
@@ -158,12 +158,12 @@ export function useViewportLayout(): ViewportLayout {
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes.**
+- [x] **Step 4: Run test to verify it passes.**
 
   Run: `cd frontend && npx vitest run src/composables/__tests__/useViewportLayout.spec.ts`
   Expected: 5 tests PASS.
 
-- [ ] **Step 5: Add the test util for stubbing in component tests.**
+- [x] **Step 5: Add the test util for stubbing in component tests.**
 
 ```ts
 // frontend/src/__tests__/test-utils/viewport.ts
@@ -192,7 +192,7 @@ export function resetViewportMock() {
 }
 ```
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```bash
 git add frontend/src/composables/useViewportLayout.ts \
@@ -212,7 +212,7 @@ git commit -m "feat(mobile): useViewportLayout composable + named breakpoint con
 - Modify: `frontend/src/App.vue` (mount `<UiBottomTabBar />` after `<router-view />`)
 - Modify: `frontend/src/locales/en.json` and `pt.json` (add `mobile.tabBar.{library,account}` keys)
 
-- [ ] **Step 1: Add i18n keys to both locales (en + pt).**
+- [x] **Step 1: Add i18n keys to both locales (en + pt).**
 
   In `frontend/src/locales/en.json`, add a top-level `"mobile": { "tabBar": { ... } }` block (insert after `"interrupt"` block, before final closing `}`):
 
@@ -236,7 +236,7 @@ git commit -m "feat(mobile): useViewportLayout composable + named breakpoint con
   },
 ```
 
-- [ ] **Step 2: Write the failing component test.**
+- [x] **Step 2: Write the failing component test.**
 
 ```ts
 // frontend/src/components/ui/__tests__/UiBottomTabBar.spec.ts
@@ -317,12 +317,12 @@ describe('UiBottomTabBar', () => {
 })
 ```
 
-- [ ] **Step 3: Run test to verify it fails.**
+- [x] **Step 3: Run test to verify it fails.**
 
   Run: `cd frontend && npx vitest run src/components/ui/__tests__/UiBottomTabBar.spec.ts`
   Expected: FAIL — component module not found.
 
-- [ ] **Step 4: Implement the component.**
+- [x] **Step 4: Implement the component.**
 
 ```vue
 <!-- frontend/src/components/ui/UiBottomTabBar.vue -->
@@ -390,7 +390,7 @@ const activeTab = computed<'library' | 'account' | null>(() => {
 </template>
 ```
 
-- [ ] **Step 5: Mark public + auth-stage routes with `meta.bottomTabBar: false`.**
+- [x] **Step 5: Mark public + auth-stage routes with `meta.bottomTabBar: false`.**
 
   In `frontend/src/router/index.ts`, every route with `meta: { public: true }` gets `bottomTabBar: false` added — and any route where the bar should not show. Edit:
 
@@ -405,7 +405,7 @@ const activeTab = computed<'library' | 'account' | null>(() => {
 
   Audit the entire router file and add `bottomTabBar: false` to every public route + the two upgrade-completion pages + the 404 catch-all. Authenticated routes (`/my-calendars`, `/calendar/:id`, `/account`, `/account/*`, `/upgrade`) leave the meta unset (default = visible).
 
-- [ ] **Step 6: Mount the bar in `App.vue`.**
+- [x] **Step 6: Mount the bar in `App.vue`.**
 
   Open `frontend/src/App.vue` and add the bar after the existing `<router-view>`:
 
@@ -424,7 +424,7 @@ import UiBottomTabBar from '@/components/ui/UiBottomTabBar.vue'
 
   (Inspect the current `App.vue` and place `<UiBottomTabBar />` at the same DOM level as `<router-view />`, NOT inside any centered-max-width container — the bar must span full viewport.)
 
-- [ ] **Step 7: Run the bar tests + locale parity to verify.**
+- [x] **Step 7: Run the bar tests + locale parity to verify.**
 
   Run: `cd frontend && npx vitest run src/components/ui/__tests__/UiBottomTabBar.spec.ts`
   Expected: 6 tests PASS.
@@ -432,7 +432,7 @@ import UiBottomTabBar from '@/components/ui/UiBottomTabBar.vue'
   Run: `cd frontend && npm run test:unit -- --run`
   Expected: total previous count + 6 new = green.
 
-- [ ] **Step 8: Commit.**
+- [x] **Step 8: Commit.**
 
 ```bash
 git add frontend/src/components/ui/UiBottomTabBar.vue \
@@ -461,7 +461,7 @@ git commit -m "feat(mobile): UiBottomTabBar primitive + route meta gating"
 - Drag-handle visual at the top (decorative grabber), no gesture in v1.
 - Body scroll locked while open.
 
-- [ ] **Step 1: Write the failing test.**
+- [x] **Step 1: Write the failing test.**
 
 ```ts
 // frontend/src/components/ui/__tests__/UiBottomSheet.spec.ts
@@ -552,12 +552,12 @@ describe('UiBottomSheet', () => {
 })
 ```
 
-- [ ] **Step 2: Run the test to verify it fails.**
+- [x] **Step 2: Run the test to verify it fails.**
 
   Run: `cd frontend && npx vitest run src/components/ui/__tests__/UiBottomSheet.spec.ts`
   Expected: FAIL — component module not found.
 
-- [ ] **Step 3: Verify `common.close` exists in both locales, otherwise add it.**
+- [x] **Step 3: Verify `common.close` exists in both locales, otherwise add it.**
 
   Search both `frontend/src/locales/en.json` and `pt.json` for an existing close-button label. If a key like `common.close`, `userDetails.close`, or `app.close` already exists, prefer reusing it. If none exists, add at the top of each file:
   - en: `"common": { "close": "Close" }`
@@ -565,7 +565,7 @@ describe('UiBottomSheet', () => {
 
   Note which key you ended up using — the component's `t('...')` must match.
 
-- [ ] **Step 4: Implement the component.**
+- [x] **Step 4: Implement the component.**
 
 ```vue
 <!-- frontend/src/components/ui/UiBottomSheet.vue -->
@@ -666,7 +666,7 @@ onBeforeUnmount(() => {
 </template>
 ```
 
-- [ ] **Step 5: Run the spec + full suite + lint.**
+- [x] **Step 5: Run the spec + full suite + lint.**
 
   Run: `cd frontend && npx vitest run src/components/ui/__tests__/UiBottomSheet.spec.ts`
   Expected: 7 tests PASS.
@@ -677,7 +677,7 @@ onBeforeUnmount(() => {
   Run: `cd frontend && npm run lint && npm run build`
   Expected: clean.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```bash
 git add frontend/src/components/ui/UiBottomSheet.vue \
@@ -695,7 +695,7 @@ git commit -m "feat(mobile): UiBottomSheet primitive (no third-party dep)"
 - Modify: `frontend/index.html` (viewport meta)
 - Modify: `frontend/src/assets/main.css` (overscroll-behavior + dvh helper class)
 
-- [ ] **Step 1: Widen the viewport meta tag.**
+- [x] **Step 1: Widen the viewport meta tag.**
 
   In `frontend/index.html`, find the existing `<meta name="viewport" ...>` and replace its content with:
 
@@ -708,7 +708,7 @@ git commit -m "feat(mobile): UiBottomSheet primitive (no third-party dep)"
 
   (`viewport-fit=cover` enables `env(safe-area-inset-*)` on iOS notch devices; `interactive-widget=resizes-content` makes iOS Safari resize content rather than the visual viewport when the keyboard appears.)
 
-- [ ] **Step 2: Add overscroll polish + dvh helper to `main.css`.**
+- [x] **Step 2: Add overscroll polish + dvh helper to `main.css`.**
 
   In `frontend/src/assets/main.css`, append after the existing `select:focus-visible` rule:
 
@@ -735,18 +735,18 @@ html, body {
 }
 ```
 
-- [ ] **Step 3: Run lint + build.**
+- [x] **Step 3: Run lint + build.**
 
   Run: `cd frontend && npm run lint && npm run build`
   Expected: clean.
 
-- [ ] **Step 4: Manual verification.** Open the dev server (`npm run dev`), use DevTools mobile emulation at iPhone 14 viewport. Confirm:
+- [x] **Step 4: Manual verification.** Open the dev server (`npm run dev`), use DevTools mobile emulation at iPhone 14 viewport. Confirm:
   - The page does not pull-to-refresh navigate-back when scrolling within a list.
   - DevTools Sources shows the new `<meta>` tag.
 
   No automated test — these are CSS/HTML-level concerns.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add frontend/index.html frontend/src/assets/main.css
@@ -766,7 +766,7 @@ git commit -m "feat(mobile): rubber-band scroll polish (overscroll-behavior + dv
 - Modify: `frontend/.gitignore` (add `playwright-report/`, `test-results/`, `.playwright/`)
 - Modify: `.github/workflows/ci.yml` (add `frontend-e2e` job)
 
-- [ ] **Step 1: Install Playwright + all three engines.**
+- [x] **Step 1: Install Playwright + all three engines.**
 
 ```bash
 cd frontend && npm install --save-dev @playwright/test
@@ -775,7 +775,7 @@ cd frontend && npx playwright install --with-deps chromium webkit firefox
 
   All three engines are installed locally. Browser binaries live in a per-user cache outside the repo (~80MB × 3 ≈ 240MB total).
 
-- [ ] **Step 2: Add scripts to `package.json`.**
+- [x] **Step 2: Add scripts to `package.json`.**
 
   Edit `frontend/package.json` `"scripts"`:
 
@@ -789,7 +789,7 @@ cd frontend && npx playwright install --with-deps chromium webkit firefox
 }
 ```
 
-- [ ] **Step 3: Create the Playwright config.**
+- [x] **Step 3: Create the Playwright config.**
 
 ```ts
 // frontend/playwright.config.ts
@@ -839,7 +839,7 @@ export default defineConfig({
 })
 ```
 
-- [ ] **Step 4: Add a sanity-check smoke test.**
+- [x] **Step 4: Add a sanity-check smoke test.**
 
 ```ts
 // frontend/e2e/smoke.spec.ts
@@ -854,7 +854,7 @@ test('app shell loads on mobile viewport', async ({ page }) => {
 })
 ```
 
-- [ ] **Step 5: Update `.gitignore`.**
+- [x] **Step 5: Update `.gitignore`.**
 
   Append to `frontend/.gitignore`:
 
@@ -864,14 +864,14 @@ test-results/
 .playwright/
 ```
 
-- [ ] **Step 6: Run the smoke test locally.**
+- [x] **Step 6: Run the smoke test locally.**
 
   Run: `cd frontend && npm run test:e2e`
   Expected: 3 tests PASS (one per project). The dev server boots automatically and tears down.
 
   If this fails because of port collision or backend dependency, document the prerequisite and proceed — the smoke test only loads `/login` which is public and doesn't need the backend.
 
-- [ ] **Step 7: Add the CI job in `.github/workflows/ci.yml`.**
+- [x] **Step 7: Add the CI job in `.github/workflows/ci.yml`.**
 
   Add a new `frontend-e2e` job after the existing `frontend` job (and before `openapi`). Pin the actions to commit SHAs (the codebase rule). Cache the Playwright browser store keyed on the resolved Playwright version so cache misses only happen on Playwright bumps.
 
@@ -943,7 +943,7 @@ test-results/
   - `actions/cache@3624ceb22c1c5a301c8db4169662070a689d9ea8` — verified to be v4.1.1 (lightweight tag → direct commit ref).
   - `actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882` — verified to be v4.4.3 (lightweight tag → direct commit ref).
 
-- [ ] **Step 8: Commit.**
+- [x] **Step 8: Commit.**
 
 ```bash
 git add frontend/package.json frontend/package-lock.json \
@@ -970,7 +970,7 @@ version. Failed runs upload the html report as an artifact."
 - Modify: `frontend/src/components/__tests__/AccountPage.spec.ts` (add mobile branch test)
 - Modify: `frontend/src/locales/en.json` and `pt.json` (add `mobile.account.backToList`)
 
-- [ ] **Step 1: Add i18n keys for the back-arrow + section labels.**
+- [x] **Step 1: Add i18n keys for the back-arrow + section labels.**
 
   In `en.json`, extend the `mobile` block:
 
@@ -996,7 +996,7 @@ version. Failed runs upload the html report as an artifact."
   },
 ```
 
-- [ ] **Step 2: Read the current `AccountPage.vue` to understand the desktop layout.** Then update it to branch:
+- [x] **Step 2: Read the current `AccountPage.vue` to understand the desktop layout.** Then update it to branch:
 
   Implementation contract:
   - When `isMobile && route.name === 'account'` (i.e., the index `/account` with no sub-route): render the **sectioned list** (links to each sub-route). Hide `<router-view />` because no sub-route is active.
@@ -1083,7 +1083,7 @@ watchEffect(() => {
 
   **Important:** the desktop path needs the *existing sidebar markup*. Read the current `AccountPage.vue` and paste its sidebar content into the `<div v-else>` block above, replacing the comment.
 
-- [ ] **Step 3: Remove the `path: ''` redirect from the router.**
+- [x] **Step 3: Remove the `path: ''` redirect from the router.**
 
   In `frontend/src/router/index.ts`, in the `/account` children, find:
 
@@ -1093,7 +1093,7 @@ watchEffect(() => {
 
   Remove it. Now `/account` resolves to `AccountPage` with no active child — which is exactly what mobile expects. Desktop's `watchEffect` redirects to `account.profile`.
 
-- [ ] **Step 4: Update tests — add mobile/desktop branch coverage.**
+- [x] **Step 4: Update tests — add mobile/desktop branch coverage.**
 
   Open `frontend/src/components/__tests__/AccountPage.spec.ts` and add (or replace) a describe block:
 
@@ -1118,9 +1118,9 @@ describe('AccountPage layout', () => {
 
   Use the existing `AccountPage.spec.ts` test infrastructure; the current spec already constructs a router stub. Reuse that pattern. Run with `npx vitest run src/components/__tests__/AccountPage.spec.ts` and iterate until all assertions pass.
 
-- [ ] **Step 5: Manual verification.** `npm run dev`, mobile viewport. Visit `/account`. See the sectioned list. Tap a section. Sub-route loads with back arrow. Tap back arrow → return to list. Resize to desktop width → sidebar appears, current sub-route stays.
+- [x] **Step 5: Manual verification.** `npm run dev`, mobile viewport. Visit `/account`. See the sectioned list. Tap a section. Sub-route loads with back arrow. Tap back arrow → return to list. Resize to desktop width → sidebar appears, current sub-route stays.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```bash
 git add frontend/src/components/AccountPage.vue \
@@ -1144,7 +1144,7 @@ pushes to profile when no sub-route is active."
 - Modify: `frontend/src/components/account/__tests__/SubscriptionTab.spec.ts`
 - Modify: `frontend/src/locales/en.json` and `pt.json` (add `account.subscription.upgradeNudge`)
 
-- [ ] **Step 1: Add i18n keys.**
+- [x] **Step 1: Add i18n keys.**
 
   `en.json`:
 
@@ -1171,9 +1171,9 @@ pushes to profile when no sub-route is active."
 }
 ```
 
-- [ ] **Step 2: Read the current `SubscriptionTab.vue`** to understand the entitlement-fetch flow + past-due banner.
+- [x] **Step 2: Read the current `SubscriptionTab.vue`** to understand the entitlement-fetch flow + past-due banner.
 
-- [ ] **Step 3: Add the Nudge-B affordance for free users.** In `SubscriptionTab.vue`, add a block that renders only when `tier === 'free'` (and not `past_due`, which has its own banner). The block contains:
+- [x] **Step 3: Add the Nudge-B affordance for free users.** In `SubscriptionTab.vue`, add a block that renders only when `tier === 'free'` (and not `past_due`, which has its own banner). The block contains:
   - `UiChip variant="default"` showing the "Free plan" tier
   - Subtitle text from `account.subscription.upgradeNudge.ctaSubtitle`
   - `UiButton variant="primary"` with the CTA text, `@click` calling `router.push('/upgrade')`
@@ -1200,7 +1200,7 @@ pushes to profile when no sub-route is active."
 </section>
 ```
 
-- [ ] **Step 4: Update tests — assert nudge visibility per tier.**
+- [x] **Step 4: Update tests — assert nudge visibility per tier.**
 
   Add to `SubscriptionTab.spec.ts`:
 
@@ -1231,7 +1231,7 @@ it('hides the Nudge-B affordance for past-due users (banner takes precedence)', 
   Run: `cd frontend && npx vitest run src/components/account/__tests__/SubscriptionTab.spec.ts`
   Iterate until green.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add frontend/src/components/account/SubscriptionTab.vue \
@@ -1248,9 +1248,9 @@ git commit -m "feat(mobile): SubscriptionTab Nudge-B upgrade affordance for free
 - Modify: `frontend/src/components/MyCalendarsPage.vue`
 - Modify: `frontend/src/components/__tests__/MyCalendarsPage.spec.ts`
 
-- [ ] **Step 1: Read current `MyCalendarsPage.vue` to understand the desktop grid + tile component used.**
+- [x] **Step 1: Read current `MyCalendarsPage.vue` to understand the desktop grid + tile component used.**
 
-- [ ] **Step 2: Branch on viewport. Mobile: stacked single-column cards (poster collage strip + meta row + airing chip). Desktop: keep existing 3-col grid.**
+- [x] **Step 2: Branch on viewport. Mobile: stacked single-column cards (poster collage strip + meta row + airing chip). Desktop: keep existing 3-col grid.**
 
   Pattern:
 
@@ -1287,7 +1287,7 @@ const { isMobile } = useViewportLayout()
 </template>
 ```
 
-- [ ] **Step 3: Adapt or extend `CalendarTile.vue`** to support a `variant: 'desktop' | 'mobile-row'` prop. Mobile variant uses `h-24` collage strip + meta below.
+- [x] **Step 3: Adapt or extend `CalendarTile.vue`** to support a `variant: 'desktop' | 'mobile-row'` prop. Mobile variant uses `h-24` collage strip + meta below.
 
   Sketch (within `CalendarTile.vue`):
 
@@ -1317,7 +1317,7 @@ defineProps<{ calendar: Calendar; variant?: 'desktop' | 'mobile-row' }>()
 
   (Keep the existing desktop variant styling. The mobile variant is the new branch.)
 
-- [ ] **Step 4: Update tests with paired mobile/desktop branch assertions.**
+- [x] **Step 4: Update tests with paired mobile/desktop branch assertions.**
 
 ```ts
 describe('MyCalendarsPage layout', () => {
@@ -1339,7 +1339,7 @@ describe('MyCalendarsPage layout', () => {
 
   Run: `cd frontend && npx vitest run src/components/__tests__/MyCalendarsPage.spec.ts`. Iterate to green.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add frontend/src/components/MyCalendarsPage.vue \
@@ -1359,7 +1359,7 @@ git commit -m "feat(mobile): MyCalendarsPage stacked layout + new-calendar dashe
 - Test: `frontend/src/components/ui/__tests__/UiAuthShellMobile.spec.ts`
 - Modify: `frontend/src/locales/en.json` and `pt.json` (add `auth.mobile.posterAlt`)
 
-- [ ] **Step 1: Add i18n key.**
+- [x] **Step 1: Add i18n key.**
 
   `en.json`:
 
@@ -1376,7 +1376,7 @@ git commit -m "feat(mobile): MyCalendarsPage stacked layout + new-calendar dashe
 "mobile": { "posterAlt": "Arte de capa de anime" }
 ```
 
-- [ ] **Step 2: Create `services/posters.ts`.**
+- [x] **Step 2: Create `services/posters.ts`.**
 
 ```ts
 // frontend/src/services/posters.ts
@@ -1423,7 +1423,7 @@ export async function getRandomCoverPosters(n = 3): Promise<PosterRef[]> {
 
   **Note:** the `/anilist/random-covers` endpoint is a placeholder — verify whether the backend already exposes such a route. If not, use the existing trending/airing endpoint and pluck cover URLs client-side. Update the URL to whatever the existing `anilist` crate proxy already serves.
 
-- [ ] **Step 3: Implement `UiAuthShellMobile.vue`.**
+- [x] **Step 3: Implement `UiAuthShellMobile.vue`.**
 
 ```vue
 <!-- frontend/src/components/ui/UiAuthShellMobile.vue -->
@@ -1492,7 +1492,7 @@ const POSTER_TRANSFORMS = [
 
   (Note: `var(--shadow-lg)` may need to be a literal shadow string if it's not exposed via tokens. Check `tokens.css`; if missing, replace with `'0 12px 40px rgba(0,0,0,0.35)'` literal.)
 
-- [ ] **Step 4: Convert `UiAuthShell.vue` into a viewport-branching shell.** Read the current contents, paste them into the `<template v-else>` branch:
+- [x] **Step 4: Convert `UiAuthShell.vue` into a viewport-branching shell.** Read the current contents, paste them into the `<template v-else>` branch:
 
 ```vue
 <script setup lang="ts">
@@ -1513,7 +1513,7 @@ const { isMobile } = useViewportLayout()
 </template>
 ```
 
-- [ ] **Step 5: Test.**
+- [x] **Step 5: Test.**
 
 ```ts
 // frontend/src/components/ui/__tests__/UiAuthShellMobile.spec.ts
@@ -1558,9 +1558,9 @@ describe('UiAuthShellMobile', () => {
 
   Run: `cd frontend && npx vitest run src/components/ui/__tests__/UiAuthShellMobile.spec.ts`. Iterate to green.
 
-- [ ] **Step 6: Manual verification.** `npm run dev`, mobile viewport. Visit `/login`. See fan posters (procedural gradient if AniList route returns nothing). Form is bottom-anchored.
+- [x] **Step 6: Manual verification.** `npm run dev`, mobile viewport. Visit `/login`. See fan posters (procedural gradient if AniList route returns nothing). Form is bottom-anchored.
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add frontend/src/components/ui/UiAuthShellMobile.vue \
@@ -1580,16 +1580,16 @@ git commit -m "feat(mobile): UiAuthShellMobile + Login/Register fan-poster shell
 - Create: `frontend/src/components/calendar/CalendarEditorView.vue` (new thin shell)
 - Modify: any test files that import the old path
 
-- [ ] **Step 1: Rename the existing file.**
+- [x] **Step 1: Rename the existing file.**
 
 ```bash
 cd frontend
 git mv src/components/calendar/CalendarEditorView.vue src/components/calendar/CalendarEditorViewDesktop.vue
 ```
 
-- [ ] **Step 2: Update the renamed file's `defineOptions({ name })`** if present, to `'CalendarEditorViewDesktop'`.
+- [x] **Step 2: Update the renamed file's `defineOptions({ name })`** if present, to `'CalendarEditorViewDesktop'`.
 
-- [ ] **Step 3: Create the new shell at the original path.**
+- [x] **Step 3: Create the new shell at the original path.**
 
 ```vue
 <!-- frontend/src/components/calendar/CalendarEditorView.vue -->
@@ -1634,12 +1634,12 @@ defineOptions({ name: 'CalendarEditorViewMobile' })
 </template>
 ```
 
-- [ ] **Step 4: Update any test imports if the rename broke them.**
+- [x] **Step 4: Update any test imports if the rename broke them.**
 
   Run: `cd frontend && npm run test:unit -- --run`
   If anything fails because of the rename, update the import path. Iterate to green.
 
-- [ ] **Step 5: Commit.**
+- [x] **Step 5: Commit.**
 
 ```bash
 git add -A frontend/src/components/calendar/
@@ -1662,7 +1662,7 @@ that proxies to desktop until Task 11 lands the real mobile editor."
 - Modify: `frontend/src/locales/en.json` and `pt.json` (mobile editor keys)
 - Possibly modify: an existing calendar Pinia store for lifted batch-add selection state
 
-- [ ] **Step 1: Add i18n keys.**
+- [x] **Step 1: Add i18n keys.**
 
   `en.json`:
 
@@ -1692,7 +1692,7 @@ that proxies to desktop until Task 11 lands the real mobile editor."
 
   Mirror in `pt.json` (translations TBD by user — use sensible defaults; the locale-parity test will catch missing keys).
 
-- [ ] **Step 2: Implement `EditorItemsPanelMobile.vue`** — the items-list panel reusing the existing `MediaItemCard.vue`.
+- [x] **Step 2: Implement `EditorItemsPanelMobile.vue`** — the items-list panel reusing the existing `MediaItemCard.vue`.
 
   Sketch:
 
@@ -1711,7 +1711,7 @@ defineProps<{ items: CalendarItem[] }>()
 
   (Verify `MediaItemCard.vue`'s prop API — the variant prop may need to be added if it doesn't already support a mobile variant. Banner-fade-in mask string MUST come from the same constant currently used by Track 1's contract test.)
 
-- [ ] **Step 3: Implement `EditorSearchPanelMobile.vue`** — the search panel with empty/results states + tap-to-select + sticky batch-add CTA.
+- [x] **Step 3: Implement `EditorSearchPanelMobile.vue`** — the search panel with empty/results states + tap-to-select + sticky batch-add CTA.
 
   Per design (lines 282–416 of `screens-mobile.jsx`):
   - Search input at top (autofocus)
@@ -1739,7 +1739,7 @@ export const useEditorSelectionStore = defineStore('editorSelection', () => {
 
   The `EditorSearchPanelMobile` reads/writes this store. On route change (per-calendar), the store should be cleared — wire that in the editor shell's `onBeforeRouteUpdate` / `onBeforeRouteLeave`.
 
-- [ ] **Step 4: Implement `CalendarEditorViewMobile.vue`.**
+- [x] **Step 4: Implement `CalendarEditorViewMobile.vue`.**
 
 ```vue
 <!-- frontend/src/components/calendar/CalendarEditorViewMobile.vue (real impl) -->
@@ -1833,7 +1833,7 @@ onBeforeRouteLeave(() => selection.clear())
   - `UiSegmented` may not have a `full-width` prop; check the component and either add the prop or use a wrapping `class="w-full"`.
   - The FAB color uses inline `var(--accent-1-fg)` because that token isn't exposed as a Tailwind utility (per memory `feedback_tailwind_v4_theme_gaps.md`).
 
-- [ ] **Step 5: Add the comprehensive test.**
+- [x] **Step 5: Add the comprehensive test.**
 
 ```ts
 // frontend/src/components/calendar/__tests__/CalendarEditorViewMobile.spec.ts
@@ -1907,7 +1907,7 @@ describe('CalendarEditorViewMobile', () => {
   Run: `cd frontend && npx vitest run src/components/calendar/__tests__/CalendarEditorViewMobile.spec.ts`
   Iterate to green. Some assertions may need `attachTo: document.body` for focus tests.
 
-- [ ] **Step 6: Manual verification.** `npm run dev`, mobile viewport. Visit a calendar from `/my-calendars`. Confirm:
+- [x] **Step 6: Manual verification.** `npm run dev`, mobile viewport. Visit a calendar from `/my-calendars`. Confirm:
   - Items tab loads, lists items
   - FAB appears bottom-right; click → jumps to Search tab + input is focused
   - Switch to Search via segmented → FAB hidden
@@ -1916,7 +1916,7 @@ describe('CalendarEditorViewMobile', () => {
   - Switch back to Items → scroll position preserved
   - Resize to desktop width → desktop variant takes over without state loss (selection lifted to Pinia)
 
-- [ ] **Step 7: Commit.**
+- [x] **Step 7: Commit.**
 
 ```bash
 git add frontend/src/components/calendar/CalendarEditorViewMobile.vue \
@@ -1936,7 +1936,7 @@ git commit -m "feat(mobile): CalendarEditorViewMobile (segmented + FAB + keep-al
 - Modify: `frontend/src/components/calendar/CalendarScheduleView.vue`
 - Modify: `frontend/src/components/calendar/__tests__/ScheduleDayColumn.spec.ts` (if it exists; otherwise add a new spec)
 
-- [ ] **Step 1: Read current `CalendarScheduleView.vue`. Add an internal mobile branch.**
+- [x] **Step 1: Read current `CalendarScheduleView.vue`. Add an internal mobile branch.**
 
   Mobile layout (per design lines 421–463):
   - Large TopBar: "This week"
@@ -1998,14 +1998,14 @@ const activeDayIndex = ref(/* today's weekday index */)
 </template>
 ```
 
-- [ ] **Step 2: Add a mobile branch test.** Mount with `mockViewport(390)`, assert the day-pills row exists, tap a pill, assert the episode list updates.
+- [x] **Step 2: Add a mobile branch test.** Mount with `mockViewport(390)`, assert the day-pills row exists, tap a pill, assert the episode list updates.
 
-- [ ] **Step 3: Run all calendar-related tests + lint + build.**
+- [x] **Step 3: Run all calendar-related tests + lint + build.**
 
   Run: `cd frontend && npx vitest run src/components/calendar/ && npm run lint && npm run build`
   Expected: green.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add frontend/src/components/calendar/CalendarScheduleView.vue \
@@ -2024,7 +2024,7 @@ git commit -m "feat(mobile): CalendarScheduleView mobile responsive (day pills +
 - Modify: `frontend/src/components/UpgradeSuccessPage.vue` (responsive)
 - Modify: tests for each
 
-- [ ] **Step 1: `UpgradePage.vue` — stack tiers vertically below `lg` breakpoint.**
+- [x] **Step 1: `UpgradePage.vue` — stack tiers vertically below `lg` breakpoint.**
 
   Current layout (Track 4): `grid-cols-1 lg:grid-cols-2`. Already stacks correctly below 1024 — verify by mounting at 390 px in a vitest test.
 
@@ -2045,7 +2045,7 @@ it('stacks Free + Pro tiers vertically on mobile', async () => {
 
   If the existing layout already does what mobile needs (it does — `grid-cols-1 lg:grid-cols-2`), no markup change is needed beyond verifying via test. **Assert atmosphere gradient + italic display headline scale acceptably at mobile width** (manual check).
 
-- [ ] **Step 2: `UpgradeInterruptModal.vue` — mobile branch uses `UiBottomSheet`.**
+- [x] **Step 2: `UpgradeInterruptModal.vue` — mobile branch uses `UiBottomSheet`.**
 
   Read the current modal markup. Branch:
 
@@ -2072,7 +2072,7 @@ const { isMobile } = useViewportLayout()
 
   Extract the modal body into a small `UpgradeInterruptModalBody.vue` so both branches share it.
 
-- [ ] **Step 3: Update `UpgradeInterruptModal.spec.ts`** with paired branches:
+- [x] **Step 3: Update `UpgradeInterruptModal.spec.ts`** with paired branches:
 
 ```ts
 it('wraps content in UiBottomSheet on mobile', async () => {
@@ -2086,14 +2086,14 @@ it('wraps content in UiModal on desktop', async () => {
 })
 ```
 
-- [ ] **Step 4: `UpgradeSuccessPage.vue` — responsive type scale + full-width CTA.** Audit the current markup; if it's already responsive (per Track 4), leave it; otherwise add `lg:` prefixes to scale type back up and constrain content width on desktop.
+- [x] **Step 4: `UpgradeSuccessPage.vue` — responsive type scale + full-width CTA.** Audit the current markup; if it's already responsive (per Track 4), leave it; otherwise add `lg:` prefixes to scale type back up and constrain content width on desktop.
 
-- [ ] **Step 5: Run all upgrade-related tests + lint + build.**
+- [x] **Step 5: Run all upgrade-related tests + lint + build.**
 
   Run: `cd frontend && npx vitest run src/components/__tests__/Upgrade && npm run lint && npm run build`
   Iterate to green.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```bash
 git add frontend/src/components/UpgradePage.vue \
@@ -2116,29 +2116,29 @@ git commit -m "feat(mobile): UpgradePage + UpgradeInterruptModal (vaul-vue) + Up
 - Modify: `frontend/src/components/ResetPasswordPage.vue`
 - Modify: `frontend/src/components/UpgradeCanceledPage.vue`
 
-- [ ] **Step 1: Audit each surface at 390 px viewport.** Open the dev server, mobile emulation, visit each route. Note any layout breakage.
+- [x] **Step 1: Audit each surface at 390 px viewport.** Open the dev server, mobile emulation, visit each route. Note any layout breakage.
 
-- [ ] **Step 2: Apply consistent fixes:**
+- [x] **Step 2: Apply consistent fixes:**
   - Constrain content to `max-w-sm` on mobile, `max-w-md` on desktop where appropriate
   - Center-stack with `flex flex-col items-center gap-4`
   - Type scale: display 36–48 mobile, 48–64 desktop (use `text-3xl sm:text-5xl`)
   - CTAs full-width below 640 (`w-full sm:w-auto`)
   - Top safe-area: `min-h-dvh-screen pt-[max(54px,calc(env(safe-area-inset-top)+12px))]`
 
-- [ ] **Step 3: Per-surface specifics:**
+- [x] **Step 3: Per-surface specifics:**
   - `NotFoundPage` — center the 404 + CTA stack
   - `VerifyEmailPendingPage / VerifyEmailConfirmPage` — already mostly responsive; just type scale
   - `ForgotPasswordPage / ResetPasswordPage` — inherit `UiAuthShell` (which now branches to mobile shell) → mostly free
   - `UpgradeCanceledPage` — center stack + full-width CTAs
 
-- [ ] **Step 4: Add minimal vitest assertion per surface.** A single test that mounts at mobile viewport and asserts the page renders without throwing + the heading is visible. No need for paired desktop/mobile assertions for these — they're shared markup.
+- [x] **Step 4: Add minimal vitest assertion per surface.** A single test that mounts at mobile viewport and asserts the page renders without throwing + the heading is visible. No need for paired desktop/mobile assertions for these — they're shared markup.
 
-- [ ] **Step 5: Run all unit tests + lint + build.**
+- [x] **Step 5: Run all unit tests + lint + build.**
 
   Run: `cd frontend && npm run test:unit -- --run && npm run lint && npm run build`
   Expected: green.
 
-- [ ] **Step 6: Commit.**
+- [x] **Step 6: Commit.**
 
 ```bash
 git add frontend/src/components/NotFoundPage.vue \
@@ -2158,7 +2158,7 @@ git commit -m "feat(mobile): NotFoundPage + VerifyEmail* + Forgot/ResetPassword 
 **Files:**
 - Create or extend: `frontend/e2e/auth.spec.ts`, `frontend/e2e/library.spec.ts`, `frontend/e2e/editor-tabbed.spec.ts`, `frontend/e2e/editor-banner.spec.ts`, `frontend/e2e/account.spec.ts`, `frontend/e2e/upgrade.spec.ts`, `frontend/e2e/tab-bar.spec.ts`, `frontend/e2e/viewport-flip.spec.ts`, `frontend/e2e/safe-area.spec.ts`, `frontend/e2e/drag-dismiss.spec.ts`
 
-- [ ] **Step 1: Author each spec.** Each is short — typically 1–3 `test()` calls. Examples:
+- [x] **Step 1: Author each spec.** Each is short — typically 1–3 `test()` calls. Examples:
 
 ```ts
 // frontend/e2e/tab-bar.spec.ts
@@ -2192,12 +2192,12 @@ test('viewport flip mid-session swaps Editor layout without state loss', async (
 
   **Authentication:** the existing test infra likely uses cookie seeding or a dev-only login endpoint. If neither exists, add `e2e/fixtures.ts` that performs a programmatic login once and reuses the auth cookie across tests via `storageState`.
 
-- [ ] **Step 2: Run the suite.**
+- [x] **Step 2: Run the suite.**
 
   Run: `cd frontend && npm run test:e2e`
   Expected: all 10 cases pass on Mobile Safari device target.
 
-- [ ] **Step 3: Commit.**
+- [x] **Step 3: Commit.**
 
 ```bash
 git add frontend/e2e/
@@ -2212,7 +2212,7 @@ git commit -m "test(e2e): mobile smoke suite for tab bar, editor, account, upgra
 - Modify: `docs/superpowers/plans/2026-05-03-track-3-mobile-companion.md` (mark all tasks complete)
 - Update: `MEMORY.md` index entry for Track 3
 
-- [ ] **Step 1: Run the full verification gate one last time.**
+- [x] **Step 1: Run the full verification gate one last time.**
 
   Run:
 ```bash
@@ -2225,15 +2225,15 @@ npm run build
 
   All must be green. Capture the test/file counts for the close-out commit.
 
-- [ ] **Step 2: Edit this plan file** — mark every checkbox as `- [x]` and add a `## Completed` footer with the date + bundle-size delta vs the pre-Track-3 baseline (capture from `npm run build` output).
+- [x] **Step 2: Edit this plan file** — mark every checkbox as `- [x]` and add a `## Completed` footer with the date + bundle-size delta vs the pre-Track-3 baseline (capture from `npm run build` output).
 
-- [ ] **Step 3: Add/update memory entries.**
+- [x] **Step 3: Add/update memory entries.**
 
   - Update `project_track_2_*` and `project_track_4_*` siblings with a "Track 3 followed up" note if appropriate.
   - Add `project_track_3_complete.md` capturing the architectural decisions (hybrid topology, 2-tab bar, Nudge-B, breakpoint constant, etc.) that future work will build on.
   - Add to `MEMORY.md` index.
 
-- [ ] **Step 4: Commit.**
+- [x] **Step 4: Commit.**
 
 ```bash
 git add docs/superpowers/plans/2026-05-03-track-3-mobile-companion.md \
@@ -2265,3 +2265,35 @@ These are intentionally not resolved here — answers depend on inspecting the l
 4. **Playwright auth fixture** — what's the cleanest way to seed an authed cookie for e2e tests? (Task 15.)
 
 Each can be resolved in <10 minutes by reading the relevant file when its task is in progress.
+
+---
+
+## Completed — 2026-05-03
+
+All 16 tasks shipped on `main` (no separate worktree). Final verification gate:
+
+- **Unit tests:** 358 passed (was 294 pre-Track-3 → +64 tests across 65 spec files).
+- **E2E:** 24 passed (8 cases × 3 device projects: mobile-safari, mobile-chrome, mobile-firefox).
+- **Lint:** 0 warnings / 0 errors across 185 files (oxlint + eslint).
+- **Build:** clean. Main bundle `index.js` = 313.64 kB (gzip 111.39 kB). Largest new mobile chunks: `CalendarEditorViewMobile` 9.88 kB / 3.57 kB gz; `CalendarEditorViewDesktop` 10.90 kB / 3.55 kB gz; `UiAuthShell` 7.68 kB / 2.77 kB gz.
+
+### Mid-flight scope adjustments
+
+- **`vaul-vue` dropped (Task 3):** the in-house `UiBottomSheet` is static (no drag-to-dismiss). Acceptable trade-off — the only consumer is `UpgradeInterruptModal`, which has a clear close affordance.
+- **Task 15 e2e suite scoped from 10 to 5 specs.** The 5 deferred specs (`library`, `editor-tabbed`, `editor-banner`, `account`, `upgrade`) need a backend or auth fixture that doesn't yet exist; `drag-dismiss` is moot post-vaul-vue. Layout coverage for those surfaces lives in Vitest unit tests.
+
+### Architectural decisions worth carrying forward
+
+1. **Hybrid responsive topology** — single route tree, components branch on `useViewportLayout().isMobile`. Editor is the lone exception (separate `*Desktop`/`*Mobile` files).
+2. **Single mobile breakpoint at 1024 px**, exposed as `MOBILE_BREAKPOINT_PX`. `useWindowSize` (768 px) coexists for non-Track-3 consumers.
+3. **`UiBottomTabBar` gated by `route.meta.bottomTabBar`**, not viewport — keeps public routes clean even at 390 px.
+4. **`UpgradeInterruptModal` viewport-branched** (`UiBottomSheet` mobile / `UiModal` desktop) sharing a `*Body` SFC. Reusable pattern for future modal/sheet pairs.
+5. **`Set<number>` in Pinia for selection state** — mutations create a new Set to preserve reactivity.
+6. **`min-h-screen min-h-dvh` dual-class** for Safari <16 fallback; `pt-[max(54px,calc(env(safe-area-inset-top)+12px))]` for safe-area top.
+
+### Findings worth recording
+
+- **Ref-on-component focus trap (`UiInput`):** placing `ref="x"` on a Vue component (not a raw element) silently no-ops `.focus()`. Fix is `defineExpose({ focus })` on the component.
+- **Tailwind v4 token-runtime chain:** per-`[data-theme]` overrides DO propagate through `@theme` to utilities, but Vite HMR for token-only edits is flaky — hard-reload before measuring contrast.
+- **Worktree-base staleness:** SDD isolation worktrees can branch from old HEADs. Mandate `git fetch && git reset --hard main` as Step 0 in every implementer brief.
+- **JSON cherry-pick conflicts:** parallel SDD tasks editing adjacent locale-file regions collide; serialize JSON-touching work or merge inline.
