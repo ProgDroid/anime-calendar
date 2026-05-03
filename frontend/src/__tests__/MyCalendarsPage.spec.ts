@@ -5,6 +5,7 @@ import { createI18n } from 'vue-i18n'
 import { createRouter, createMemoryHistory } from 'vue-router'
 import MyCalendarsPage from '@/components/MyCalendarsPage.vue'
 import en from '@/locales/en.json'
+import { mockViewport, resetViewportMock } from '@/__tests__/test-utils/viewport'
 
 vi.mock('@/config/api', () => ({
   default: { get: vi.fn(), delete: vi.fn(), post: vi.fn(), put: vi.fn() },
@@ -190,8 +191,6 @@ describe('MyCalendarsPage', () => {
 })
 
 describe('MyCalendarsPage mobile layout', () => {
-  const originalInnerWidth = window.innerWidth
-
   beforeEach(() => {
     setActivePinia(createPinia())
     vi.clearAllMocks()
@@ -208,23 +207,11 @@ describe('MyCalendarsPage mobile layout', () => {
   })
 
   afterEach(() => {
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      writable: true,
-      value: originalInnerWidth,
-    })
+    resetViewportMock()
   })
 
-  function setViewport(width: number) {
-    Object.defineProperty(window, 'innerWidth', {
-      configurable: true,
-      writable: true,
-      value: width,
-    })
-  }
-
   it('renders the desktop grid above the breakpoint', async () => {
-    setViewport(1280)
+    await mockViewport(1280)
     const wrapper = mountPage()
     await flushPromises()
     expect(wrapper.find('[data-testid="my-calendars"]').exists()).toBe(true)
@@ -234,7 +221,7 @@ describe('MyCalendarsPage mobile layout', () => {
   })
 
   it('renders the mobile stack below the breakpoint', async () => {
-    setViewport(390)
+    await mockViewport(390)
     const wrapper = mountPage()
     await flushPromises()
     expect(wrapper.find('[data-testid="my-calendars-mobile-stack"]').exists()).toBe(true)
@@ -244,7 +231,7 @@ describe('MyCalendarsPage mobile layout', () => {
   })
 
   it('mobile stack lists every calendar from the store', async () => {
-    setViewport(390)
+    await mockViewport(390)
     const wrapper = mountPage()
     await flushPromises()
     const tiles = wrapper
@@ -255,7 +242,7 @@ describe('MyCalendarsPage mobile layout', () => {
   })
 
   it('mobile create CTA navigates to /calendar/new', async () => {
-    setViewport(390)
+    await mockViewport(390)
     const pushSpy = vi.spyOn(router, 'push')
     const wrapper = mountPage()
     await flushPromises()
