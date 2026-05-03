@@ -165,7 +165,11 @@ describe('CalendarPage — error paths', () => {
         id: 1,
         name: 'My Cal',
         language: 'English',
-        items: [{ id: 1, title: 'Test Anime', image: '', episodes: 12, status: 'RELEASING', next_airing_episode: null, schedule: [] }],
+        items: [{
+          id: 1,
+          title: { english: 'Test Anime', romaji: 'Test Anime', native: 'Test Anime', user_preferred: 'Test Anime' },
+          image: '', episodes: 12, status: 'RELEASING', next_airing_episode: null, schedule: [],
+        }],
         subscription_token: 'tok'
       }
     })

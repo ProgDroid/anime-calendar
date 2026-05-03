@@ -2,24 +2,18 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createWebHistory } from 'vue-router'
 import axios from 'axios'
 import ForgotPasswordPage from '@/components/ForgotPasswordPage.vue'
 import en from '@/locales/en.json'
 import { inputAt } from './helpers/uiInput'
+import { makeSmokeRouter } from './test-utils/router'
 
 vi.mock('axios', () => ({
   default: { post: vi.fn() },
 }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
-const router = createRouter({
-  history: createWebHistory(),
-  routes: [
-    { path: '/forgot-password', component: ForgotPasswordPage },
-    { path: '/login', name: 'Login', component: { template: '<div />' } },
-  ],
-})
+const router = makeSmokeRouter('/forgot-password')
 
 function mountPage() {
   return mount(ForgotPasswordPage, {

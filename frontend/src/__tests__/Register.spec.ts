@@ -2,10 +2,10 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createWebHistory } from 'vue-router'
 import Register from '@/components/Register.vue'
 import en from '@/locales/en.json'
 import { inputAt } from './helpers/uiInput'
+import { makeSmokeRouter } from './test-utils/router'
 
 vi.mock('@/config/api', () => ({
   default: { post: vi.fn(), get: vi.fn(), delete: vi.fn(), put: vi.fn() }
@@ -14,14 +14,7 @@ vi.mock('@/config/api', () => ({
 import api from '@/config/api'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
-const router = createRouter({
-  history: createWebHistory(),
-  routes: [
-    { path: '/register', component: Register },
-    { path: '/login', name: 'Login', component: { template: '<div />' } },
-    { path: '/verify-email-pending', name: 'VerifyEmailPending', component: { template: '<div />' } },
-  ],
-})
+const router = makeSmokeRouter('/register')
 
 function mountPage() {
   return mount(Register, {

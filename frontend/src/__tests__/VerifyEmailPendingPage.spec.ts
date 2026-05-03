@@ -2,9 +2,9 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createMemoryHistory } from 'vue-router'
 import VerifyEmailPendingPage from '@/components/VerifyEmailPendingPage.vue'
 import en from '@/locales/en.json'
+import { makeSmokeRouter } from './test-utils/router'
 
 vi.mock('@/config/api', () => ({
   default: { post: vi.fn() },
@@ -13,13 +13,7 @@ vi.mock('@/config/api', () => ({
 import api from '@/config/api'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
-const router = createRouter({
-  history: createMemoryHistory(),
-  routes: [
-    { path: '/verify-email-pending', component: VerifyEmailPendingPage },
-    { path: '/login', name: 'Login', component: { template: '<div />' } },
-  ],
-})
+const router = makeSmokeRouter('/verify-email/pending')
 
 function mountPage(email = 'user@example.com') {
   // Stub history.state which the component reads at setup

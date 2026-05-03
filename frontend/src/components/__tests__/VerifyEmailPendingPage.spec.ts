@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createMemoryHistory } from 'vue-router'
-import { defineComponent, h } from 'vue'
 import { mockViewport, resetViewportMock } from '@/__tests__/test-utils/viewport'
+import { makeSmokeRouter } from '@/__tests__/test-utils/router'
 
 import en from '@/locales/en.json'
 
@@ -12,16 +11,6 @@ vi.mock('@/config/api', () => ({
 }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
-
-function makeRouter() {
-  return createRouter({
-    history: createMemoryHistory(),
-    routes: [
-      { path: '/login', component: defineComponent({ render: () => h('div') }) },
-      { path: '/verify-pending', component: defineComponent({ render: () => h('div') }) },
-    ],
-  })
-}
 
 describe('VerifyEmailPendingPage — mobile smoke test', () => {
   beforeEach(async () => {
@@ -35,7 +24,7 @@ describe('VerifyEmailPendingPage — mobile smoke test', () => {
   it('renders at 390 px without throwing and shows the pending heading', async () => {
     const { default: VerifyEmailPendingPage } = await import('../VerifyEmailPendingPage.vue')
     const wrapper = mount(VerifyEmailPendingPage, {
-      global: { plugins: [i18n, makeRouter()] },
+      global: { plugins: [i18n, makeSmokeRouter('/verify-email/pending')] },
     })
     expect(wrapper.text()).toContain(en.auth.verifyEmail.pending.title)
   })
