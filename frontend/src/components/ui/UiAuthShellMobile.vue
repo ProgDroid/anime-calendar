@@ -37,10 +37,7 @@ onMounted(async () => {
     />
 
     <!-- Three-poster fan hero -->
-    <div
-      class="relative z-10 flex flex-1 items-end justify-center pb-8 pt-16"
-      aria-label="t('auth.mobile.posterAlt')"
-    >
+    <div class="relative z-10 flex flex-1 items-end justify-center pb-8 pt-16">
       <div class="relative flex items-end justify-center" style="height: 240px; width: 280px;">
         <div
           v-for="(poster, i) in posters"
