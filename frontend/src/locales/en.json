@@ -348,13 +348,37 @@
     "weekOf": "Week {week} of {year}"
   },
   "pricing": {
-    "eyebrow": "Pro plan",
-    "heading": "Upgrade for the full experience",
-    "subtitle": "Unlock Pro accents, priority refresh, and more flexible exports.",
+    "eyebrow": "Upgrade · Pricing",
+    "heading": "More seasons, more colors, more {emphasis}.",
+    "headingEmphasis": "control",
+    "subtitle": "Anime Calendar stays free for the basics. Pro unlocks the polish and power features for people who track every season.",
+    "mostPopular": "★ Most popular",
     "interval": {
       "ariaLabel": "Billing interval",
       "monthly": "Monthly",
       "annual": "Annual"
+    },
+    "tiers": {
+      "ariaLabel": "Compare plans",
+      "free": {
+        "name": "Free",
+        "tagline": "Track what airs.",
+        "price": "$0",
+        "period": "forever",
+        "cta": "Current plan",
+        "features": {
+          "tracking": "Anime tracking & weekly schedule",
+          "icsExport": ".ics export & subscribe link",
+          "freeAccents": "Coral and Iris accent themes",
+          "noProAccents": "Pro accent themes (Matcha, Sakura, Citron)",
+          "noPrioritySupport": "Priority email support"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "tagline": "For the serial watcher.",
+        "cta": "Upgrade to Pro"
+      }
     },
     "plan": {
       "title": "Anime Calendar Pro",
@@ -375,7 +399,7 @@
       "exportFlexibility": "Multiple export profiles",
       "support": "Priority email support"
     },
-    "footer": "14-day free trial. Cancel anytime from your account settings."
+    "footer": "Cancel anytime · Secure payment · 14-day free trial."
   },
   "upgrade": {
     "cta": {

@@ -29,10 +29,21 @@ function mountPage(locale: 'en' | 'pt' = 'en') {
       stubs: {
         // Stub icons — they're SFCs that don't add to the assertion surface.
         IconCheck: true,
+        IconX: true,
         IconSparkle: true,
       },
     },
   })
+}
+
+/**
+ * Heading carries an `{emphasis}` interpolation slot, so the literal i18n
+ * string won't appear in rendered text. Build the expected rendered form
+ * from the lead segment + the emphasis word.
+ */
+function renderedHeading(messages: typeof enMessages) {
+  const lead = messages.pricing.heading.split('{emphasis}')[0] ?? ''
+  return (lead + messages.pricing.headingEmphasis).trim()
 }
 
 describe('UpgradePage', () => {
@@ -54,9 +65,25 @@ describe('UpgradePage', () => {
   it('renders pricing eyebrow + heading and the monthly/annual toggle', () => {
     const wrapper = mountPage()
     expect(wrapper.text()).toContain(enMessages.pricing.eyebrow)
-    expect(wrapper.text()).toContain(enMessages.pricing.heading)
+    expect(wrapper.text()).toContain(renderedHeading(enMessages))
     expect(wrapper.text()).toContain(enMessages.pricing.interval.monthly)
     expect(wrapper.text()).toContain(enMessages.pricing.interval.annual)
+  })
+
+  it('renders both tiers with the Free card disabled and Most-popular chip on Pro', () => {
+    const wrapper = mountPage()
+
+    // Free tier name + tagline + disabled CTA.
+    expect(wrapper.text()).toContain(enMessages.pricing.tiers.free.name)
+    expect(wrapper.text()).toContain(enMessages.pricing.tiers.free.tagline)
+    const freeCta = wrapper.get('[data-testid="upgrade-cta-free"]')
+    expect(freeCta.text()).toContain(enMessages.pricing.tiers.free.cta)
+    // The CTA's underlying <button> should be disabled.
+    expect(freeCta.attributes('disabled')).toBeDefined()
+
+    // Pro card surfaces the "Most popular" chip and the upgrade CTA.
+    expect(wrapper.text()).toContain(enMessages.pricing.mostPopular)
+    expect(wrapper.find('[data-testid="upgrade-cta"]').exists()).toBe(true)
   })
 
   it('shows the savings chip only when annual is selected', async () => {
@@ -103,7 +130,7 @@ describe('UpgradePage', () => {
 
   it('renders Portuguese copy when locale=pt', () => {
     const wrapper = mountPage('pt')
-    expect(wrapper.text()).toContain(ptMessages.pricing.heading)
+    expect(wrapper.text()).toContain(renderedHeading(ptMessages))
     expect(wrapper.text()).toContain(ptMessages.upgrade.cta.startTrial)
   })
 })
@@ -125,4 +152,3 @@ describe('locale parity', () => {
     }
   })
 })
-

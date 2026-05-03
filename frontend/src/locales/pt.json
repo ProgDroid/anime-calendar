@@ -348,13 +348,37 @@
     "weekOf": "Semana {week} de {year}"
   },
   "pricing": {
-    "eyebrow": "Plano Pro",
-    "heading": "Faça upgrade para a experiência completa",
-    "subtitle": "Desbloqueie acentos Pro, atualização prioritária e exportações flexíveis.",
+    "eyebrow": "Upgrade · Planos",
+    "heading": "Mais temporadas, mais cores, mais {emphasis}.",
+    "headingEmphasis": "controle",
+    "subtitle": "O Anime Calendar continua gratuito para o essencial. O Pro libera o acabamento e o poder para quem acompanha cada temporada.",
+    "mostPopular": "★ Mais escolhido",
     "interval": {
       "ariaLabel": "Intervalo de cobrança",
       "monthly": "Mensal",
       "annual": "Anual"
+    },
+    "tiers": {
+      "ariaLabel": "Comparar planos",
+      "free": {
+        "name": "Free",
+        "tagline": "Acompanhe o que estreia.",
+        "price": "R$ 0",
+        "period": "para sempre",
+        "cta": "Plano atual",
+        "features": {
+          "tracking": "Acompanhamento de animes e grade semanal",
+          "icsExport": "Exportação .ics e link de assinatura",
+          "freeAccents": "Acentos Coral e Iris",
+          "noProAccents": "Acentos Pro (Matcha, Sakura, Citron)",
+          "noPrioritySupport": "Suporte prioritário por e-mail"
+        }
+      },
+      "pro": {
+        "name": "Pro",
+        "tagline": "Para quem acompanha de perto.",
+        "cta": "Fazer upgrade para Pro"
+      }
     },
     "plan": {
       "title": "Anime Calendar Pro",
@@ -375,7 +399,7 @@
       "exportFlexibility": "Múltiplos perfis de exportação",
       "support": "Suporte prioritário por e-mail"
     },
-    "footer": "14 dias grátis. Cancele a qualquer momento nas configurações da conta."
+    "footer": "Cancele quando quiser · Pagamento seguro · 14 dias grátis."
   },
   "upgrade": {
     "cta": {
