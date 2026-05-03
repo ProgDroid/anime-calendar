@@ -345,6 +345,7 @@
       "sun": "Sun"
     },
     "episode": "Ep. {n}",
+    "airsAt": "Airs at {time}",
     "noEntries": "No entries",
     "prev": "Previous week",
     "next": "Next week",
@@ -453,7 +454,7 @@
     },
     "schedule": {
       "title": "This week",
-      "sub": "Your upcoming episodes"
+      "eyebrow": "Your upcoming episodes"
     }
   }
 }

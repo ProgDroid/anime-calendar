@@ -172,6 +172,6 @@ describe('CalendarScheduleView — mobile', () => {
   it('renders mobile header with i18n keys', async () => {
     const { wrapper } = await mountView()
     expect(wrapper.text()).toContain(en.mobile.schedule.title)
-    expect(wrapper.text()).toContain(en.mobile.schedule.sub)
+    expect(wrapper.text()).toContain(en.mobile.schedule.eyebrow)
   })
 })

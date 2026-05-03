@@ -59,8 +59,12 @@ function isoDay(d: Date) {
   return d.toISOString().slice(0, 10)
 }
 
-// Mobile: active day pill index (0 = Monday)
+// Mobile: active day pill index (0 = Monday). Reset to 0 on week change so
+// the pill stays in sync with the visible week.
 const activeDayIndex = ref(0)
+watch(week, () => {
+  activeDayIndex.value = 0
+})
 
 // Entries for the active pill day
 const activeDayEntries = computed(() => {
@@ -74,7 +78,7 @@ const activeDayEntries = computed(() => {
   <!-- Mobile layout -->
   <div v-if="isMobile" class="flex flex-col gap-4 pb-tab-bar" data-testid="schedule-mobile">
     <header class="px-4 pt-4">
-      <p class="text-xs uppercase tracking-wider text-fg-2">{{ t('mobile.schedule.sub') }}</p>
+      <p class="text-xs uppercase tracking-wider text-fg-2">{{ t('mobile.schedule.eyebrow') }}</p>
       <h1 class="font-display text-3xl text-fg-1 mt-1">{{ t('mobile.schedule.title') }}</h1>
     </header>
 
@@ -120,7 +124,9 @@ const activeDayEntries = computed(() => {
           <span v-if="ep.episode != null" class="text-xs text-fg-2">{{
             t('schedule.episode', { n: ep.episode })
           }}</span>
-          <span v-if="ep.time" class="font-mono text-xs text-accent-1-text">{{ ep.time }}</span>
+          <span v-if="ep.time" class="font-mono text-xs text-accent-1-text">{{
+            t('schedule.airsAt', { time: ep.time })
+          }}</span>
         </div>
       </article>
       <p

@@ -345,6 +345,7 @@
       "sun": "Dom"
     },
     "episode": "Ep. {n}",
+    "airsAt": "Estreia às {time}",
     "noEntries": "Sem episódios",
     "prev": "Semana anterior",
     "next": "Próxima semana",
@@ -453,7 +454,7 @@
     },
     "schedule": {
       "title": "Esta semana",
-      "sub": "Os teus próximos episódios"
+      "eyebrow": "Os teus próximos episódios"
     }
   }
 }
