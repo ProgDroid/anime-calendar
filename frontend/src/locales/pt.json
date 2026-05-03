@@ -20,7 +20,8 @@
     "orContinueWith": "Ou continue com",
     "cancel": "Cancelar",
     "confirm": "Confirmar",
-    "loading": "A carregar..."
+    "loading": "A carregar...",
+    "back": "Voltar"
   },
   "auth": {
     "google": {
@@ -455,6 +456,24 @@
     "schedule": {
       "title": "Esta semana",
       "eyebrow": "Os teus próximos episódios"
+    },
+    "editor": {
+      "itemsTab": "Itens · {count}",
+      "searchTab": "Pesquisar",
+      "fabAdd": "Adicionar anime",
+      "batchAdd": "Adicionar {count} ao calendário",
+      "batchClear": "Limpar",
+      "emptySearch": {
+        "title": "Encontra algo novo.",
+        "subtitle": "Pesquisa por título, estúdio ou temporada — anime e manga funcionam.",
+        "tryChips": "Tenta",
+        "recentLabel": "Recentes"
+      },
+      "results": {
+        "tapToSelect": "toca para selecionar",
+        "added": "Adicionado",
+        "resultsCount": "Resultados · {count}"
+      }
     }
   }
 }
