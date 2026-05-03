@@ -8,6 +8,7 @@ defineOptions({ name: 'UiBottomSheet' })
 
 interface Props {
   modelValue: boolean
+  ariaLabel?: string
 }
 const props = defineProps<Props>()
 const emit = defineEmits<{
@@ -81,6 +82,7 @@ onBeforeUnmount(() => {
         data-testid="bottom-sheet-panel"
         role="dialog"
         aria-modal="true"
+        :aria-label="ariaLabel"
         class="fixed bottom-0 left-0 right-0 z-50 rounded-t-[28px] border-t border-line-soft bg-bg-1 shadow-[0_-16px_50px_rgba(0,0,0,0.35)]"
         :style="{ paddingBottom: 'max(36px, calc(env(safe-area-inset-bottom) + 16px))' }"
         @click.stop
