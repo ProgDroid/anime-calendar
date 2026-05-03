@@ -6,7 +6,7 @@
 
 **Architecture:** Hybrid responsive — single route tree, components branch on viewport. Editor is the one exception: thin shell picks `CalendarEditorViewDesktop` (renamed) or `CalendarEditorViewMobile` (new). Single breakpoint at 1024 px exposed as a named constant. New `useViewportLayout` composable (singleton, debounced) coexists with the existing `useWindowSize` (per-component, 768 px threshold) — the two are intentionally separate; `useWindowSize` consumers are unaffected.
 
-**Tech Stack:** Vue 3.5 + TS 5.9, Tailwind v4 (`@theme` tokens), Pinia 3, vue-router 4, vue-i18n 11, vitest + jsdom, **new:** `vaul-vue` (drag-dismiss bottom sheets), **new:** Playwright (mobile smoke).
+**Tech Stack:** Vue 3.5 + TS 5.9, Tailwind v4 (`@theme` tokens), Pinia 3, vue-router 4, vue-i18n 11, vitest + jsdom, **new:** Playwright (mobile smoke). (Originally also `vaul-vue` for drag-dismiss bottom sheets — dropped during execution; static `UiBottomSheet` is built in-house, see Task 3.)
 
 **Source spec:** [`docs/superpowers/specs/2026-05-03-track-3-mobile-companion-design.md`](../specs/2026-05-03-track-3-mobile-companion-design.md)
 
@@ -446,47 +446,67 @@ git commit -m "feat(mobile): UiBottomTabBar primitive + route meta gating"
 
 ---
 
-### Task 3: Add `vaul-vue` dep + integration scaffold
+### Task 3: `UiBottomSheet` primitive (no third-party dep)
+
+**Plan revision (2026-05-03):** Originally specced `vaul-vue` for drag-to-dismiss UX. Reassessed mid-execution and dropped — drag-dismiss is gravy on top of a working bottom sheet, the static sheet is ~70 lines, and reaching for a dep here is the kind of pre-decision YAGNI we want to push back on. If user testing later shows drag-dismiss is missed, we can add a small custom drag (~40 lines `pointermove` + transform) or pull `vaul-vue` then. v1 ships with × close + backdrop tap + ESC.
 
 **Files:**
-- Modify: `frontend/package.json` (add dep)
-- Modify: `frontend/package-lock.json` (auto)
-- Create: `frontend/src/components/ui/UiBottomSheet.vue` (thin wrapper around vaul-vue)
+- Create: `frontend/src/components/ui/UiBottomSheet.vue`
 - Test: `frontend/src/components/ui/__tests__/UiBottomSheet.spec.ts`
 
-- [ ] **Step 1: Install `vaul-vue` (pin to latest stable).**
+**Behavior:**
+- Bottom-anchored sheet, slides up on `modelValue=true`, slides down on close.
+- Teleports to `document.body` so it overlays everything.
+- Backdrop tap closes; ESC closes; × button closes.
+- Drag-handle visual at the top (decorative grabber), no gesture in v1.
+- Body scroll locked while open.
 
-```bash
-cd frontend && npm install vaul-vue@latest
-```
-
-  Note the resolved version in the commit message. The wrapper is intentionally thin so we can swap out the underlying lib if it breaks.
-
-- [ ] **Step 2: Write the wrapper test.**
+- [ ] **Step 1: Write the failing test.**
 
 ```ts
 // frontend/src/components/ui/__tests__/UiBottomSheet.spec.ts
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { createI18n } from 'vue-i18n'
+import en from '@/locales/en.json'
+import pt from '@/locales/pt.json'
 import UiBottomSheet from '../UiBottomSheet.vue'
 
+const i18n = createI18n({ legacy: false, locale: 'en', messages: { en, pt } })
+
+function mountSheet(modelValue: boolean) {
+  return mount(UiBottomSheet, {
+    props: { modelValue },
+    slots: { default: '<p>hello</p>' },
+    attachTo: document.body,
+    global: { plugins: [i18n] },
+  })
+}
+
 describe('UiBottomSheet', () => {
-  it('renders slot content when open', () => {
-    const w = mount(UiBottomSheet, {
-      props: { modelValue: true },
-      slots: { default: '<p>hello</p>' },
-      attachTo: document.body,
-    })
+  beforeEach(() => {
+    document.body.replaceChildren()
+  })
+  afterEach(() => {
+    document.body.replaceChildren()
+    document.body.style.overflow = ''
+  })
+
+  it('does not render the panel when modelValue is false', () => {
+    const w = mountSheet(false)
+    expect(document.body.querySelector('[data-testid="bottom-sheet-panel"]')).toBeNull()
+    w.unmount()
+  })
+
+  it('renders slot content when open and teleports to body', () => {
+    const w = mountSheet(true)
+    expect(document.body.querySelector('[data-testid="bottom-sheet-panel"]')).not.toBeNull()
     expect(document.body.textContent).toContain('hello')
     w.unmount()
   })
 
-  it('emits update:modelValue=false when close button clicked', async () => {
-    const w = mount(UiBottomSheet, {
-      props: { modelValue: true },
-      slots: { default: '<p>hello</p>' },
-      attachTo: document.body,
-    })
+  it('emits update:modelValue=false when close button is clicked', async () => {
+    const w = mountSheet(true)
     const closeBtn = document.body.querySelector(
       '[data-testid="bottom-sheet-close"]',
     ) as HTMLElement | null
@@ -495,15 +515,63 @@ describe('UiBottomSheet', () => {
     expect(w.emitted('update:modelValue')?.[0]).toEqual([false])
     w.unmount()
   })
+
+  it('emits update:modelValue=false when backdrop is clicked', async () => {
+    const w = mountSheet(true)
+    const backdrop = document.body.querySelector(
+      '[data-testid="bottom-sheet-backdrop"]',
+    ) as HTMLElement | null
+    expect(backdrop).not.toBeNull()
+    backdrop?.click()
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([false])
+    w.unmount()
+  })
+
+  it('emits update:modelValue=false when ESC is pressed', async () => {
+    const w = mountSheet(true)
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    expect(w.emitted('update:modelValue')?.[0]).toEqual([false])
+    w.unmount()
+  })
+
+  it('locks body scroll while open', async () => {
+    const w = mountSheet(true)
+    expect(document.body.style.overflow).toBe('hidden')
+    await w.setProps({ modelValue: false })
+    expect(document.body.style.overflow).toBe('')
+    w.unmount()
+  })
+
+  it('renders a decorative drag-handle visual', () => {
+    const w = mountSheet(true)
+    const handle = document.body.querySelector('[data-testid="bottom-sheet-handle"]')
+    expect(handle).not.toBeNull()
+    expect(handle?.getAttribute('aria-hidden')).toBe('true')
+    w.unmount()
+  })
 })
 ```
 
-- [ ] **Step 3: Implement the wrapper.**
+- [ ] **Step 2: Run the test to verify it fails.**
+
+  Run: `cd frontend && npx vitest run src/components/ui/__tests__/UiBottomSheet.spec.ts`
+  Expected: FAIL — component module not found.
+
+- [ ] **Step 3: Verify `common.close` exists in both locales, otherwise add it.**
+
+  Search both `frontend/src/locales/en.json` and `pt.json` for an existing close-button label. If a key like `common.close`, `userDetails.close`, or `app.close` already exists, prefer reusing it. If none exists, add at the top of each file:
+  - en: `"common": { "close": "Close" }`
+  - pt: `"common": { "close": "Fechar" }`
+
+  Note which key you ended up using — the component's `t('...')` must match.
+
+- [ ] **Step 4: Implement the component.**
 
 ```vue
 <!-- frontend/src/components/ui/UiBottomSheet.vue -->
 <script setup lang="ts">
-import { DrawerRoot, DrawerPortal, DrawerOverlay, DrawerContent, DrawerClose } from 'vaul-vue'
+import { onBeforeUnmount, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import IconX from './icons/IconX.vue'
 
 defineOptions({ name: 'UiBottomSheet' })
@@ -511,47 +579,100 @@ defineOptions({ name: 'UiBottomSheet' })
 interface Props {
   modelValue: boolean
 }
-defineProps<Props>()
-defineEmits<{
+const props = defineProps<Props>()
+const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
 }>()
+
+const { t } = useI18n()
+
+function close() {
+  emit('update:modelValue', false)
+}
+
+function onKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape' && props.modelValue) close()
+}
+
+watch(
+  () => props.modelValue,
+  (open) => {
+    if (typeof document === 'undefined') return
+    if (open) {
+      document.body.style.overflow = 'hidden'
+      document.addEventListener('keydown', onKeydown)
+    } else {
+      document.body.style.overflow = ''
+      document.removeEventListener('keydown', onKeydown)
+    }
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => {
+  document.body.style.overflow = ''
+  document.removeEventListener('keydown', onKeydown)
+})
 </script>
 
 <template>
-  <DrawerRoot
-    :open="modelValue"
-    @update:open="(v: boolean) => $emit('update:modelValue', v)"
-  >
-    <DrawerPortal>
-      <DrawerOverlay class="fixed inset-0 z-40 bg-black/40" />
-      <DrawerContent
+  <Teleport to="body">
+    <Transition
+      enter-active-class="transition-opacity duration-200"
+      enter-from-class="opacity-0"
+      leave-active-class="transition-opacity duration-200"
+      leave-to-class="opacity-0"
+    >
+      <div
+        v-if="modelValue"
+        data-testid="bottom-sheet-backdrop"
+        class="fixed inset-0 z-40 bg-black/40"
+        @click="close"
+      />
+    </Transition>
+    <Transition
+      enter-active-class="transition-transform duration-300"
+      enter-from-class="translate-y-full"
+      leave-active-class="transition-transform duration-200"
+      leave-to-class="translate-y-full"
+    >
+      <div
+        v-if="modelValue"
+        data-testid="bottom-sheet-panel"
+        role="dialog"
+        aria-modal="true"
         class="fixed bottom-0 left-0 right-0 z-50 rounded-t-[28px] border-t border-line-soft bg-bg-1 shadow-[0_-16px_50px_rgba(0,0,0,0.35)]"
         :style="{ paddingBottom: 'max(36px, calc(env(safe-area-inset-bottom) + 16px))' }"
+        @click.stop
       >
         <div
+          data-testid="bottom-sheet-handle"
           aria-hidden="true"
           class="mx-auto mt-3 mb-4 h-1 w-9 rounded-full bg-line"
         />
-        <DrawerClose
+        <button
+          type="button"
           data-testid="bottom-sheet-close"
-          aria-label="Close"
-          class="absolute right-4 top-4 rounded-full p-2 text-fg-2 hover:bg-bg-2"
+          :aria-label="t('common.close')"
+          class="absolute right-4 top-4 rounded-full p-2 text-fg-2 hover:bg-bg-2 focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2"
+          @click="close"
         >
           <IconX />
-        </DrawerClose>
+        </button>
         <slot />
-      </DrawerContent>
-    </DrawerPortal>
-  </DrawerRoot>
+      </div>
+    </Transition>
+  </Teleport>
 </template>
 ```
 
-- [ ] **Step 4: Run the wrapper test.**
+- [ ] **Step 5: Run the spec + full suite + lint.**
 
   Run: `cd frontend && npx vitest run src/components/ui/__tests__/UiBottomSheet.spec.ts`
-  Expected: 2 tests PASS. **If `vaul-vue` import fails or DOM query returns null,** check that vaul-vue is installed and component names exported match the lib's actual API (consult `node_modules/vaul-vue/dist/index.d.ts`).
+  Expected: 7 tests PASS.
 
-- [ ] **Step 5: Run lint + build to ensure nothing broke.**
+  Run: `cd frontend && npm run test:unit -- --run`
+  Expected: prior count + 7 new = green.
 
   Run: `cd frontend && npm run lint && npm run build`
   Expected: clean.
@@ -559,13 +680,11 @@ defineEmits<{
 - [ ] **Step 6: Commit.**
 
 ```bash
-git add frontend/package.json frontend/package-lock.json \
-        frontend/src/components/ui/UiBottomSheet.vue \
-        frontend/src/components/ui/__tests__/UiBottomSheet.spec.ts
-git commit -m "chore(mobile): add vaul-vue dep + UiBottomSheet wrapper
-
-vaul-vue@<resolved-version> for drag-to-dismiss bottom sheets. Thin
-wrapper at UiBottomSheet keeps the lib swappable if it breaks."
+git add frontend/src/components/ui/UiBottomSheet.vue \
+        frontend/src/components/ui/__tests__/UiBottomSheet.spec.ts \
+        frontend/src/locales/en.json \
+        frontend/src/locales/pt.json
+git commit -m "feat(mobile): UiBottomSheet primitive (no third-party dep)"
 ```
 
 ---
