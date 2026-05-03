@@ -303,7 +303,7 @@
         "annual": "Annual"
       },
       "upgradeNudge": {
-        "tierChipFree": "Free plan",
+        "chipLabel": "Free plan",
         "ctaFree": "Upgrade to Pro",
         "ctaSubtitle": "Unlock all accent themes, priority refresh, and more."
       },

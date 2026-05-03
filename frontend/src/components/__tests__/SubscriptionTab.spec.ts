@@ -229,7 +229,7 @@ describe('SubscriptionTab', () => {
     const { wrapper } = await mountTab()
     await flushPromises()
     expect(wrapper.find('[data-testid="subscription-upgrade-nudge"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain(enMessages.account.subscription.upgradeNudge.tierChipFree)
+    expect(wrapper.text()).toContain(enMessages.account.subscription.upgradeNudge.chipLabel)
     expect(wrapper.text()).toContain(enMessages.account.subscription.upgradeNudge.ctaSubtitle)
   })
 

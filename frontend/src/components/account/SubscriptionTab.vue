@@ -123,9 +123,9 @@ onMounted(() => {
       data-testid="subscription-upgrade-nudge"
       class="rounded-lg border border-accent-1 bg-bg-1 p-6 mt-6 shadow-sm"
     >
-      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+      <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
         <div class="flex flex-col gap-3">
-          <UiChip variant="default">{{ t('account.subscription.upgradeNudge.tierChipFree') }}</UiChip>
+          <UiChip variant="default">{{ t('account.subscription.upgradeNudge.chipLabel') }}</UiChip>
           <p class="text-sm text-fg-2">
             {{ t('account.subscription.upgradeNudge.ctaSubtitle') }}
           </p>

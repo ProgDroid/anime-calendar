@@ -303,7 +303,7 @@
         "annual": "Anual"
       },
       "upgradeNudge": {
-        "tierChipFree": "Plano Free",
+        "chipLabel": "Plano Free",
         "ctaFree": "Fazer upgrade para Pro",
         "ctaSubtitle": "Desbloqueie todos os acentos, atualização prioritária e muito mais."
       },
