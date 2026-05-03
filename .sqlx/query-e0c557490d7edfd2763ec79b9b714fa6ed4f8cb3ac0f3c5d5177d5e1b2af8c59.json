@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT current_period_end FROM subscriptions WHERE stripe_subscription_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "current_period_end",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e0c557490d7edfd2763ec79b9b714fa6ed4f8cb3ac0f3c5d5177d5e1b2af8c59"
+}

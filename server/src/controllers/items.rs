@@ -25,6 +25,7 @@ struct Params {
     get,
     path = "/items",
     tag = "items",
+    operation_id = "getItems",
     params(Params),
     responses(
         (status = 200, body = Vec<common::item::Item>),

@@ -8,9 +8,7 @@ use utoipa::{
 use crate::{
     controllers::{
         auth::{AuthResponse, ErrorResponse, LoginRequest, RegisterRequest},
-        calendar::{
-            CalendarRequest, PageCalendar, PaginatedResponse, PaginationInfo, PaginationParams,
-        },
+        calendar::{CalendarRequest, PageCalendar, PaginatedResponse, PaginationInfo},
         oauth::{GoogleOAuthRequest, GoogleOAuthResponse},
         stripe::{BillingInterval, CheckoutRequest, CheckoutResponse, PortalResponse},
         subscription::SubscriptionResponse,
@@ -45,7 +43,11 @@ impl Modify for BearerAuth {
     info(
         title = "Anime Calendar API",
         version = "1.0.0",
-        description = "REST API for managing anime calendars with Anilist integration"
+        description = "REST API for managing anime calendars with Anilist integration",
+        license(name = "Proprietary", identifier = "LicenseRef-anime-calendar")
+    ),
+    servers(
+        (url = "/", description = "Same-origin (proxied via Vite/nginx)"),
     ),
     paths(
         // auth
@@ -111,8 +113,10 @@ impl Modify for BearerAuth {
         Theme,
         SiteLanguage,
         // calendar types
+        // PaginationParams is `IntoParams`, not `ToSchema` — registered via
+        // `params(PaginationParams)` on each handler that uses it, not in
+        // the global schemas list (see feedback_utoipa_schema_patterns).
         CalendarRequest,
-        PaginationParams,
         PageCalendar,
         PaginatedResponse,
         PaginationInfo,

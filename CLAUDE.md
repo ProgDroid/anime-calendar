@@ -78,7 +78,7 @@ Copy `config.toml.dist` → `config.toml` and `database.toml.dist` → `database
 - Redis key scanning: use `SCAN` cursor loop, never blocking `KEYS`
 - All `Error` variants must return `{"error":"..."}` JSON — never plain text
 - Auth failures: always return `Error::Unauthorised` regardless of whether the user exists
-- sqlx: regenerate and commit `.sqlx/` after any query change (`DATABASE_URL=... cargo sqlx prepare --workspace`)
+- sqlx: regenerate and commit `.sqlx/` after any query change (`DATABASE_URL=... cargo sqlx prepare --workspace -- --all-targets`). The trailing `-- --all-targets` flag is required — `prepare` walks default targets only by default, and CI's `cargo test --workspace` step needs cached entries for test-module `sqlx::query!` calls or it fails with "no cached data for this query".
 
 ### CI/CD
 
