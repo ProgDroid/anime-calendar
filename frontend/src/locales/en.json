@@ -446,6 +446,10 @@
       "library": "Library",
       "account": "Account",
       "label": "Primary navigation"
+    },
+    "account": {
+      "backToList": "Back to Account",
+      "sectionsHeading": "Account"
     }
   }
 }

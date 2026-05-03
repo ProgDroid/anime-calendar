@@ -446,6 +446,10 @@
       "library": "Biblioteca",
       "account": "Conta",
       "label": "Navegação principal"
+    },
+    "account": {
+      "backToList": "Voltar para Conta",
+      "sectionsHeading": "Conta"
     }
   }
 }

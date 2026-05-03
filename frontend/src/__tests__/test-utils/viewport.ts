@@ -1,4 +1,5 @@
 import { vi } from 'vitest'
+import { ref } from 'vue'
 
 /**
  * Stubs `useViewportLayout` to return a fixed `isMobile` value.
@@ -12,7 +13,7 @@ export async function mockViewport(width: number) {
     MOBILE_BREAKPOINT_PX: 1024,
     useViewportLayout: () => ({
       MOBILE_BREAKPOINT_PX: 1024,
-      isMobile: { value: width < 1024 },
+      isMobile: ref(width < 1024),
     }),
   }))
 }

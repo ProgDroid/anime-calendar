@@ -1,22 +1,23 @@
-import { describe, it, expect, vi } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createMemoryHistory } from 'vue-router'
+import { createRouter, createMemoryHistory, type Router } from 'vue-router'
 import { createPinia } from 'pinia'
 import AccountPage from '@/components/AccountPage.vue'
 import en from '@/locales/en.json'
+import { mockViewport, resetViewportMock } from '@/__tests__/test-utils/viewport'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
-function makeRouter() {
+function makeRouter(component: unknown = AccountPage): Router {
   return createRouter({
     history: createMemoryHistory(),
     routes: [
       {
         path: '/account',
-        component: AccountPage,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        component: component as any,
         children: [
-          { path: '', redirect: { name: 'account.profile' } },
           { path: 'profile', name: 'account.profile', component: { template: '<div data-testid="profile-stub" />' } },
           { path: 'preferences', name: 'account.preferences', component: { template: '<div data-testid="preferences-stub" />' } },
           { path: 'subscription', name: 'account.subscription', component: { template: '<div data-testid="subscription-stub" />' } },
@@ -94,5 +95,52 @@ describe('AccountPage (shell)', () => {
     await flushPromises()
     const activeBtn = wrapper.find(`[data-testid="${activeTestid}"]`)
     expect(activeBtn.classes().some((c) => c.includes('bg-bg-2'))).toBe(true)
+  })
+})
+
+describe('AccountPage layout', () => {
+  afterEach(() => {
+    resetViewportMock()
+  })
+
+  it('renders the desktop sidebar layout above the breakpoint', async () => {
+    await mockViewport(1280)
+    vi.resetModules()
+    const { default: Comp } = await import('@/components/AccountPage.vue')
+    const router = makeRouter(Comp)
+    router.push('/account/profile')
+    await router.isReady()
+    const wrapper = mount(Comp, { global: { plugins: [i18n, router, createPinia()] } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="account-desktop-layout"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="account-sidebar"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="account-section-list"]').exists()).toBe(false)
+  })
+
+  it('renders the section list at /account on mobile', async () => {
+    await mockViewport(390)
+    vi.resetModules()
+    const { default: Comp } = await import('@/components/AccountPage.vue')
+    const router = makeRouter(Comp)
+    router.push('/account')
+    await router.isReady()
+    const wrapper = mount(Comp, { global: { plugins: [i18n, router, createPinia()] } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="account-section-list"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="account-desktop-layout"]').exists()).toBe(false)
+  })
+
+  it('renders the sub-route view + back arrow at /account/profile on mobile', async () => {
+    await mockViewport(390)
+    vi.resetModules()
+    const { default: Comp } = await import('@/components/AccountPage.vue')
+    const router = makeRouter(Comp)
+    router.push('/account/profile')
+    await router.isReady()
+    const wrapper = mount(Comp, { global: { plugins: [i18n, router, createPinia()] } })
+    await flushPromises()
+    expect(wrapper.find('[data-testid="account-subroute"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="account-back-arrow"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="account-desktop-layout"]').exists()).toBe(false)
   })
 })

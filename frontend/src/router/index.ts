@@ -49,7 +49,6 @@ const router = createRouter({
       component: () => import('@/components/AccountPage.vue'),
       meta: { requiresAuth: true },
       children: [
-        { path: '', redirect: { name: 'account.profile' } },
         { path: 'profile', name: 'account.profile', component: () => import('@/components/account/ProfileTab.vue') },
         { path: 'preferences', name: 'account.preferences', component: () => import('@/components/account/PreferencesTab.vue') },
         { path: 'subscription', name: 'account.subscription', component: () => import('@/components/account/SubscriptionTab.vue') },
