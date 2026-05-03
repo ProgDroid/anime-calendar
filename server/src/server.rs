@@ -3,21 +3,23 @@ use std::str::FromStr;
 
 use actix_cors::Cors;
 use actix_governor::{
-    governor::{clock::QuantaInstant, NotUntil},
     Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError,
+    governor::{NotUntil, clock::QuantaInstant},
 };
 use actix_web::dev::ServiceRequest;
 use actix_web::{
+    App, HttpServer,
     dev::Server,
     middleware::{Compress, Condition, DefaultHeaders, Logger},
-    web, App, HttpServer,
+    web,
 };
 use env_logger::Builder;
-use log::{error, LevelFilter};
+use log::{LevelFilter, error};
 use utoipa::OpenApi as _;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
+    ServerResult,
     cache::Cache,
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig, StripeConfig},
     controllers::{
@@ -34,7 +36,6 @@ use crate::{
     },
     openapi::ApiDoc,
     services::{email::EmailService, entitlement::EntitlementService},
-    ServerResult,
 };
 use stripe::Client as StripeClient;
 

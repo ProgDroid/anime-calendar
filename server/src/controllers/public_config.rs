@@ -20,6 +20,7 @@ pub struct PublicConfig {
 #[utoipa::path(
     get,
     path = "/public-config",
+    operation_id = "get_public_config",
     tag = "config",
     responses((status = 200, body = PublicConfig)),
 )]

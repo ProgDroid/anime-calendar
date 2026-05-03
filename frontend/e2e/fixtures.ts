@@ -20,10 +20,15 @@ import { test as base, expect } from '@playwright/test'
 export const test = base.extend<{ apiMock: void }>({
   apiMock: [
     async ({ page }, use) => {
-      // Public bootstrap config: must succeed for the SPA to mount. Stub
-      // before the catch-all `route.abort()` because Playwright matches in
-      // registration order. The SPA hard-fails if this endpoint is rejected,
-      // so an explicit success stub is required for every e2e spec.
+      // Playwright runs matching route handlers in REVERSE registration
+      // order — the most recently registered handler wins. Register the
+      // catch-all abort first, then the specific public-config stub, so
+      // the stub runs first for `/api/public-config` and the abort still
+      // covers every other `/api/**` request.
+      //
+      // The SPA hard-fails its bootstrap if `/api/public-config` is
+      // rejected, so an explicit success stub is required for every spec.
+      await page.route('**/api/**', (route) => route.abort())
       await page.route('**/api/public-config', (route) =>
         route.fulfill({
           status: 200,
@@ -31,7 +36,6 @@ export const test = base.extend<{ apiMock: void }>({
           body: JSON.stringify({ google_client_id: 'e2e-test-cid' }),
         }),
       )
-      await page.route('**/api/**', (route) => route.abort())
       await use()
     },
     { auto: true },

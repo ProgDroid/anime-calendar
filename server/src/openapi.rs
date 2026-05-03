@@ -1,8 +1,8 @@
 #![allow(clippy::needless_for_each)]
 
 use utoipa::{
-    openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
     Modify, OpenApi,
+    openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
 };
 
 use crate::{
