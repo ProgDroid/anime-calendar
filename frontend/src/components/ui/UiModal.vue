@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, watch, ref, nextTick } from 'vue'
+import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
 
 interface Props { open: boolean; closeOnScrim?: boolean; ariaLabel: string }
 const props = withDefaults(defineProps<Props>(), { closeOnScrim: true })
@@ -10,6 +11,10 @@ const emit = defineEmits<{ (e: 'update:open', v: boolean): void; (e: 'close'): v
 
 const dialogEl = ref<HTMLElement | null>(null)
 let invoker: HTMLElement | null = null
+// Per-instance flag (script setup runs once per component instance) so we
+// pair exactly one lockBodyScroll() with one unlockBodyScroll() per open
+// cycle, even if the modal unmounts while still open.
+let didLock = false
 
 const FOCUSABLE_SELECTOR =
   'a[href], button:not([disabled]), input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
@@ -63,13 +68,22 @@ function onScrimClick() {
 onMounted(() => document.addEventListener('keydown', onKey))
 onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKey)
-  document.body.style.overflow = ''
+  if (didLock) {
+    unlockBodyScroll()
+    didLock = false
+  }
 })
 
 watch(
   () => props.open,
   async (v) => {
-    document.body.style.overflow = v ? 'hidden' : ''
+    if (v && !didLock) {
+      lockBodyScroll()
+      didLock = true
+    } else if (!v && didLock) {
+      unlockBodyScroll()
+      didLock = false
+    }
     if (v) {
       invoker = (document.activeElement as HTMLElement) ?? null
       await nextTick()

@@ -4,6 +4,7 @@ import { createI18n } from 'vue-i18n'
 import en from '@/locales/en.json'
 import pt from '@/locales/pt.json'
 import UiBottomSheet from '../UiBottomSheet.vue'
+import { _resetBodyScrollLockForTests } from '@/composables/useBodyScrollLock'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en, pt } })
 
@@ -18,7 +19,9 @@ function mountSheet(modelValue: boolean) {
 
 describe('UiBottomSheet', () => {
   beforeEach(() => {
+    _resetBodyScrollLockForTests()
     document.body.replaceChildren()
+    document.body.style.overflow = ''
   })
   afterEach(() => {
     document.body.replaceChildren()

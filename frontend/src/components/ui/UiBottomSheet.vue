@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onBeforeUnmount, watch } from 'vue'
 import { useI18n } from 'vue-i18n'
+import { lockBodyScroll, unlockBodyScroll } from '@/composables/useBodyScrollLock'
 import IconX from './icons/IconX.vue'
 
 defineOptions({ name: 'UiBottomSheet' })
@@ -23,33 +24,43 @@ function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && props.modelValue) close()
 }
 
+// Per-instance flag (script setup runs once per component instance) so we
+// pair exactly one lockBodyScroll() with one unlockBodyScroll() per open
+// cycle, even if the watcher fires unexpectedly or the component unmounts
+// while still open.
+let didLock = false
+
 watch(
   () => props.modelValue,
   (open) => {
-    if (typeof document === 'undefined') return
-    if (open) {
-      document.body.style.overflow = 'hidden'
+    if (open && !didLock) {
+      lockBodyScroll()
       document.addEventListener('keydown', onKeydown)
-    } else {
-      document.body.style.overflow = ''
+      didLock = true
+    } else if (!open && didLock) {
+      unlockBodyScroll()
       document.removeEventListener('keydown', onKeydown)
+      didLock = false
     }
   },
   { immediate: true },
 )
 
 onBeforeUnmount(() => {
-  document.body.style.overflow = ''
-  document.removeEventListener('keydown', onKeydown)
+  if (didLock) {
+    unlockBodyScroll()
+    document.removeEventListener('keydown', onKeydown)
+    didLock = false
+  }
 })
 </script>
 
 <template>
   <Teleport to="body">
     <Transition
-      enter-active-class="transition-opacity duration-200"
+      enter-active-class="transition-opacity duration-200 motion-reduce:transition-none motion-reduce:duration-0"
       enter-from-class="opacity-0"
-      leave-active-class="transition-opacity duration-200"
+      leave-active-class="transition-opacity duration-200 motion-reduce:transition-none motion-reduce:duration-0"
       leave-to-class="opacity-0"
     >
       <div
@@ -60,9 +71,9 @@ onBeforeUnmount(() => {
       />
     </Transition>
     <Transition
-      enter-active-class="transition-transform duration-300"
+      enter-active-class="transition-transform duration-300 motion-reduce:transition-none motion-reduce:duration-0"
       enter-from-class="translate-y-full"
-      leave-active-class="transition-transform duration-200"
+      leave-active-class="transition-transform duration-200 motion-reduce:transition-none motion-reduce:duration-0"
       leave-to-class="translate-y-full"
     >
       <div
@@ -74,6 +85,7 @@ onBeforeUnmount(() => {
         :style="{ paddingBottom: 'max(36px, calc(env(safe-area-inset-bottom) + 16px))' }"
         @click.stop
       >
+        <!-- TODO(track-3-a11y): focus-trap inside panel + initial focus on open + restore focus on close. Track 2 a11y memory `feedback_jsdom_focusable_offsetparent` flags the jsdom Teleport pitfall to watch for in tests. -->
         <div
           data-testid="bottom-sheet-handle"
           aria-hidden="true"
