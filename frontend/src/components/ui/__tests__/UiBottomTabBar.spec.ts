@@ -58,18 +58,30 @@ describe('UiBottomTabBar', () => {
   it('highlights Library on /my-calendars', async () => {
     const w = await mountAt('/my-calendars', 390)
     const lib = w.get('[data-testid="bottom-tab-library"]')
-    expect(lib.classes().some((c) => c.includes('text-accent-1'))).toBe(true)
+    expect(lib.classes()).toContain('text-accent-1-text')
   })
 
   it('highlights Library on /calendar/:id (editor is child of Library)', async () => {
     const w = await mountAt('/calendar/42', 390)
     const lib = w.get('[data-testid="bottom-tab-library"]')
-    expect(lib.classes().some((c) => c.includes('text-accent-1'))).toBe(true)
+    expect(lib.classes()).toContain('text-accent-1-text')
   })
 
   it('highlights Account on /account/profile', async () => {
     const w = await mountAt('/account/profile', 390)
     const acc = w.get('[data-testid="bottom-tab-account"]')
-    expect(acc.classes().some((c) => c.includes('text-accent-1'))).toBe(true)
+    expect(acc.classes()).toContain('text-accent-1-text')
+  })
+
+  it('uses a single noun phrase for aria-label', async () => {
+    const w = await mountAt('/my-calendars', 390)
+    expect(w.get('[data-testid="bottom-tab-bar"]').attributes('aria-label')).toBe('Primary navigation')
+  })
+
+  it('exposes aria-current="page" on active tab only', async () => {
+    const w = await mountAt('/my-calendars', 390)
+    const tabs = w.findAll('[data-testid="bottom-tab"]')
+    expect(tabs[0]!.attributes('aria-current')).toBe('page')
+    expect(tabs[1]!.attributes('aria-current')).toBeUndefined()
   })
 })

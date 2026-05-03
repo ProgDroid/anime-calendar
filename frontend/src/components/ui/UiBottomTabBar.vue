@@ -28,19 +28,20 @@ const activeTab = computed<'library' | 'account' | null>(() => {
   <nav
     v-if="visible"
     data-testid="bottom-tab-bar"
-    :aria-label="t('mobile.tabBar.library') + ' / ' + t('mobile.tabBar.account')"
+    :aria-label="t('mobile.tabBar.label')"
     class="sticky bottom-0 left-0 right-0 z-30 flex justify-around border-t border-line-soft bg-bg-0/80 pt-2 backdrop-blur-md"
     :style="{ paddingBottom: 'max(22px, calc(env(safe-area-inset-bottom) + 8px))' }"
   >
     <RouterLink
       to="/my-calendars"
       data-testid="bottom-tab"
+      :aria-current="activeTab === 'library' ? 'page' : undefined"
       :class="[
         'flex flex-col items-center gap-1 px-4 py-1 text-[10px] font-medium',
-        activeTab === 'library' ? 'text-accent-1' : 'text-fg-2',
+        activeTab === 'library' ? 'text-accent-1-text' : 'text-fg-2',
       ]"
     >
-      <span data-testid="bottom-tab-library" :class="activeTab === 'library' ? 'text-accent-1' : 'text-fg-2'">
+      <span data-testid="bottom-tab-library" :class="activeTab === 'library' ? 'text-accent-1-text' : 'text-fg-2'">
         <IconCal />
       </span>
       {{ t('mobile.tabBar.library') }}
@@ -48,12 +49,13 @@ const activeTab = computed<'library' | 'account' | null>(() => {
     <RouterLink
       to="/account"
       data-testid="bottom-tab"
+      :aria-current="activeTab === 'account' ? 'page' : undefined"
       :class="[
         'flex flex-col items-center gap-1 px-4 py-1 text-[10px] font-medium',
-        activeTab === 'account' ? 'text-accent-1' : 'text-fg-2',
+        activeTab === 'account' ? 'text-accent-1-text' : 'text-fg-2',
       ]"
     >
-      <span data-testid="bottom-tab-account" :class="activeTab === 'account' ? 'text-accent-1' : 'text-fg-2'">
+      <span data-testid="bottom-tab-account" :class="activeTab === 'account' ? 'text-accent-1-text' : 'text-fg-2'">
         <IconSettings />
       </span>
       {{ t('mobile.tabBar.account') }}

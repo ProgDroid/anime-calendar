@@ -441,7 +441,8 @@
   "mobile": {
     "tabBar": {
       "library": "Library",
-      "account": "Account"
+      "account": "Account",
+      "label": "Primary navigation"
     }
   }
 }
