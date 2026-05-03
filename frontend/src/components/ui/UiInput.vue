@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, useId, useSlots } from 'vue'
+import { computed, ref, useId, useSlots } from 'vue'
 import { tv } from 'tailwind-variants'
 
 interface Props {
@@ -55,6 +55,11 @@ const inputClasses = computed(() => [
 function onInput(ev: Event) {
   emit('update:modelValue', (ev.target as HTMLInputElement).value)
 }
+
+const inputEl = ref<HTMLInputElement | null>(null)
+defineExpose({
+  focus: () => inputEl.value?.focus(),
+})
 </script>
 
 <template>
@@ -69,6 +74,7 @@ function onInput(ev: Event) {
       </span>
       <input
         :id="inputId"
+        ref="inputEl"
         :name="name"
         :class="inputClasses"
         :type="type"

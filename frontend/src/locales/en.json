@@ -460,18 +460,16 @@
     "editor": {
       "itemsTab": "Items · {count}",
       "searchTab": "Search",
+      "tabGroupLabel": "Editor view",
       "fabAdd": "Add anime",
       "batchAdd": "Add {count} to calendar",
       "batchClear": "Clear",
       "emptySearch": {
         "title": "Find something new.",
-        "subtitle": "Search by title, studio, or season — anime & manga both work.",
-        "tryChips": "Try",
-        "recentLabel": "Recent"
+        "subtitle": "Search by title, studio, or season — anime & manga both work."
       },
       "results": {
         "tapToSelect": "tap to select",
-        "added": "Added",
         "resultsCount": "Results · {count}"
       }
     }

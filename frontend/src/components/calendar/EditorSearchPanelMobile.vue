@@ -26,7 +26,7 @@ const emit = defineEmits<{
 
 const nameInput = ref('')
 const mediaType = ref<'' | 'ANIME' | 'MANGA'>('')
-const searchInputRef = ref<HTMLInputElement | null>(null)
+const searchInputRef = ref<{ focus: () => void } | null>(null)
 
 const hasResults = computed(() => fetchedItems.value.length > 0)
 const selectionCount = computed(() => selection.selectedMediaIds.size)
@@ -44,8 +44,10 @@ const doSearch = () => {
   handleSearch({ name: nameInput.value, mediaType: mediaType.value })
 }
 
-// Expose the search input ref so the parent can focus it (for FAB jump)
-defineExpose({ searchInputRef })
+// Expose a focus wrapper so the parent can focus the search input (for FAB jump)
+defineExpose({
+  focus: () => searchInputRef.value?.focus(),
+})
 </script>
 
 <template>

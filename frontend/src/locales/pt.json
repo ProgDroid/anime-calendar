@@ -460,18 +460,16 @@
     "editor": {
       "itemsTab": "Itens · {count}",
       "searchTab": "Pesquisar",
+      "tabGroupLabel": "Vista do editor",
       "fabAdd": "Adicionar anime",
       "batchAdd": "Adicionar {count} ao calendário",
       "batchClear": "Limpar",
       "emptySearch": {
         "title": "Encontra algo novo.",
-        "subtitle": "Pesquisa por título, estúdio ou temporada — anime e manga funcionam.",
-        "tryChips": "Tenta",
-        "recentLabel": "Recentes"
+        "subtitle": "Pesquisa por título, estúdio ou temporada — anime e manga funcionam."
       },
       "results": {
         "tapToSelect": "toca para selecionar",
-        "added": "Adicionado",
         "resultsCount": "Resultados · {count}"
       }
     }

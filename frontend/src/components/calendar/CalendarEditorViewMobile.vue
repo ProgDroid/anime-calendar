@@ -50,11 +50,7 @@ const tabOptions = computed(() => [
 function jumpToSearch() {
   tab.value = 'search'
   void nextTick(() => {
-    // Try to focus the search input inside the panel
-    const inputEl = searchPanelRef.value?.searchInputRef
-    if (inputEl && typeof (inputEl as { focus?: () => void }).focus === 'function') {
-      ;(inputEl as { focus: () => void }).focus()
-    }
+    searchPanelRef.value?.focus()
   })
 }
 
@@ -208,7 +204,7 @@ if (calendarId && calendarId !== 'new') {
           v-model="tab"
           :options="tabOptions"
           variant="tab"
-          :aria-label="t('mobile.editor.searchTab')"
+          :aria-label="t('mobile.editor.tabGroupLabel')"
           class="w-full [&>button]:flex-1"
         />
       </div>

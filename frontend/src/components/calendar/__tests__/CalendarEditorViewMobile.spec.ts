@@ -105,6 +105,15 @@ describe('CalendarEditorViewMobile', () => {
     w.unmount()
   })
 
+  it('FAB click focuses the search input', async () => {
+    const w = await mountView()
+    await w.find('[data-testid="editor-fab"]').trigger('click')
+    await flushPromises()
+    const input = w.find('[data-testid="search-input-mobile"] input').element as HTMLInputElement
+    expect(document.activeElement).toBe(input)
+    w.unmount()
+  })
+
   it('renders the tab bar with Items and Search options', async () => {
     const w = await mountView()
     const tabBar = w.find('[data-testid="editor-tab-bar"]')
