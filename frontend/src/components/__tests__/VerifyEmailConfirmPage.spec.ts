@@ -31,7 +31,9 @@ describe('VerifyEmailConfirmPage — mobile smoke test', () => {
   beforeEach(async () => {
     setActivePinia(createPinia())
     verifyEmailMock.mockReset()
-    verifyEmailMock.mockResolvedValue(undefined)
+    // Reject so the success branch's setTimeout(router.push, 1500) never schedules,
+    // which would otherwise leak across tests as a real-timer flake (see SubscriptionTab.spec).
+    verifyEmailMock.mockRejectedValue(new Error('skip-redirect'))
     await mockViewport(390)
   })
 
@@ -42,7 +44,7 @@ describe('VerifyEmailConfirmPage — mobile smoke test', () => {
   it('renders at 390 px without throwing and shows the eyebrow', async () => {
     const { default: VerifyEmailConfirmPage } = await import('../VerifyEmailConfirmPage.vue')
     const wrapper = mount(VerifyEmailConfirmPage, {
-      global: { plugins: [i18n, makeRouter(), createPinia()] },
+      global: { plugins: [i18n, makeRouter()] },
     })
     expect(wrapper.text()).toContain(en.auth.verifyEmail.confirm.eyebrow)
   })
