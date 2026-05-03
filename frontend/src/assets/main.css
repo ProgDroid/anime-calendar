@@ -44,3 +44,24 @@ select:focus-visible {
   outline-offset: 2px;
   border-color: var(--accent-1);
 }
+
+/* Track 3: rubber-band scroll polish.
+   Scroll containers anchored to the bottom tab bar should not bubble
+   the gesture into history-back navigation. */
+html, body {
+  overscroll-behavior-y: contain;
+}
+
+/* Full-height containers should use dynamic viewport height on mobile
+   Safari so the URL bar appearing/disappearing doesn't cause layout
+   jumps. The .h-dvh-screen utility provides 100dvh with 100vh fallback. */
+.h-dvh-screen {
+  height: 100vh;
+  height: 100dvh;
+}
+
+/* Bottom-tab-bar-aware scroll padding so focused inputs are visible
+   above the bar on mobile keyboards. */
+.scroll-padding-tab-bar {
+  scroll-padding-bottom: 90px;
+}
