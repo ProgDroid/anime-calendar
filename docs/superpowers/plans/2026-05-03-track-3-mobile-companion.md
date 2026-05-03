@@ -910,7 +910,7 @@ test-results/
 
       - name: Cache Playwright browsers
         id: pw-cache
-        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf
+        uses: actions/cache@3624ceb22c1c5a301c8db4169662070a689d9ea8
         with:
           path: ~/.cache/ms-playwright
           key: playwright-browsers-${{ runner.os }}-${{ steps.pw-version.outputs.version }}
@@ -930,20 +930,18 @@ test-results/
 
       - name: Upload Playwright report on failure
         if: failure()
-        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        uses: actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882
         with:
           name: playwright-report
           path: frontend/playwright-report/
           retention-days: 7
 ```
 
-  After adding, verify the SHAs:
+  SHAs verified via `https://api.github.com/repos/<owner>/<repo>/git/refs/tags/<tag>`:
   - `actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd` — already pinned in this file.
   - `actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f` — already pinned in this file.
-  - `actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf` — corresponds to `actions/cache@v4.1.1`. Confirm via `gh api repos/actions/cache/git/refs/tags/v4.1.1` if uncertain.
-  - `actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808` — corresponds to `actions/upload-artifact@v4.4.3`. Confirm similarly.
-
-  If you cannot confirm a SHA, escalate rather than picking a wrong one. Pinning to a stale or wrong SHA would block the workflow.
+  - `actions/cache@3624ceb22c1c5a301c8db4169662070a689d9ea8` — verified to be v4.1.1 (lightweight tag → direct commit ref).
+  - `actions/upload-artifact@b4b15b8c7c6ac21ea08fcf65892d2ee8f75cf882` — verified to be v4.4.3 (lightweight tag → direct commit ref).
 
 - [ ] **Step 8: Commit.**
 
