@@ -125,7 +125,7 @@ describe('CalendarPage — error paths', () => {
   it('shows loadFailed when GET /calendars/:id returns an error', async () => {
     ;(api.get as ReturnType<typeof vi.fn>).mockRejectedValue(axiosError(500))
 
-    const CalendarEditorView = (await import('@/components/calendar/CalendarEditorView.vue')).default
+    const CalendarEditorView = (await import('@/components/calendar/CalendarEditorViewDesktop.vue')).default
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [{ path: '/calendar/:id', component: CalendarEditorView }]
@@ -143,7 +143,7 @@ describe('CalendarPage — error paths', () => {
   it('shows loadFailed when GET /calendars/:id returns 404', async () => {
     ;(api.get as ReturnType<typeof vi.fn>).mockRejectedValue(axiosError(404))
 
-    const CalendarEditorView = (await import('@/components/calendar/CalendarEditorView.vue')).default
+    const CalendarEditorView = (await import('@/components/calendar/CalendarEditorViewDesktop.vue')).default
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [{ path: '/calendar/:id', component: CalendarEditorView }]
@@ -171,7 +171,7 @@ describe('CalendarPage — error paths', () => {
     })
     ;(api.put as ReturnType<typeof vi.fn>).mockRejectedValue(axiosError(500))
 
-    const CalendarEditorView = (await import('@/components/calendar/CalendarEditorView.vue')).default
+    const CalendarEditorView = (await import('@/components/calendar/CalendarEditorViewDesktop.vue')).default
     const router = createRouter({
       history: createMemoryHistory(),
       routes: [{ path: '/calendar/:id', component: CalendarEditorView }]
