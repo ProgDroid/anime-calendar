@@ -47,9 +47,9 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        VITE_API_BASE_URL: http://localhost:8080
-        VITE_GOOGLE_CLIENT_ID: ${VITE_GOOGLE_CLIENT_ID:-}
+      # No build args. Public bootstrap config (Google OAuth client ID, etc.)
+      # is delivered at runtime by the backend via GET /api/public-config,
+      # so the resulting image is environment-agnostic.
     ports:
       - "80:80"
     depends_on:

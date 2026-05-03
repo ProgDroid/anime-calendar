@@ -10,6 +10,8 @@
 
 **Spec note:** The design doc `docs/superpowers/specs/2026-04-20-deployment-design.md` states two frontend images (frontend-staging, frontend-prod). That is incorrect — the frontend uses `baseURL: '/api'` (relative URL via nginx proxy), so `VITE_API_BASE_URL` is never consulted at runtime. One image with runtime `BACKEND_URL` envsubst is correct.
 
+**Runtime config update (2026-05-03):** `VITE_GOOGLE_CLIENT_ID` has also been retired. The Google OAuth client ID is now served by the backend via `GET /api/public-config` and fetched by the SPA at bootstrap (see `server/src/controllers/public_config.rs`, `frontend/src/services/publicConfig.ts`). The frontend image is now fully environment-agnostic — no Vite build args of any kind. All references to `VITE_GOOGLE_CLIENT_ID` below have been struck through and updated.
+
 ---
 
 ## File Map
@@ -28,7 +30,7 @@
 - `server/src/server.rs` — wire health endpoint + CF middleware + `cookie_domain`
 - `server/src/controllers/auth.rs` — `SameSite::Strict` → `SameSite::Lax`, add optional domain to both cookie builders
 - `frontend/nginx.conf` → `frontend/nginx.conf.template` — replace `http://server:8080` with `${BACKEND_URL}`
-- `frontend/Dockerfile` — envsubst at container startup instead of baked URL; keep `VITE_GOOGLE_CLIENT_ID` as build arg
+- `frontend/Dockerfile` — envsubst at container startup instead of baked URL; no build args (Google client ID now served at runtime by backend `/api/public-config`)
 - `config.toml.dist` — add `cf_origin_secret`, `cookie_domain` fields
 - `.github/workflows/ci.yml` → **rename** to keep CI, add staging + production deploy jobs (or create `.github/workflows/deploy.yml`)
 
@@ -911,8 +913,9 @@ RUN npm ci
 
 COPY . .
 
-ARG VITE_GOOGLE_CLIENT_ID
-ENV VITE_GOOGLE_CLIENT_ID=$VITE_GOOGLE_CLIENT_ID
+# No build args. Public bootstrap config (Google OAuth client ID, etc.) is
+# delivered at runtime by the backend via GET /api/public-config — see
+# server/src/controllers/public_config.rs and frontend/src/services/publicConfig.ts.
 
 RUN npm run build
 
@@ -945,7 +948,7 @@ CMD ["nginx", "-g", "daemon off;"]
 
 ```bash
 cd frontend
-docker build --build-arg VITE_GOOGLE_CLIENT_ID=test-client-id -t frontend-test .
+docker build -t frontend-test .
 docker run --rm -e BACKEND_URL=http://host.docker.internal:8080 -p 8081:80 frontend-test
 ```
 
@@ -1365,8 +1368,10 @@ jobs:
 
       - name: Build and push frontend image
         run: |
+          # No build args — the frontend image is environment-agnostic.
+          # Google OAuth client ID and any other public bootstrap config is
+          # served by the backend at runtime via GET /api/public-config.
           docker build \
-            --build-arg VITE_GOOGLE_CLIENT_ID=${{ secrets.VITE_GOOGLE_CLIENT_ID }} \
             -t $REGISTRY/frontend:$SHA \
             -f frontend/Dockerfile frontend/
           docker push $REGISTRY/frontend:$SHA
@@ -1572,8 +1577,9 @@ In GitHub → repo → Settings → Secrets and variables → Actions:
 - `WORKLOAD_IDENTITY_PROVIDER` — WIF provider resource name from Task 9
 - `GCP_STAGING_SA` — `github-staging@YOUR_PROJECT_ID.iam.gserviceaccount.com`
 - `GCP_PROD_SA` — `github-prod@YOUR_PROJECT_ID.iam.gserviceaccount.com`
-- `VITE_GOOGLE_CLIENT_ID` — Google OAuth client ID
 - `PROD_DB_PASSWORD` — Cloud SQL user password
+
+> The Google OAuth client ID is **not** a GitHub secret in this design — it lives in `shared/google-client-id` in GCP Secret Manager (already listed in the Secrets table) and is served to the SPA at runtime by the backend's `/api/public-config` endpoint. The CI job no longer needs it.
 
 - [ ] **Step 4: Create GitHub Environments**
 
@@ -1658,4 +1664,4 @@ After completing all tasks, the following items from `docs/superpowers/specs/202
 | Cookie SameSite=Lax + domain | Task 5 |
 | Rollback on failure | Task 12 |
 
-**Spec inaccuracy (not blocking):** The spec describes `frontend-staging:{sha}` and `frontend-prod:{sha}` as two separate images. The correct implementation (Task 7) uses one image with `BACKEND_URL` envsubst at runtime, since `VITE_API_BASE_URL` is never read by the frontend source.
+**Spec inaccuracy (not blocking):** The spec describes `frontend-staging:{sha}` and `frontend-prod:{sha}` as two separate images. The correct implementation (Task 7) uses one image with `BACKEND_URL` envsubst at runtime, since `VITE_API_BASE_URL` is never read by the frontend source. As of 2026-05-03, `VITE_GOOGLE_CLIENT_ID` has also been removed in favour of a runtime `/api/public-config` endpoint, so the frontend image truly has zero build-time configuration — one identical image deploys to both environments.

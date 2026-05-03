@@ -192,7 +192,7 @@ environment = "development" # 'development' | 'staging' | 'production'
 frontend_url = "http://localhost:5175"
 ```
 
-`VITE_STRIPE_PUBLISHABLE_KEY` baked at build time per the existing Vite/Docker pattern (memory: `feedback_vite_docker_env_vars.md`).
+~~`VITE_STRIPE_PUBLISHABLE_KEY` baked at build time per the existing Vite/Docker pattern.~~ **Not implemented this way.** Stripe Checkout is fully server-side: the backend creates a Checkout Session and returns the redirect URL, so the frontend never embeds the Stripe publishable key and no `VITE_STRIPE_*` env var was ever introduced. (Note 2026-05-03: even if a publishable key were needed in future, it would now be served via `/api/public-config` rather than baked at build time — see `feedback_vite_docker_env_vars.md` for the runtime-config pattern.)
 
 ### Security
 

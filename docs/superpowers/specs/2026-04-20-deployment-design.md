@@ -52,7 +52,7 @@ Browser
 **Frontend:**
 - Memory: 256 MB
 - Min instances: 0 · Max instances: 5
-- `VITE_API_BASE_URL` baked at image build time (staging vs prod values differ)
+- ~~`VITE_API_BASE_URL` baked at image build time (staging vs prod values differ)~~ **Superseded.** As of 2026-05-03, the frontend image has no build-time env vars. Public bootstrap config (Google OAuth client ID, etc.) is delivered at runtime by the backend via `GET /api/public-config`. The same frontend image deploys to both staging and production, with environment differences resolved entirely at runtime.
 
 ### Domain & Cookies
 
@@ -90,28 +90,27 @@ Extend the existing `ci.yml` with deploy jobs, or create a separate `deploy.yml`
 
 1. Authenticate to GCP via **Workload Identity Federation** (`github-staging@…` SA)
 2. Build `backend:{sha}` image → push to Artifact Registry
-3. Build `frontend-staging:{sha}` (`VITE_API_BASE_URL=https://staging-api.yourdomain.com`) → push to Artifact Registry
-4. Build `frontend-prod:{sha}` (`VITE_API_BASE_URL=https://api.yourdomain.com`) → push to Artifact Registry
-5. Run sqlx migrations against Neon DB (direct TLS connection, no proxy needed)
-6. Deploy Cloud Run backend (staging) revision
-7. Deploy Cloud Run frontend (staging) revision using `frontend-staging:{sha}`
-8. Smoke test: `GET https://staging.yourdomain.com/api/health`
+3. Build `frontend:{sha}` (no build args — image is environment-agnostic) → push to Artifact Registry
+4. Run sqlx migrations against Neon DB (direct TLS connection, no proxy needed)
+5. Deploy Cloud Run backend (staging) revision
+6. Deploy Cloud Run frontend (staging) revision using `frontend:{sha}`
+7. Smoke test: `GET https://staging.yourdomain.com/api/health`
 
-> Both frontend variants are built here so `frontend-prod:{sha}` is already in Artifact Registry when the production deploy runs.
+> A single `frontend:{sha}` image is built and reused for both environments. Differences between staging and prod are resolved at runtime via `BACKEND_URL` envsubst (nginx upstream) and the backend's `/api/public-config` response (Google client ID, etc.) — neither requires a rebuild. Updated 2026-05-03 when `VITE_GOOGLE_CLIENT_ID` was retired.
 
 ### Production Deploy (tag-gated)
 
 1. GitHub Environment `production` gate — required reviewer(s) must approve
 2. Authenticate via **Workload Identity Federation** (`github-prod@…` SA)
-3. Pull `backend:{sha}` + `frontend-prod:{sha}` from Artifact Registry — **no rebuild**
+3. Pull `backend:{sha}` + `frontend:{sha}` from Artifact Registry — **no rebuild**
 4. Run sqlx migrations against Cloud SQL (via Cloud SQL Auth Proxy + IAM auth from `github-prod@…`)
 5. Deploy Cloud Run backend (prod) revision
-6. Deploy Cloud Run frontend (prod) revision using `frontend-prod:{sha}`
+6. Deploy Cloud Run frontend (prod) revision using `frontend:{sha}` (the same image deployed to staging)
 7. Smoke test: `GET https://yourdomain.com/api/health`
 8. On success: tag Cloud Run revision as `stable`
 9. On failure: `gcloud run services update-traffic backend --to-revisions=PREV=100` (~10s rollback)
 
-**Key principle:** The backend image that ran in staging is the exact binary deployed to production — no recompilation. Both frontend images are built from the same git SHA; they differ only in the baked-in API URL.
+**Key principle:** The backend AND frontend images that ran in staging are the exact binaries deployed to production — no recompilation, no environment-specific build variants. Environment differences are resolved entirely at runtime (backend env vars + `/api/public-config` response).
 
 ### Workload Identity Federation
 
