@@ -67,6 +67,32 @@
     </UiEmptyState>
 
     <div
+      v-else-if="isMobile"
+      data-testid="my-calendars-mobile-stack"
+      class="mt-6 flex flex-col gap-3"
+    >
+      <CalendarTile
+        v-for="calendar in calendars"
+        :key="calendar.id"
+        :calendar="calendar"
+        @open="editCalendar(calendar.id)"
+        @edit="editCalendar(calendar.id)"
+        @delete="confirmDelete(calendar.id)"
+        @export-ics="exportCalendar(calendar.id)"
+        @copy-link="copySubscriptionLink(calendar.subscription_token)"
+        @open-google="openInGoogleCalendar(calendar.subscription_token)"
+      />
+      <button
+        type="button"
+        data-testid="my-calendars-mobile-create"
+        class="rounded-xl border border-dashed border-line px-5 py-6 text-fg-2 hover:border-line-strong hover:bg-bg-1 hover:text-fg-1 focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2 transition"
+        @click="createNewCalendar"
+      >
+        + {{ $t('calendars.createNew') }}
+      </button>
+    </div>
+
+    <div
       v-else
       data-testid="my-calendars"
       class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
@@ -112,6 +138,7 @@ import { useI18n } from 'vue-i18n'
 import type { PageCalendar } from '@/types/calendar'
 import api, { getApiUrl } from '@/config/api'
 import { toastService } from '@/services/toastService'
+import { useViewportLayout } from '@/composables/useViewportLayout'
 import PaginationControls from '@/components/shared/PaginationControls.vue'
 import ConfirmModal from '@/components/shared/ConfirmModal.vue'
 import CalendarTile from '@/components/shared/CalendarTile.vue'
@@ -123,6 +150,7 @@ defineOptions({ name: 'MyCalendarsPage' })
 
 const { t } = useI18n()
 const router = useRouter()
+const { isMobile } = useViewportLayout()
 
 const calendars = ref<PageCalendar[]>([])
 const loading = ref(false)

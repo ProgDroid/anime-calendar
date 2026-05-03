@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
@@ -185,6 +185,82 @@ describe('MyCalendarsPage', () => {
     const stat = wrapper.find('[data-testid="my-calendars-airing"]')
     expect(stat.exists()).toBe(true)
     expect(stat.text()).toContain('7')
+    wrapper.unmount()
+  })
+})
+
+describe('MyCalendarsPage mobile layout', () => {
+  const originalInnerWidth = window.innerWidth
+
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn().mockReturnValue(null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    })
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith('/items')) return { data: [] }
+      return { data: { data: mockCalendars, pagination: mockPagination } }
+    })
+  })
+
+  afterEach(() => {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: originalInnerWidth,
+    })
+  })
+
+  function setViewport(width: number) {
+    Object.defineProperty(window, 'innerWidth', {
+      configurable: true,
+      writable: true,
+      value: width,
+    })
+  }
+
+  it('renders the desktop grid above the breakpoint', async () => {
+    setViewport(1280)
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="my-calendars"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="my-calendars-mobile-stack"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="my-calendars-mobile-create"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('renders the mobile stack below the breakpoint', async () => {
+    setViewport(390)
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="my-calendars-mobile-stack"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="my-calendars-mobile-create"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="my-calendars"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('mobile stack lists every calendar from the store', async () => {
+    setViewport(390)
+    const wrapper = mountPage()
+    await flushPromises()
+    const tiles = wrapper
+      .find('[data-testid="my-calendars-mobile-stack"]')
+      .findAll('[data-testid="calendar-tile"]')
+    expect(tiles).toHaveLength(mockCalendars.length)
+    wrapper.unmount()
+  })
+
+  it('mobile create CTA navigates to /calendar/new', async () => {
+    setViewport(390)
+    const pushSpy = vi.spyOn(router, 'push')
+    const wrapper = mountPage()
+    await flushPromises()
+    await wrapper.find('[data-testid="my-calendars-mobile-create"]').trigger('click')
+    expect(pushSpy).toHaveBeenCalledWith('/calendar/new')
     wrapper.unmount()
   })
 })
