@@ -1,9 +1,10 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach, afterEach } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import UiAuthShell from '@/components/ui/UiAuthShell.vue'
 import en from '@/locales/en.json'
 import pt from '@/locales/pt.json'
+import { mockViewport, resetViewportMock } from '@/__tests__/test-utils/viewport'
 
 const i18n = createI18n({
   legacy: false,
@@ -19,6 +20,18 @@ const mountShell = (options: Parameters<typeof mount>[1] = {}) =>
   })
 
 describe('UiAuthShell', () => {
+  // Force desktop branch so existing layout assertions keep passing.
+  // mockViewport sets window.innerWidth, which the real useViewportLayout
+  // singleton reads synchronously on each call — covering the static-import
+  // path used here without needing dynamic re-imports.
+  beforeEach(async () => {
+    await mockViewport(1280)
+  })
+
+  afterEach(() => {
+    resetViewportMock()
+  })
+
   it('renders default slot content', () => {
     const wrapper = mountShell({
       slots: { default: '<p data-testid="slot-content">hello</p>' },
@@ -46,7 +59,9 @@ describe('UiAuthShell', () => {
 
   it('applies the outer wrapper layout classes', () => {
     const wrapper = mountShell()
-    const root = wrapper.element as HTMLElement
+    // With the viewport branch, the template has multiple roots; use the
+    // data-testid to locate the desktop wrapper specifically.
+    const root = wrapper.find('[data-testid="auth-shell-desktop"]').element as HTMLElement
     expect(root.classList.contains('grid')).toBe(true)
     expect(root.classList.contains('lg:grid-cols-2')).toBe(true)
     expect(root.classList.contains('bg-bg-0')).toBe(true)

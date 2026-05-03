@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import AuthPosterCollage from './AuthPosterCollage.vue'
+import UiAuthShellMobile from './UiAuthShellMobile.vue'
+import { useViewportLayout } from '@/composables/useViewportLayout'
 
 defineOptions({ name: 'UiAuthShell' })
 
@@ -15,10 +17,18 @@ defineProps<{
   /** Optional subtitle rendered under the heading on the right pane. */
   subtitle?: string
 }>()
+
+const { isMobile } = useViewportLayout()
 </script>
 
 <template>
-  <div class="min-h-[calc(100vh-6rem)] grid lg:grid-cols-2 bg-bg-0">
+  <!-- Mobile fan-poster shell -->
+  <UiAuthShellMobile v-if="isMobile">
+    <slot />
+  </UiAuthShellMobile>
+
+  <!-- Desktop two-pane layout -->
+  <div v-else data-testid="auth-shell-desktop" class="min-h-[calc(100vh-6rem)] grid lg:grid-cols-2 bg-bg-0">
     <!-- Left pane: atmospheric collage -->
     <div
       v-if="posterTestid"

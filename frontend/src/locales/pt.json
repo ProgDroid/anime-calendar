@@ -93,6 +93,9 @@
       "passwordMismatch": "As senhas não coincidem.",
       "invalidToken": "Este link de redefinição é inválido ou expirou. Por favor, solicite um novo."
     },
+    "mobile": {
+      "posterAlt": "Arte de capa de anime"
+    },
     "verifyEmail": {
       "pending": {
         "eyebrow": "Verifique a caixa de entrada",
