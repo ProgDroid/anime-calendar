@@ -41,7 +41,7 @@ impl StripeEventMapper {
     /// transaction that spans the idempotency insert *and* the subscription
     /// upsert (both must commit atomically — see module docs).
     #[must_use]
-    pub fn pool(&self) -> &sqlx::PgPool {
+    pub const fn pool(&self) -> &sqlx::PgPool {
         &self.db.pool
     }
 

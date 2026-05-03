@@ -7,7 +7,7 @@
 //!
 //! Multi-replica note: this loop is single-process safe. Multi-replica
 //! deployments need either `pg_try_advisory_lock` around the pass or an
-//! out-of-process scheduler (k8s CronJob). Deferred until that's a real
+//! out-of-process scheduler (k8s `CronJob`). Deferred until that's a real
 //! concern.
 
 use std::time::Duration;
@@ -16,9 +16,9 @@ use chrono::NaiveDateTime;
 use log::{error, info, warn};
 use metrics::counter;
 
-use crate::ServerResult;
 use crate::mappers::subscription::{ReconcileRow, SubscriptionMapper};
 use crate::metrics::names;
+use crate::ServerResult;
 
 /// What the reconcile loop needs from Stripe. Generic + native AFIT so we
 /// stay free of the `async-trait` macro and let the live + mock impls
@@ -209,11 +209,12 @@ fn collect_drift(local: &ReconcileRow, remote: &RemoteSubscription) -> Vec<&'sta
     fields
 }
 
-/// One-shot reconcile for a single user. Used by the `set_subscription`
-/// CLI's `--reconcile-from-stripe` mode. Returns whether a drift correction
-/// was applied (`Ok(Some(true))`), no drift was found (`Ok(Some(false))`),
-/// or the user has no eligible subscription row to reconcile (`Ok(None)`).
+/// One-shot reconcile for a single user.
 ///
+/// Used by the `set_subscription` CLI's `--reconcile-from-stripe` mode.
+/// Returns whether a drift correction was applied (`Ok(Some(true))`),
+/// no drift was found (`Ok(Some(false))`), or the user has no eligible
+/// subscription row to reconcile (`Ok(None)`).
 /// # Errors
 /// Returns a string describing a DB or Stripe transport failure.
 pub async fn reconcile_for_user<F: StripeSubscriptionFetcher>(
@@ -604,7 +605,7 @@ mod tests {
 
         let status_drift = RemoteSubscription {
             status: "past_due".to_string(),
-            ..same.clone()
+            ..same
         };
         assert_eq!(collect_drift(&local, &status_drift), vec!["status"]);
 

@@ -380,6 +380,8 @@ async fn put(
     body: web::Json<CalendarRequest>,
     claims: Claims,
 ) -> HttpResponse {
+    const MAX_ITEMS: usize = 2000;
+
     let user = match user_mapper.get_user_from_claims(&claims).await {
         Ok(user) => user,
         Err(e) => {
@@ -394,7 +396,6 @@ async fn put(
         }));
     }
 
-    const MAX_ITEMS: usize = 2000;
     if body.items.len() > MAX_ITEMS {
         return Error::InvalidRequest.error_response();
     }
@@ -583,7 +584,7 @@ async fn get_calendars(
             // Cache the response for 30 minutes (1800 seconds)
             let cache_key = crate::cache::generate_paginated_key(
                 user.id,
-                "/calendars",
+                "calendars",
                 params.page,
                 params.page_size,
             );

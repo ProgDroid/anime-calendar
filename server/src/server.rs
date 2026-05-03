@@ -45,7 +45,7 @@ use stripe::Client as StripeClient;
 ///
 /// All other paths fall through to the default per-peer-IP behavior (with the
 /// IPv6 /56-prefix grouping the upstream `PeerIpKeyExtractor` uses).
-const WEBHOOK_WHITELIST_KEY: IpAddr = IpAddr::V4(Ipv4Addr::new(0, 0, 0, 0));
+const WEBHOOK_WHITELIST_KEY: IpAddr = IpAddr::V4(Ipv4Addr::UNSPECIFIED);
 
 #[derive(Clone, Copy, Debug)]
 struct WebhookExemptKeyExtractor;
@@ -90,7 +90,7 @@ impl KeyExtractor for WebhookExemptKeyExtractor {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 /// # Errors
 /// Returns an error if the server fails to start.
 pub fn start(

@@ -1,7 +1,7 @@
 //! Stripe-facing controller: kicks the user off to a hosted Checkout Session.
 //!
 //! Phase 2 of Track 4 only handles the *outbound* side of the flow — the user
-//! posts a desired billing interval, we create a CheckoutSession on Stripe,
+//! posts a desired billing interval, we create a `CheckoutSession` on Stripe,
 //! and return its hosted URL. Phase 3 adds the inbound webhook handler;
 //! Phase 4 adds the Customer Portal handoff.
 

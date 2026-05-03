@@ -9,7 +9,7 @@ use crate::{
 use crate::entity::user_settings::UserSettings;
 use crate::mappers::refresh_token::RefreshTokenMapper;
 use crate::mappers::user_settings::UserSettingsMapper;
-use actix_web::{HttpResponse, ResponseError, delete, get, post, put, web};
+use actix_web::{delete, get, post, put, web, HttpResponse, ResponseError};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 
@@ -193,11 +193,11 @@ pub async fn update_password(
         Ok(()) => {
             // Log out all other devices — anyone who had a session before the
             // password change can no longer silently stay authenticated.
-            if let Err(e) = refresh_token_mapper
-                .invalidate_all_for_user(user.id)
-                .await
-            {
-                error!("Failed to invalidate refresh tokens for user {}: {e}", user.id);
+            if let Err(e) = refresh_token_mapper.invalidate_all_for_user(user.id).await {
+                error!(
+                    "Failed to invalidate refresh tokens for user {}: {e}",
+                    user.id
+                );
             }
             let _ = cache.invalidate_user_details(user.id).await;
             HttpResponse::Ok().finish()
@@ -314,8 +314,10 @@ pub async fn update_user_settings(
     if settings_data.accent_preference.is_pro() {
         match entitlement.effective_tier(user_id).await {
             Ok(crate::entity::subscription::Tier::Free) => {
-                return crate::error::Error::PaymentRequired { required_tier: "paid" }
-                    .error_response();
+                return crate::error::Error::PaymentRequired {
+                    required_tier: "paid",
+                }
+                .error_response();
             }
             Ok(_) => { /* paid tier — allowed */ }
             Err(e) => {
@@ -355,7 +357,7 @@ mod integration_tests {
     use crate::mappers::user::UserMapper;
     use crate::mappers::user_settings::UserSettingsMapper;
     use crate::services::auth::{generate_token, hash_password};
-    use actix_web::{App, http::StatusCode, test, web};
+    use actix_web::{http::StatusCode, test, web, App};
     use secrecy::SecretString;
     use serde_json::Value;
 
@@ -558,12 +560,13 @@ mod integration_tests {
 
     #[tokio::test]
     async fn update_password_invalidates_refresh_tokens() {
+        use crate::controllers::auth::hash_refresh_token;
+
         let pool = crate::test_helpers::test_pool().await;
         let user = seed_user(&pool).await;
         let rt_mapper = RefreshTokenMapper::from_pool(pool.clone());
 
         // Seed an active refresh token for the user.
-        use crate::controllers::auth::hash_refresh_token;
         rt_mapper
             .replace_token(user.id, &hash_refresh_token("existing_session"))
             .await
@@ -596,7 +599,10 @@ mod integration_tests {
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert_eq!(count, 0, "refresh tokens must be wiped after password change");
+        assert_eq!(
+            count, 0,
+            "refresh tokens must be wiped after password change"
+        );
     }
 
     #[tokio::test]
@@ -841,7 +847,7 @@ mod integration_tests {
 
     /// Free user requesting a Pro accent → 402 with the documented body
     /// shape `{"error":"upgrade_required","required_tier":"paid"}`. Defense
-    /// in depth — the frontend AccentPicker also gates this, but a direct
+    /// in depth — the frontend `AccentPicker` also gates this, but a direct
     /// API caller hits this path.
     #[tokio::test]
     async fn update_user_settings_free_user_pro_accent_returns_402() {
@@ -882,7 +888,7 @@ mod integration_tests {
     }
 
     /// Paid user requesting a Pro accent → 200. Uses an active subscription
-    /// row so EntitlementService returns Tier::Paid.
+    /// row so `EntitlementService` returns `Tier::Paid`.
     #[tokio::test]
     async fn update_user_settings_paid_user_pro_accent_returns_200() {
         use chrono::{Duration, Utc};

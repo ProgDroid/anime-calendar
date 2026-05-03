@@ -114,10 +114,11 @@ impl Default for AppConfig {
     }
 }
 
-/// Stripe credentials and product price ids. All fields default to empty
-/// strings so a partial config doesn't crash startup; handlers that need
-/// Stripe will surface a clear "stripe not configured" error instead of
-/// failing at the deserialise layer.
+/// Stripe config — credentials and product price ids.
+///
+/// All fields default to empty strings so a partial config doesn't crash startup;
+/// handlers that need Stripe will surface a clear "stripe not configured" error
+/// instead of failing at the deserialise layer.
 #[derive(Debug, Deserialize, Clone, Default)]
 pub struct StripeConfig {
     #[serde(default)]

@@ -1,6 +1,6 @@
 use crate::{
-    ServerResult, config::database::Database as DatabaseConfig, entity::subscription::Subscription,
-    mappers::database::Database,
+    config::database::Database as DatabaseConfig, entity::subscription::Subscription,
+    mappers::database::Database, ServerResult,
 };
 
 /// Slim row used by the reconcile loop. We only project the fields that
@@ -46,7 +46,7 @@ impl SubscriptionMapper {
 
     /// Return the user's currently-entitling subscription row, if any.
     ///
-    /// "Entitling" = status in (trialing, active, past_due) and the period has
+    /// "Entitling" = status in (trialing, active, `past_due`) and the period has
     /// not yet ended. The WHERE clause must stay in lockstep with
     /// `Status::grants_access`.
     ///
@@ -316,10 +316,11 @@ impl SubscriptionMapper {
         Ok(result.rows_affected())
     }
 
-
     /// Snapshot of a subscription row used by the reconcile loop. Slim
     /// projection so the loop doesn't drag the full Subscription entity
     /// (and its calendar of unused columns) through every pass.
+    /// # Errors
+    /// - `sqlx::Error`: database error
     pub async fn list_for_reconcile(&self) -> ServerResult<Vec<ReconcileRow>> {
         crate::metrics::db::timed("subscription.list_for_reconcile", async {
             let rows = sqlx::query_as!(
@@ -340,7 +341,7 @@ impl SubscriptionMapper {
     /// Apply a Stripe-side truth update to a local row, guarded so a webhook
     /// write that landed mid-pass doesn't get clobbered. Skips the update
     /// when the local `current_period_end` has already moved past Stripe's
-    /// (rows_affected = 0). Caller should treat 0 as "newer write won, no
+    /// (`rows_affected` = 0). Caller should treat 0 as "newer write won, no
     /// drift correction needed."
     ///
     /// # Errors

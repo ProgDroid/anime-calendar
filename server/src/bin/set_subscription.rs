@@ -1,25 +1,25 @@
 //! Dev-only CLI to set a user's subscription state for testing.
 //!
 //! Usage:
-//!   set_subscription --email <email> <state>
-//!   set_subscription --user-id <id>  <state>
-//!   set_subscription --email <email> --reconcile-from-stripe
+//!   `set_subscription` --email <email> <state>
+//!   `set_subscription` --user-id <id>  <state>
+//!   `set_subscription` --email <email> --reconcile-from-stripe
 //!
 //! States:
 //!   free                    Delete all subscription rows for the user.
-//!   trialing                status=trialing, period_end=now+14d, trial_end=period_end.
-//!   active                  status=active,   period_end=now+30d.
-//!   past-due                status=past_due, period_end=now+3d.
-//!   cancel-at-period-end    status=active,   cancel_at_period_end=true, period_end=now+10d.
+//!   trialing                status=trialing, `period_end=now+14d`, `trial_end=period_end`.
+//!   active                  status=active,   `period_end=now+30d`.
+//!   past-due                `status=past_due`, `period_end=now+3d`.
+//!   cancel-at-period-end    status=active,   `cancel_at_period_end=true`, `period_end=now+10d`.
 //!   canceled-expired        status=canceled, period_end=now-1d.
-//!   incomplete              status=incomplete, period_end=now+30d.
+//!   incomplete              status=incomplete, `period_end=now+30d`.
 //!
 //! `--reconcile-from-stripe` pulls Stripe truth for the user's active
 //! subscription and applies the same drift correction the hourly loop would.
 //! Useful for debugging webhook delivery gaps or hand-checking a customer
 //! after the fact.
 //!
-//! Safety: refuses to run when APP_ENV=production. Reads database.toml from CWD.
+//! Safety: refuses to run when `APP_ENV=production`. Reads database.toml from CWD.
 //! `--reconcile-from-stripe` additionally reads config.toml for the Stripe
 //! secret key. This bin is excluded from the production Docker image.
 
@@ -280,6 +280,8 @@ async fn apply_reconcile(pool: &PgPool, user_id: i32) -> Result<String, String> 
 
 #[tokio::main]
 async fn main() -> ExitCode {
+    use secrecy::ExposeSecret;
+
     // Hard guard: never run against prod.
     if let Ok(env_name) = env::var("APP_ENV")
         && (env_name.eq_ignore_ascii_case("production") || env_name.eq_ignore_ascii_case("prod"))
@@ -305,7 +307,6 @@ async fn main() -> ExitCode {
         }
     };
 
-    use secrecy::ExposeSecret;
     let url = format!(
         "postgres://{}:{}@{}:{}/{}",
         cfg.user,

@@ -24,7 +24,7 @@
 //!
 //! Subscription metadata `{ "user_id": "<id>" }` is stamped during Checkout
 //! creation (see `controllers/stripe.rs`). Every `customer.subscription.*`
-//! event payload carries this metadata back, so we can resolve user_id
+//! event payload carries this metadata back, so we can resolve `user_id`
 //! without an extra Stripe API call. For invoice events (which carry only the
 //! subscription id, not the metadata), we look up the user via the existing
 //! `(stripe_customer_id, user_id)` pair stored on a prior subscription row.
@@ -38,7 +38,7 @@
 //! - We don't fetch any extra data via the Stripe API. Every field we need is
 //!   already in the webhook payload.
 
-use actix_web::{HttpRequest, HttpResponse, post, web};
+use actix_web::{post, web, HttpRequest, HttpResponse};
 use chrono::DateTime;
 use log::{error, warn};
 use stripe_types::Timestamp;
@@ -83,21 +83,18 @@ pub async fn stripe_webhook(
         return HttpResponse::BadRequest().json(serde_json::json!({"error":"not configured"}));
     }
 
-    let sig_header = match req.headers().get("Stripe-Signature").and_then(|h| h.to_str().ok()) {
-        Some(h) => h,
-        None => {
-            warn!("stripe webhook missing Stripe-Signature header");
-            return HttpResponse::BadRequest()
-                .json(serde_json::json!({"error":"missing signature"}));
-        }
+    let Some(sig_header) = req
+        .headers()
+        .get("Stripe-Signature")
+        .and_then(|h| h.to_str().ok())
+    else {
+        warn!("stripe webhook missing Stripe-Signature header");
+        return HttpResponse::BadRequest().json(serde_json::json!({"error":"missing signature"}));
     };
 
-    let payload = match std::str::from_utf8(&body) {
-        Ok(p) => p,
-        Err(_) => {
-            return HttpResponse::BadRequest()
-                .json(serde_json::json!({"error":"invalid payload encoding"}));
-        }
+    let Ok(payload) = std::str::from_utf8(&body) else {
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error":"invalid payload encoding"}));
     };
 
     let secret = stripe_config.webhook_secret.expose_secret();
@@ -132,19 +129,16 @@ pub async fn stripe_webhook(
         }
     };
 
-    let first_time = match StripeEventMapper::record_first_time_in_tx(
-        &mut tx, &event_id, event_type,
-    )
-    .await
-    {
-        Ok(b) => b,
-        Err(e) => {
-            error!("stripe webhook: idempotency insert failed for {event_id}: {e}");
-            let _ = tx.rollback().await;
-            return HttpResponse::InternalServerError()
-                .json(serde_json::json!({"error":"db error"}));
-        }
-    };
+    let first_time =
+        match StripeEventMapper::record_first_time_in_tx(&mut tx, &event_id, event_type).await {
+            Ok(b) => b,
+            Err(e) => {
+                error!("stripe webhook: idempotency insert failed for {event_id}: {e}");
+                let _ = tx.rollback().await;
+                return HttpResponse::InternalServerError()
+                    .json(serde_json::json!({"error":"db error"}));
+            }
+        };
     if !first_time {
         // Replay — commit so the no-op insert query result doesn't leak a
         // dangling tx, then 200.
@@ -176,27 +170,21 @@ pub async fn stripe_webhook(
 /// Route a verified Stripe event object to the right writer. Returns `Ok(())`
 /// for events we deliberately ignore — the idempotency insert is enough to
 /// stop Stripe retries.
-async fn dispatch_event(
-    tx: &mut sqlx::PgConnection,
-    object: EventObject,
-) -> Result<(), String> {
+async fn dispatch_event(tx: &mut sqlx::PgConnection, object: EventObject) -> Result<(), String> {
     match object {
         // checkout.session.completed: Stripe also fires
         // customer.subscription.created with the full subscription object and
         // our metadata, so we don't write here. The event id is already
         // persisted by record_first_time_in_tx, so 200 is correct.
-        EventObject::CheckoutSessionCompleted(_) => Ok(()),
-
         EventObject::CustomerSubscriptionCreated(sub)
         | EventObject::CustomerSubscriptionUpdated(sub) => upsert_subscription(tx, &sub).await,
 
         EventObject::CustomerSubscriptionDeleted(sub) => {
             let sub_id = sub.id.as_str();
-            let updated = SubscriptionMapper::update_status_by_subscription_id_in_tx(
-                tx, sub_id, "canceled",
-            )
-            .await
-            .map_err(|e| format!("update_status_by_subscription_id failed: {e}"))?;
+            let updated =
+                SubscriptionMapper::update_status_by_subscription_id_in_tx(tx, sub_id, "canceled")
+                    .await
+                    .map_err(|e| format!("update_status_by_subscription_id failed: {e}"))?;
             if updated == 0 {
                 warn!(
                     "stripe webhook: subscription.deleted for unknown stripe_subscription_id {sub_id}"
@@ -212,7 +200,7 @@ async fn dispatch_event(
         EventObject::InvoicePaymentFailed(invoice) => handle_invoice_failed(tx, &invoice).await,
 
         // Any other event: idempotency-only path. Nothing to write.
-        _ => Ok(()),
+        EventObject::CheckoutSessionCompleted(_) | _ => Ok(()),
     }
 }
 
@@ -306,18 +294,14 @@ async fn handle_invoice_succeeded(
         stripe_types::Expandable::Object(s) => s.id.to_string(),
         stripe_types::Expandable::Id(id) => id.to_string(),
     };
-    let period_end = match naive_from_timestamp(line.period.end) {
-        Some(t) => t,
-        None => {
-            warn!("stripe webhook: invoice line missing period.end for sub {sub_id}");
-            return Ok(());
-        }
+    let Some(period_end) = naive_from_timestamp(line.period.end) else {
+        warn!("stripe webhook: invoice line missing period.end for sub {sub_id}");
+        return Ok(());
     };
-    let updated = SubscriptionMapper::update_period_end_by_subscription_id_in_tx(
-        tx, &sub_id, period_end,
-    )
-    .await
-    .map_err(|e| format!("update_period_end_by_subscription_id failed: {e}"))?;
+    let updated =
+        SubscriptionMapper::update_period_end_by_subscription_id_in_tx(tx, &sub_id, period_end)
+            .await
+            .map_err(|e| format!("update_period_end_by_subscription_id failed: {e}"))?;
     if updated == 0 {
         warn!(
             "stripe webhook: invoice.payment_succeeded for unknown stripe_subscription_id {sub_id}"
@@ -330,7 +314,12 @@ async fn handle_invoice_failed(
     tx: &mut sqlx::PgConnection,
     invoice: &stripe_shared::Invoice,
 ) -> Result<(), String> {
-    let Some(sub_field) = invoice.lines.data.first().and_then(|l| l.subscription.as_ref()) else {
+    let Some(sub_field) = invoice
+        .lines
+        .data
+        .first()
+        .and_then(|l| l.subscription.as_ref())
+    else {
         // Not a subscription invoice — nothing to flip.
         return Ok(());
     };
@@ -338,15 +327,12 @@ async fn handle_invoice_failed(
         stripe_types::Expandable::Object(s) => s.id.to_string(),
         stripe_types::Expandable::Id(id) => id.to_string(),
     };
-    let updated = SubscriptionMapper::update_status_by_subscription_id_in_tx(
-        tx, &sub_id, "past_due",
-    )
-    .await
-    .map_err(|e| format!("update_status_by_subscription_id (past_due) failed: {e}"))?;
+    let updated =
+        SubscriptionMapper::update_status_by_subscription_id_in_tx(tx, &sub_id, "past_due")
+            .await
+            .map_err(|e| format!("update_status_by_subscription_id (past_due) failed: {e}"))?;
     if updated == 0 {
-        warn!(
-            "stripe webhook: invoice.payment_failed for unknown stripe_subscription_id {sub_id}"
-        );
+        warn!("stripe webhook: invoice.payment_failed for unknown stripe_subscription_id {sub_id}");
     }
     Ok(())
 }
