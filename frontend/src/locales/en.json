@@ -437,5 +437,11 @@
     },
     "cta": "See plans",
     "maybeLater": "Maybe later"
+  },
+  "mobile": {
+    "tabBar": {
+      "library": "Library",
+      "account": "Account"
+    }
   }
 }

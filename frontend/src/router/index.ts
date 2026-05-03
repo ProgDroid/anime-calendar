@@ -19,7 +19,7 @@ const router = createRouter({
       path: '/login',
       name: 'Login',
       component: LoginPage,
-      meta: { public: true }
+      meta: { public: true, bottomTabBar: false }
     },
     {
       path: '/my-calendars',
@@ -61,31 +61,31 @@ const router = createRouter({
       path: '/forgot-password',
       name: 'ForgotPassword',
       component: () => import('@/components/ForgotPasswordPage.vue'),
-      meta: { public: true }
+      meta: { public: true, bottomTabBar: false }
     },
     {
       path: '/reset-password',
       name: 'ResetPassword',
       component: () => import('@/components/ResetPasswordPage.vue'),
-      meta: { public: true }
+      meta: { public: true, bottomTabBar: false }
     },
     {
       path: '/register',
       name: 'Register',
       component: () => import('@/components/Register.vue'),
-      meta: { public: true }
+      meta: { public: true, bottomTabBar: false }
     },
     {
       path: '/verify-email/pending',
       name: 'VerifyEmailPending',
       component: () => import('@/components/VerifyEmailPendingPage.vue'),
-      meta: { public: true }
+      meta: { public: true, bottomTabBar: false }
     },
     {
       path: '/verify-email',
       name: 'VerifyEmailConfirm',
       component: () => import('@/components/VerifyEmailConfirmPage.vue'),
-      meta: { public: true }
+      meta: { public: true, bottomTabBar: false }
     },
     {
       path: '/upgrade',
@@ -97,19 +97,19 @@ const router = createRouter({
       path: '/upgrade/success',
       name: 'UpgradeSuccess',
       component: () => import('@/components/UpgradeSuccessPage.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, bottomTabBar: false }
     },
     {
       path: '/upgrade/canceled',
       name: 'UpgradeCanceled',
       component: () => import('@/components/UpgradeCanceledPage.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, bottomTabBar: false }
     },
     {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
       component: () => import('@/components/NotFoundPage.vue'),
-      meta: { public: true }
+      meta: { public: true, bottomTabBar: false }
     }
   ]
 })

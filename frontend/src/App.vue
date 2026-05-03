@@ -7,6 +7,7 @@ import { applySettings } from './services/applySettings'
 import { useTheme } from './composables/useTheme'
 import UiToastHost from './components/ui/UiToastHost.vue'
 import UiMenu from './components/ui/UiMenu.vue'
+import UiBottomTabBar from './components/ui/UiBottomTabBar.vue'
 import IconLogo from './components/ui/icons/IconLogo.vue'
 import IconSun from './components/ui/icons/IconSun.vue'
 import IconMoon from './components/ui/icons/IconMoon.vue'
@@ -209,6 +210,7 @@ watch(
     <main id="main" tabindex="-1" class="container mx-auto p-4 focus:outline-none">
       <RouterView />
     </main>
+    <UiBottomTabBar />
     <UiToastHost />
   </div>
 </template>
