@@ -51,9 +51,6 @@ async function mountTab(locale: 'en' | 'pt' = 'en') {
   const wrapper = mount(SubscriptionTab, {
     global: {
       plugins: [i18n, router],
-      stubs: {
-        IconSparkle: true,
-      },
     },
   })
   return { wrapper, router }
@@ -99,8 +96,8 @@ describe('SubscriptionTab', () => {
     })
     const { wrapper, router } = await mountTab()
     await flushPromises()
-    expect(wrapper.find('[data-testid="subscription-free"]').exists()).toBe(true)
-    expect(wrapper.text()).toContain(enMessages.account.subscription.freeState.title)
+    expect(wrapper.find('[data-testid="subscription-upgrade-nudge"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain(enMessages.account.subscription.upgradeNudge.ctaFree)
     await wrapper.find('[data-testid="subscription-upgrade-cta"]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/upgrade')
@@ -218,7 +215,49 @@ describe('SubscriptionTab', () => {
     })
     const { wrapper } = await mountTab('pt')
     await flushPromises()
-    expect(wrapper.text()).toContain(ptMessages.account.subscription.freeState.title)
+    expect(wrapper.text()).toContain(ptMessages.account.subscription.upgradeNudge.ctaFree)
+  })
+
+  it('shows the Nudge-B upgrade affordance for free users', async () => {
+    getMySubscriptionMock.mockResolvedValue({
+      tier: 'free',
+      status: null,
+      current_period_end: null,
+      cancel_at_period_end: false,
+      trial_end: null,
+    })
+    const { wrapper } = await mountTab()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="subscription-upgrade-nudge"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain(enMessages.account.subscription.upgradeNudge.tierChipFree)
+    expect(wrapper.text()).toContain(enMessages.account.subscription.upgradeNudge.ctaSubtitle)
+  })
+
+  it('hides the Nudge-B affordance for paid users', async () => {
+    getMySubscriptionMock.mockResolvedValue({
+      tier: 'paid',
+      status: 'active',
+      current_period_end: '2030-01-15T00:00:00',
+      cancel_at_period_end: false,
+      trial_end: null,
+    })
+    const { wrapper } = await mountTab()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="subscription-upgrade-nudge"]').exists()).toBe(false)
+  })
+
+  it('hides the Nudge-B affordance for past-due users (banner takes precedence)', async () => {
+    getMySubscriptionMock.mockResolvedValue({
+      tier: 'paid',
+      status: 'past_due',
+      current_period_end: '2030-01-15T00:00:00',
+      cancel_at_period_end: false,
+      trial_end: null,
+    })
+    const { wrapper } = await mountTab()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="subscription-upgrade-nudge"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="subscription-past-due-banner"]').exists()).toBe(true)
   })
 })
 

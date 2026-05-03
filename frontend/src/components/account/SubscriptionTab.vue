@@ -10,7 +10,6 @@ import {
 import { useAuthStore } from '@/stores/auth'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiChip from '@/components/ui/UiChip.vue'
-import IconSparkle from '@/components/ui/icons/IconSparkle.vue'
 
 defineOptions({ name: 'SubscriptionTab' })
 
@@ -118,31 +117,26 @@ onMounted(() => {
       {{ error }}
     </div>
 
-    <!-- Free user: empty-state hero with upgrade CTA. -->
-    <div
+    <!-- Free user: Nudge-B upgrade affordance. -->
+    <section
       v-else-if="surface === 'free'"
-      class="bg-bg-1 border border-line rounded-lg p-6 mt-6 flex flex-col gap-4"
-      data-testid="subscription-free"
+      data-testid="subscription-upgrade-nudge"
+      class="rounded-lg border border-accent-1 bg-bg-1 p-6 mt-6 shadow-sm"
     >
-      <div class="flex items-center gap-2">
-        <span class="[&_svg]:w-4 [&_svg]:h-4 text-accent-1-text"><IconSparkle /></span>
-        <h2 class="text-lg font-semibold text-fg-1">
-          {{ t('account.subscription.freeState.title') }}
-        </h2>
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+        <div class="flex flex-col gap-3">
+          <UiChip variant="default">{{ t('account.subscription.upgradeNudge.tierChipFree') }}</UiChip>
+          <p class="text-sm text-fg-2">
+            {{ t('account.subscription.upgradeNudge.ctaSubtitle') }}
+          </p>
+        </div>
+        <div>
+          <UiButton variant="primary" data-testid="subscription-upgrade-cta" @click="goToUpgrade">
+            {{ t('account.subscription.upgradeNudge.ctaFree') }}
+          </UiButton>
+        </div>
       </div>
-      <p class="text-sm text-fg-2">
-        {{ t('account.subscription.freeState.description') }}
-      </p>
-      <div>
-        <UiButton
-          variant="primary"
-          data-testid="subscription-upgrade-cta"
-          @click="goToUpgrade"
-        >
-          {{ t('account.subscription.freeState.cta') }}
-        </UiButton>
-      </div>
-    </div>
+    </section>
 
     <!-- Paid / past-due / trialing layout. Same skeleton, banner varies. -->
     <div

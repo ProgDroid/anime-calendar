@@ -302,10 +302,10 @@
         "monthly": "Monthly",
         "annual": "Annual"
       },
-      "freeState": {
-        "title": "You're on the free plan",
-        "description": "Upgrade to Pro to unlock premium accents, priority support, and the full feature set.",
-        "cta": "See plans"
+      "upgradeNudge": {
+        "tierChipFree": "Free plan",
+        "ctaFree": "Upgrade to Pro",
+        "ctaSubtitle": "Unlock all accent themes, priority refresh, and more."
       },
       "paid": {
         "renewsOn": "Renews on {date}",

@@ -302,10 +302,10 @@
         "monthly": "Mensal",
         "annual": "Anual"
       },
-      "freeState": {
-        "title": "Está no plano gratuito",
-        "description": "Faça upgrade para Pro para desbloquear acentos premium, suporte prioritário e todas as funcionalidades.",
-        "cta": "Ver planos"
+      "upgradeNudge": {
+        "tierChipFree": "Plano Free",
+        "ctaFree": "Fazer upgrade para Pro",
+        "ctaSubtitle": "Desbloqueie todos os acentos, atualização prioritária e muito mais."
       },
       "paid": {
         "renewsOn": "Renova a {date}",
