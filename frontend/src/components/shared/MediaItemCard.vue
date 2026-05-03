@@ -46,7 +46,8 @@ const posterUrl = computed<string | null>(() => {
           <div class="flex-shrink-0">
             <div
               v-if="item.cover_image?.medium"
-              class="bg-bg-2 border border-line rounded w-16 h-20 overflow-hidden"
+              class="bg-bg-2 border border-line rounded overflow-hidden"
+              :class="compact ? 'w-12 h-16' : 'w-16 h-20'"
             >
               <img
                 :src="item.cover_image.medium"
@@ -58,18 +59,22 @@ const posterUrl = computed<string | null>(() => {
             </div>
             <div
               v-else
-              class="bg-bg-2 border border-line rounded w-16 h-20 flex items-center justify-center"
+              class="bg-bg-2 border border-line rounded flex items-center justify-center"
+              :class="compact ? 'w-12 h-16' : 'w-16 h-20'"
             >
               <span class="text-xs text-fg-2">{{ t('calendar.noImage') }}</span>
             </div>
           </div>
           <div class="flex-grow min-w-0">
-            <h3 class="font-semibold line-clamp-1 text-fg-1" :class="compact ? 'text-sm' : ''">
+            <h3
+              class="font-semibold text-fg-1 break-words"
+              :class="compact ? 'text-sm line-clamp-2' : 'line-clamp-1'"
+            >
               {{ displayTitle }}
             </h3>
             <UiChip
               :variant="item.media_type === 'MANGA' ? 'manga' : 'anime'"
-              :size="compact ? 'sm' : 'sm'"
+              size="sm"
               class="mt-1"
             >
               {{ item.media_type === 'MANGA' ? t('calendar.mediaTypeManga') : t('calendar.mediaTypeAnime') }}

@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
 import MediaItemCard from '@/components/shared/MediaItemCard.vue'
+import RecommendationsSection from './RecommendationsSection.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 
 defineOptions({ name: 'EditorItemsPanelMobile' })
@@ -11,12 +13,16 @@ const { t } = useI18n()
 const props = defineProps<{
   items: Item[]
   calendarLanguage: 'english' | 'romaji' | 'native'
+  recommendations?: Item[]
 }>()
 
 const emit = defineEmits<{
   remove: [id: number]
   clear: []
+  'add-recommendation': [item: Item]
 }>()
+
+const recs = computed(() => props.recommendations ?? [])
 
 const getTitle = (item: Item): string => {
   switch (props.calendarLanguage) {
@@ -68,5 +74,14 @@ const getTitle = (item: Item): string => {
     >
       {{ t('calendar.clear') }}
     </UiButton>
+
+    <RecommendationsSection
+      v-if="items.length > 0 && recs.length > 0"
+      data-testid="items-panel-recommendations"
+      :recommendations="recs"
+      :calendar-has-items="items.length > 0"
+      :calendar-language="calendarLanguage"
+      @add="(item) => emit('add-recommendation', item)"
+    />
   </div>
 </template>

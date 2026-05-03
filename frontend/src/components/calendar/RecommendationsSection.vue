@@ -31,7 +31,7 @@ const getTitle = (item: Item): string => {
     <div class="p-4 flex flex-col gap-3">
       <h2 class="font-semibold text-fg-1">{{ t('calendar.recommendedItems') }}</h2>
 
-      <div v-if="recommendations.length > 0" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+      <div v-if="recommendations.length > 0" class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <div
           v-for="item in recommendations"
           :key="item.id"

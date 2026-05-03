@@ -5,6 +5,7 @@ import type { Item } from '@/types/item'
 import { useEditorSelectionStore } from '@/stores/editorSelection'
 import { useCalendarSearch } from '@/composables/useCalendarSearch'
 import MediaItemCard from '@/components/shared/MediaItemCard.vue'
+import RecommendationsSection from './RecommendationsSection.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 
@@ -18,10 +19,12 @@ const { fetchedItems, loading, searchError, handleSearch } = useCalendarSearch()
 const props = defineProps<{
   itemsInCalendar: Item[]
   calendarLanguage: 'english' | 'romaji' | 'native'
+  recommendations?: Item[]
 }>()
 
 const emit = defineEmits<{
-  'add-selected': []
+  'add-selected': [items: Item[]]
+  'add-recommendation': [item: Item]
 }>()
 
 const nameInput = ref('')
@@ -30,6 +33,17 @@ const searchInputRef = ref<{ focus: () => void } | null>(null)
 
 const hasResults = computed(() => fetchedItems.value.length > 0)
 const selectionCount = computed(() => selection.selectedMediaIds.size)
+const hasRecommendations = computed(() => (props.recommendations?.length ?? 0) > 0)
+
+const submitSelected = () => {
+  const items = fetchedItems.value.filter(
+    item =>
+      selection.has(item.id) &&
+      !props.itemsInCalendar.some(c => c.id === item.id),
+  )
+  if (items.length === 0) return
+  emit('add-selected', items)
+}
 
 const getTitle = (item: Item): string => {
   switch (props.calendarLanguage) {
@@ -105,12 +119,21 @@ defineExpose({
     <!-- Empty state (no search yet) -->
     <div
       v-if="!hasResults && !loading && !searchError"
-      class="flex flex-col items-center justify-center py-10 text-center gap-2"
+      class="flex flex-col items-center justify-center py-6 text-center gap-2"
       data-testid="search-empty-state"
     >
       <p class="font-semibold text-fg-1">{{ t('mobile.editor.emptySearch.title') }}</p>
       <p class="text-sm text-fg-2">{{ t('mobile.editor.emptySearch.subtitle') }}</p>
     </div>
+
+    <!-- Recommendations as a discovery hint when there are no search results -->
+    <RecommendationsSection
+      v-if="!hasResults && hasRecommendations"
+      :recommendations="props.recommendations ?? []"
+      :calendar-has-items="props.itemsInCalendar.length > 0"
+      :calendar-language="calendarLanguage"
+      @add="(item) => emit('add-recommendation', item)"
+    />
 
     <!-- Results -->
     <div v-if="hasResults" class="flex flex-col gap-2" data-testid="search-results">
@@ -150,7 +173,7 @@ defineExpose({
         variant="primary"
         class="flex-1"
         data-testid="batch-add-btn"
-        @click="emit('add-selected')"
+        @click="submitSelected"
       >
         {{ t('mobile.editor.batchAdd', { count: selectionCount }) }}
       </UiButton>

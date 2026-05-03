@@ -8,7 +8,7 @@ import type { Item } from '@/types/item'
 import type { Calendar } from '@/types/calendar'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { useEditorSelectionStore } from '@/stores/editorSelection'
-import { useCalendarSearch } from '@/composables/useCalendarSearch'
+import { useRecommendations } from '@/composables/useRecommendations'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import IconPlus from '@/components/ui/icons/IconPlus.vue'
 import EditorItemsPanelMobile from './EditorItemsPanelMobile.vue'
@@ -23,8 +23,7 @@ const router = useRouter()
 const userSettingsStore = useUserSettingsStore()
 const selection = useEditorSelectionStore()
 
-// Reuse the same composable as the desktop variant for search state
-const { fetchedItems } = useCalendarSearch()
+const { recommendations, calculateRecommendations } = useRecommendations()
 
 // Editor state — mirrors CalendarEditorViewDesktop
 const calendarName = ref('')
@@ -54,23 +53,32 @@ function jumpToSearch() {
   })
 }
 
-const addItemFromSearch = () => {
-  const newItems = fetchedItems.value.filter(
-    item => selection.has(item.id) &&
-    !itemsInCalendar.value.some(c => c.id === item.id)
+const addItemFromSearch = (items: Item[]) => {
+  const newItems = items.filter(
+    item => !itemsInCalendar.value.some(c => c.id === item.id),
   )
+  if (newItems.length === 0) return
   itemsInCalendar.value.push(...newItems)
   selection.clear()
+  calculateRecommendations(itemsInCalendar.value)
   // Switch back to items tab to see the added items
   tab.value = 'items'
 }
 
+const addRecommendation = (item: Item) => {
+  if (itemsInCalendar.value.some(c => c.id === item.id)) return
+  itemsInCalendar.value.push(item)
+  calculateRecommendations(itemsInCalendar.value)
+}
+
 const removeItemFromCalendar = (id: number) => {
   itemsInCalendar.value = itemsInCalendar.value.filter(item => item.id !== id)
+  calculateRecommendations(itemsInCalendar.value)
 }
 
 const clearCalendar = () => {
   itemsInCalendar.value = []
+  calculateRecommendations([])
 }
 
 const submitCalendar = async () => {
@@ -147,6 +155,7 @@ if (calendarId && calendarId !== 'new') {
       calendarLanguage.value = calendar.language
       itemsInCalendar.value = calendar.items
       currentCalendar.value = calendar
+      calculateRecommendations(itemsInCalendar.value)
     })
     .catch(() => {
       calendarError.value = t('calendar.loadFailed')
@@ -210,22 +219,26 @@ if (calendarId && calendarId !== 'new') {
       </div>
     </div>
 
-    <!-- Tab panels with keep-alive so scroll + state persist across swaps -->
-    <div class="flex-1 overflow-auto">
+    <!-- Tab panels: page-level scroll keeps it native and avoids nested scrollers. -->
+    <div class="flex-1 min-h-0">
       <KeepAlive>
         <EditorItemsPanelMobile
           v-if="tab === 'items'"
           :items="itemsInCalendar"
           :calendar-language="calendarLanguage"
+          :recommendations="recommendations"
           @remove="removeItemFromCalendar"
           @clear="clearCalendar"
+          @add-recommendation="addRecommendation"
         />
         <EditorSearchPanelMobile
           v-else
           ref="searchPanelRef"
           :items-in-calendar="itemsInCalendar"
           :calendar-language="calendarLanguage"
+          :recommendations="recommendations"
           @add-selected="addItemFromSearch"
+          @add-recommendation="addRecommendation"
         />
       </KeepAlive>
     </div>
