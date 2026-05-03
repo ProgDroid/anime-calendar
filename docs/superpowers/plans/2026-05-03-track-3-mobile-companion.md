@@ -755,22 +755,25 @@ git commit -m "feat(mobile): rubber-band scroll polish (overscroll-behavior + dv
 
 ---
 
-### Task 5: Playwright config + mobile-safari device target
+### Task 5: Playwright config + 3-engine mobile device targets + CI hookup
+
+**Plan revision (2026-05-03):** Originally specced webkit-only. Expanded to all three engines (chromium, webkit, firefox) for broader cross-engine coverage. Also adds a CI job so e2e runs on every PR.
 
 **Files:**
 - Modify: `frontend/package.json` (devDeps + scripts)
 - Create: `frontend/playwright.config.ts`
 - Create: `frontend/e2e/smoke.spec.ts` (single sanity test for the harness)
-- Modify: `frontend/.gitignore` (add `playwright-report/`, `test-results/`)
+- Modify: `frontend/.gitignore` (add `playwright-report/`, `test-results/`, `.playwright/`)
+- Modify: `.github/workflows/ci.yml` (add `frontend-e2e` job)
 
-- [ ] **Step 1: Install Playwright.**
+- [ ] **Step 1: Install Playwright + all three engines.**
 
 ```bash
 cd frontend && npm install --save-dev @playwright/test
-npx playwright install --with-deps webkit
+cd frontend && npx playwright install --with-deps chromium webkit firefox
 ```
 
-  We only install webkit (Mobile Safari uses webkit). Adding chromium/firefox later is one config edit.
+  All three engines are installed locally. Browser binaries live in a per-user cache outside the repo (~80MB × 3 ≈ 240MB total).
 
 - [ ] **Step 2: Add scripts to `package.json`.**
 
@@ -781,7 +784,7 @@ npx playwright install --with-deps webkit
   "scripts": {
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:install": "playwright install --with-deps webkit"
+    "test:e2e:install": "playwright install --with-deps chromium webkit firefox"
   }
 }
 ```
@@ -803,8 +806,28 @@ export default defineConfig({
   },
   projects: [
     {
-      name: 'Mobile Safari',
+      name: 'mobile-safari',
       use: { ...devices['iPhone 14'] },
+    },
+    {
+      name: 'mobile-chrome',
+      use: { ...devices['Pixel 7'] },
+    },
+    {
+      name: 'mobile-firefox',
+      // Playwright doesn't ship a "Pixel 5 Firefox" device profile, so we
+      // approximate Android-class mobile firefox manually. Firefox doesn't
+      // emulate touch events the same way chromium does, but viewport +
+      // user agent + isMobile gives us a reasonable mobile rendering target.
+      use: {
+        browserName: 'firefox',
+        viewport: { width: 393, height: 851 },
+        userAgent:
+          'Mozilla/5.0 (Android 13; Mobile; rv:120.0) Gecko/120.0 Firefox/120.0',
+        isMobile: false, // firefox doesn't support isMobile=true
+        hasTouch: true,
+        deviceScaleFactor: 2.75,
+      },
     },
   ],
   webServer: {
@@ -825,7 +848,7 @@ import { test, expect } from '@playwright/test'
 test('app shell loads on mobile viewport', async ({ page }) => {
   await page.goto('/login')
   await expect(page).toHaveURL(/\/login/)
-  // Viewport is iPhone 14 — should be < 1024px wide.
+  // All three projects use a mobile viewport (< 1024px wide).
   const viewport = page.viewportSize()
   expect(viewport?.width).toBeLessThan(1024)
 })
@@ -841,20 +864,99 @@ test-results/
 .playwright/
 ```
 
-- [ ] **Step 6: Run the smoke test.**
+- [ ] **Step 6: Run the smoke test locally.**
 
   Run: `cd frontend && npm run test:e2e`
-  Expected: 1 test PASS. The dev server boots automatically and tears down.
+  Expected: 3 tests PASS (one per project). The dev server boots automatically and tears down.
 
   If this fails because of port collision or backend dependency, document the prerequisite and proceed — the smoke test only loads `/login` which is public and doesn't need the backend.
 
-- [ ] **Step 7: Commit.**
+- [ ] **Step 7: Add the CI job in `.github/workflows/ci.yml`.**
+
+  Add a new `frontend-e2e` job after the existing `frontend` job (and before `openapi`). Pin the actions to commit SHAs (the codebase rule). Cache the Playwright browser store keyed on the resolved Playwright version so cache misses only happen on Playwright bumps.
+
+```yaml
+  # ---------------------------------------------------------------------------
+  # Vue / TypeScript frontend — Playwright e2e (mobile)
+  # ---------------------------------------------------------------------------
+  frontend-e2e:
+    name: Frontend E2E
+    runs-on: ubuntu-24.04
+    needs: frontend
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+
+      - name: Setup Node.js
+        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve Playwright version
+        id: pw-version
+        shell: bash
+        run: |
+          version=$(node -p "require('./node_modules/@playwright/test/package.json').version")
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Playwright browsers
+        id: pw-cache
+        uses: actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-browsers-${{ runner.os }}-${{ steps.pw-version.outputs.version }}
+          restore-keys: |
+            playwright-browsers-${{ runner.os }}-
+
+      - name: Install Playwright browsers + system deps
+        if: steps.pw-cache.outputs.cache-hit != 'true'
+        run: npx playwright install --with-deps chromium webkit firefox
+
+      - name: Install Playwright system deps (cache hit path)
+        if: steps.pw-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium webkit firefox
+
+      - name: Run e2e (mobile, 3 engines)
+        run: npm run test:e2e
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808
+        with:
+          name: playwright-report
+          path: frontend/playwright-report/
+          retention-days: 7
+```
+
+  After adding, verify the SHAs:
+  - `actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd` — already pinned in this file.
+  - `actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f` — already pinned in this file.
+  - `actions/cache@d4323d4df104b026a6aa633fdb11d772146be0bf` — corresponds to `actions/cache@v4.1.1`. Confirm via `gh api repos/actions/cache/git/refs/tags/v4.1.1` if uncertain.
+  - `actions/upload-artifact@65462800fd760344b1a7b4382951275a0abb4808` — corresponds to `actions/upload-artifact@v4.4.3`. Confirm similarly.
+
+  If you cannot confirm a SHA, escalate rather than picking a wrong one. Pinning to a stale or wrong SHA would block the workflow.
+
+- [ ] **Step 8: Commit.**
 
 ```bash
 git add frontend/package.json frontend/package-lock.json \
         frontend/playwright.config.ts frontend/e2e/smoke.spec.ts \
-        frontend/.gitignore
-git commit -m "chore(test): playwright config + mobile-safari device target + smoke harness"
+        frontend/.gitignore \
+        .github/workflows/ci.yml
+git commit -m "chore(test): playwright e2e + 3-engine mobile + CI job
+
+Adds chromium, webkit, firefox device profiles for mobile viewports.
+CI caches the Playwright browser store on the resolved Playwright
+version. Failed runs upload the html report as an artifact."
 ```
 
 ---
