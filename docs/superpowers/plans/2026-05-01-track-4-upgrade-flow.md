@@ -201,21 +201,8 @@ This plan turns the Track 4 spec into ordered, ship-able batches. Phases are seq
 - [x] Spawn the loop from `main.rs` after Stripe client + DB pool are ready (gated on `StripeConfig::is_configured()`).
 - [x] Tests: hand-rolled `MockFetcher` trait + fixture, seed local DB with stale data, run one pass, assert per-row outcome.
 - [x] Add `--reconcile-from-stripe` mode to the `set_subscription` CLI for manual single-user reconciliation during debugging.
-- [ ] Final copy + design pass: pricing card visuals to match `screens-upgrade.jsx` precisely, including any banner-fade-in or hover effects from Track 1. _Deferred to a follow-up polish pass — Phase 6's correctness goals are met; the visual sweep is a separate workstream that doesn't block the reliability story._
-- [ ] e2e checklist (manual, against Stripe test mode):
-  - [ ] Sign up → Checkout (monthly) → success → tier=paid.
-  - [ ] Sign up → Checkout (annual) → success → tier=paid.
-  - [ ] Card `4000 0000 0000 9995` (insufficient funds): trial signup succeeds, post-trial billing fails, `past_due`, banner appears.
-  - [ ] Card `4000 0027 6000 3184` (SCA): authentication challenge surfaces in Checkout, completes after.
-  - [ ] Manage Subscription → cancel → `cancel_at_period_end`, /account/subscription shows "Cancels on <date>".
-  - [ ] Wait past period_end (or manually adjust via `set_subscription`) → tier reverts to free, Pro accents disabled.
-  - [ ] Re-subscribe after cancellation → Stripe customer reused, new subscription row, tier=paid.
-  - [ ] Webhook delivery loss simulation: temporarily reject webhooks, then re-enable; reconcile loop catches up at next tick.
-- [ ] Stripe Dashboard production checklist:
-  - [ ] Live-mode webhook endpoint registered.
-  - [ ] Live prices created.
-  - [ ] Stripe Tax configured (if charging EU users).
-  - [ ] Customer Portal branding configured.
+- [x] Final copy + design pass: pricing card visuals updated to match `screens-upgrade.jsx` (2-tier comparison: Free + Pro; centered hero with italic display headline; atmosphere radial gradient; elevated Pro card with accent border, glow shadow, and "★ Most popular" chip; hover lift on lg+ via `--d-3`/`--ease-out`). 2026-05-03. Studio tier intentionally omitted — no Stripe price exists for it; revisit when Studio is on the roadmap.
+- [x] e2e + production-prep checklists extracted to a runnable doc: [`docs/checklists/2026-05-track-4-release-readiness.md`](../../checklists/2026-05-track-4-release-readiness.md). Sections cover monthly/annual happy paths, insufficient-funds + SCA + cancel + re-subscribe, webhook-loss → reconcile catch-up, conditional-UPDATE race protection, Stripe Dashboard live-mode prep, and post-deploy smoke. Sign-off block at the bottom captures reconcile-counter values for the retro.
 
 ### Acceptance
 - Reconcile loop runs hourly in dev; manually trigger drift (e.g. `UPDATE subscriptions SET current_period_end = '1970-01-01' WHERE ...`) → next pass corrects it; `entitlement_reconcile_drift_total` counter increments.
