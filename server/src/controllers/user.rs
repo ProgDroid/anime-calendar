@@ -13,6 +13,36 @@ use actix_web::{HttpResponse, ResponseError, delete, get, post, put, web};
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 
+/// Canonical set of reminder offsets (minutes before air time) that the
+/// frontend's reminder picker exposes. Mirrors the array in
+/// `frontend/src/constants/reminderOffsets.ts`. Any value outside this set
+/// is rejected at write time — defense in depth against client bugs and
+/// direct API callers.
+pub(crate) const CANONICAL_REMINDER_OFFSETS: &[i32] =
+    &[15, 30, 60, 120, 360, 720, 1440, 2880, 4320, 10080];
+
+/// Hard cap on per-user reminder offsets. Free users render exactly one
+/// 30-min VALARM regardless of stored values; Pro users see at most this
+/// many. The cap is structural (not tier-gated) — Free users can store any
+/// canonical-shaped array; the renderer ignores it.
+const MAX_REMINDER_OFFSETS: usize = 5;
+
+/// Validates the structural shape of a reminder-offsets array. Returns the
+/// stable error code on failure, suitable for the JSON `{"error": code}`
+/// body. Values stored by Free users for tier-transition continuity are
+/// allowed — the renderer enforces the Free invariant separately.
+fn validate_reminder_offsets(offsets: &[i32]) -> Result<(), &'static str> {
+    if offsets.len() > MAX_REMINDER_OFFSETS {
+        return Err("reminder_offsets_invalid");
+    }
+    for &offset in offsets {
+        if !CANONICAL_REMINDER_OFFSETS.contains(&offset) {
+            return Err("reminder_offsets_invalid");
+        }
+    }
+    Ok(())
+}
+
 #[derive(Deserialize, utoipa::ToSchema)]
 pub struct UserRequest {
     pub username: String,
@@ -307,6 +337,15 @@ pub async fn update_user_settings(
         Err(e) => return e.error_response(),
     };
     let user_id = user.id;
+
+    // Reminder-offsets structural validation. Tier-agnostic: Free users may
+    // store Pro-shaped arrays (preserved across upgrade/downgrade — see
+    // memory `feedback_tier_gated_apply_pattern`). The .ics renderer enforces
+    // the "Free → single 30-min VALARM" invariant; the array on disk has no
+    // security significance for Free users.
+    if let Err(code) = validate_reminder_offsets(&settings_data.reminder_offsets_minutes) {
+        return HttpResponse::BadRequest().json(serde_json::json!({"error": code}));
+    }
 
     // Pro accent gate. The frontend should never POST a Pro accent for a
     // free user (AccentPicker emits 'interrupt' instead), but this is the
@@ -952,5 +991,138 @@ mod integration_tests {
             test::call_service(&app, put_req).await.status(),
             StatusCode::OK
         );
+    }
+
+    // ─── PUT /user/settings — reminder_offsets_minutes validation ────────────
+
+    /// Build a fresh `update_user_settings` test App for the given pool.
+    /// Inlined into each test (keeps the concrete actix `Service` type local).
+    macro_rules! settings_app {
+        ($pool:expr) => {{
+            let pool = $pool;
+            let cache = web::Data::new(Cache::for_tests().await);
+            let mapper = web::Data::new(UserSettingsMapper::from_pool(pool.clone()));
+            let entitlement =
+                web::Data::new(crate::services::entitlement::EntitlementService::new(
+                    crate::mappers::subscription::SubscriptionMapper::from_pool(pool.clone()),
+                    crate::services::show_count::ShowCountService::new(pool.clone()),
+                    &crate::config::server::LimitsConfig::default(),
+                ));
+            test::init_service(
+                App::new()
+                    .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                    .app_data(mapper)
+                    .app_data(entitlement)
+                    .app_data(jwt_data())
+                    .app_data(cache)
+                    .service(update_user_settings),
+            )
+            .await
+        }};
+    }
+
+    #[tokio::test]
+    async fn update_settings_rejects_six_reminders() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let app = settings_app!(pool.clone());
+
+        let put_req = test::TestRequest::put()
+            .uri("/user/settings")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "theme_preference": "dark",
+                "language_preference": "en",
+                "title_language_preference": "English",
+                "timezone": "UTC",
+                "reminder_offsets_minutes": [15, 30, 60, 120, 360, 720]
+            }))
+            .to_request();
+        let resp = test::call_service(&app, put_req).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body: Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"], "reminder_offsets_invalid");
+    }
+
+    #[tokio::test]
+    async fn update_settings_rejects_uncanonical_offset() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let app = settings_app!(pool.clone());
+
+        let put_req = test::TestRequest::put()
+            .uri("/user/settings")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "theme_preference": "dark",
+                "language_preference": "en",
+                "title_language_preference": "English",
+                "timezone": "UTC",
+                "reminder_offsets_minutes": [17]
+            }))
+            .to_request();
+        let resp = test::call_service(&app, put_req).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body: Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"], "reminder_offsets_invalid");
+    }
+
+    #[tokio::test]
+    async fn update_settings_accepts_empty_array() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let app = settings_app!(pool.clone());
+
+        let put_req = test::TestRequest::put()
+            .uri("/user/settings")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "theme_preference": "dark",
+                "language_preference": "en",
+                "title_language_preference": "English",
+                "timezone": "UTC",
+                "reminder_offsets_minutes": []
+            }))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, put_req).await.status(),
+            StatusCode::OK
+        );
+    }
+
+    /// Free users may store Pro-shaped multi-offset arrays; the values are
+    /// preserved for upgrade/downgrade continuity. The renderer enforces the
+    /// Free invariant (single 30-min VALARM) at .ics build time.
+    #[tokio::test]
+    async fn update_settings_free_user_can_store_pro_offsets() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let app = settings_app!(pool.clone());
+
+        let put_req = test::TestRequest::put()
+            .uri("/user/settings")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "theme_preference": "dark",
+                "language_preference": "en",
+                "title_language_preference": "English",
+                "timezone": "UTC",
+                "reminder_offsets_minutes": [60, 1440]
+            }))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, put_req).await.status(),
+            StatusCode::OK
+        );
+
+        // Verify the row was actually written with the requested values.
+        let stored: Vec<i32> = sqlx::query_scalar(
+            "SELECT reminder_offsets_minutes FROM user_settings WHERE user_id = $1",
+        )
+        .bind(user.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(stored, vec![60, 1440]);
     }
 }
