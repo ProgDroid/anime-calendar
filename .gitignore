@@ -20,7 +20,6 @@ yarn-error.log*
 pnpm-debug.log*
 
 .vscode
-.plans
 .playwright-mcp
 .worktrees
 .superpowers
@@ -34,5 +33,7 @@ pnpm-debug.log*
 # Claude Code runtime state
 .claude/scheduled_tasks.lock
 .claude/worktrees
+
+.ruff_cache
 
 openapi.json

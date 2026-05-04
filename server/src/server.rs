@@ -3,23 +3,21 @@ use std::str::FromStr;
 
 use actix_cors::Cors;
 use actix_governor::{
+    governor::{clock::QuantaInstant, NotUntil},
     Governor, GovernorConfigBuilder, KeyExtractor, SimpleKeyExtractionError,
-    governor::{NotUntil, clock::QuantaInstant},
 };
 use actix_web::dev::ServiceRequest;
 use actix_web::{
-    App, HttpServer,
     dev::Server,
     middleware::{Compress, Condition, DefaultHeaders, Logger},
-    web,
+    web, App, HttpServer,
 };
 use env_logger::Builder;
-use log::{LevelFilter, error};
+use log::{error, LevelFilter};
 use utoipa::OpenApi as _;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
-    ServerResult,
     cache::Cache,
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig, StripeConfig},
     controllers::{
@@ -36,6 +34,7 @@ use crate::{
     },
     openapi::ApiDoc,
     services::{email::EmailService, entitlement::EntitlementService},
+    ServerResult,
 };
 use stripe::Client as StripeClient;
 
@@ -146,7 +145,7 @@ pub fn start(
     // Snapshot the subset of config we expose to the SPA at bootstrap. Built
     // once here so the controller can't reach into other ServerConfig fields.
     let public_config = public_config::PublicConfig {
-        google_client_id: config.google_client_id.clone(),
+        google_client_id: config.google_client_id,
     };
 
     let governor_conf = GovernorConfigBuilder::default()
