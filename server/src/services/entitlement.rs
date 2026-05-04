@@ -104,6 +104,78 @@ impl EntitlementService {
         }
         Ok(())
     }
+
+    /// In-transaction variant of `effective_tier`. Reads the active
+    /// subscription on the caller's connection so callers that hold a
+    /// `pg_advisory_xact_lock` observe a consistent snapshot.
+    ///
+    /// # Errors
+    /// Returns an error if the database query fails.
+    pub async fn effective_tier_in_tx(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+    ) -> ServerResult<Tier> {
+        let sub = SubscriptionMapper::find_active_for_user_with(conn, user_id).await?;
+        Ok(sub.as_ref().map_or(Tier::Free, |s| {
+            Tier::from_str(&s.tier).unwrap_or(Tier::Free)
+        }))
+    }
+
+    /// In-transaction variant of `assert_can_create_calendar`. Runs the cap
+    /// query against the caller's connection — the only correct place to
+    /// enforce the cap when a `pg_advisory_xact_lock` is held, because the
+    /// pool-bound version observes pre-INSERT state from concurrent txs.
+    ///
+    /// # Errors
+    /// `Error::PaymentRequired { reason: Some("cap_calendars") }` if the cap
+    /// would be exceeded; database errors on count failure.
+    pub async fn assert_can_create_calendar_in_tx(
+        &self,
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+    ) -> ServerResult<()> {
+        if matches!(Self::effective_tier_in_tx(&mut *conn, user_id).await?, Tier::Paid) {
+            return Ok(());
+        }
+        let count = ShowCountService::count_calendars_for_user_in_tx(conn, user_id).await?;
+        if count >= self.free_calendar_limit {
+            return Err(Error::PaymentRequired {
+                required_tier: "paid",
+                reason: Some("cap_calendars"),
+            });
+        }
+        Ok(())
+    }
+
+    /// In-transaction variant of `assert_can_add_show`. Same idempotency
+    /// rule (already-tracked items pass even at cap), but observes the
+    /// caller's tx snapshot — pair with `pg_advisory_xact_lock` to make
+    /// the cap honest under concurrent writers.
+    ///
+    /// # Errors
+    /// `Error::PaymentRequired { reason: Some("cap_shows") }` when adding a
+    /// new (untracked) item at the free cap; database errors otherwise.
+    pub async fn assert_can_add_show_in_tx(
+        &self,
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+        item_id: i32,
+    ) -> ServerResult<()> {
+        if matches!(Self::effective_tier_in_tx(&mut *conn, user_id).await?, Tier::Paid) {
+            return Ok(());
+        }
+        if ShowCountService::user_already_tracks_in_tx(&mut *conn, user_id, item_id).await? {
+            return Ok(()); // idempotent — already counted
+        }
+        let count = ShowCountService::count_distinct_for_user_in_tx(conn, user_id).await?;
+        if count >= self.free_show_cap {
+            return Err(Error::PaymentRequired {
+                required_tier: "paid",
+                reason: Some("cap_shows"),
+            });
+        }
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -320,6 +392,104 @@ mod tests {
         let cal_id = insert_calendar(&pool, user_id, vec![10, 20]).await;
         let svc = build_service(&pool, &limits(3, 2));
         svc.assert_can_add_show(user_id, 10).await.unwrap();
+
+        sqlx::query("DELETE FROM calendar_items WHERE calendar_id = $1")
+            .bind(cal_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM calendars WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn effective_tier_in_tx_returns_paid_for_active_sub() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_id = create_test_user(&pool).await;
+        make_paid(&pool, user_id).await;
+
+        let mut conn = pool.acquire().await.unwrap();
+        let tier = EntitlementService::effective_tier_in_tx(&mut conn, user_id)
+            .await
+            .unwrap();
+        assert!(matches!(tier, Tier::Paid));
+
+        sqlx::query("DELETE FROM subscriptions WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn assert_can_create_calendar_in_tx_blocks_at_cap() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_id = create_test_user(&pool).await;
+        for _ in 0..3 {
+            insert_calendar(&pool, user_id, vec![]).await;
+        }
+        let svc = build_service(&pool, &limits(3, 25));
+
+        let mut conn = pool.acquire().await.unwrap();
+        let err = svc
+            .assert_can_create_calendar_in_tx(&mut conn, user_id)
+            .await
+            .unwrap_err();
+        match err {
+            Error::PaymentRequired { reason, .. } => {
+                assert_eq!(reason, Some("cap_calendars"));
+            }
+            other => panic!("expected PaymentRequired, got {other:?}"),
+        }
+
+        sqlx::query("DELETE FROM calendars WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn assert_can_add_show_in_tx_passes_for_already_tracked_at_cap() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_id = create_test_user(&pool).await;
+        let cal_id = insert_calendar(&pool, user_id, vec![10, 20]).await;
+        let svc = build_service(&pool, &limits(3, 2));
+
+        let mut conn = pool.acquire().await.unwrap();
+        // Already tracked → passes even at cap.
+        svc.assert_can_add_show_in_tx(&mut conn, user_id, 10)
+            .await
+            .unwrap();
+        // New at cap → blocked.
+        let err = svc
+            .assert_can_add_show_in_tx(&mut conn, user_id, 999)
+            .await
+            .unwrap_err();
+        match err {
+            Error::PaymentRequired { reason, .. } => {
+                assert_eq!(reason, Some("cap_shows"));
+            }
+            other => panic!("expected PaymentRequired, got {other:?}"),
+        }
 
         sqlx::query("DELETE FROM calendar_items WHERE calendar_id = $1")
             .bind(cal_id)

@@ -20,6 +20,20 @@ impl ShowCountService {
     /// # Errors
     /// Returns the underlying sqlx error on query failure.
     pub async fn count_distinct_for_user(&self, user_id: i32) -> sqlx::Result<i64> {
+        Self::count_distinct_for_user_in_tx(&mut *self.pool.acquire().await?, user_id).await
+    }
+
+    /// Same as `count_distinct_for_user` but runs on the caller's
+    /// connection. Used inside the PUT-calendar advisory-locked
+    /// transaction so the cap-check observes the same snapshot as the
+    /// subsequent INSERT/UPDATE.
+    ///
+    /// # Errors
+    /// Returns the underlying sqlx error on query failure.
+    pub async fn count_distinct_for_user_in_tx(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+    ) -> sqlx::Result<i64> {
         sqlx::query_scalar!(
             r#"SELECT COUNT(DISTINCT ci.item_id) AS "count!"
                FROM calendar_items ci
@@ -28,7 +42,7 @@ impl ShowCountService {
                  AND c.deleted_at IS NULL"#,
             user_id
         )
-        .fetch_one(&self.pool)
+        .fetch_one(conn)
         .await
     }
 
@@ -40,6 +54,19 @@ impl ShowCountService {
     /// # Errors
     /// Returns the underlying sqlx error on query failure.
     pub async fn user_already_tracks(&self, user_id: i32, item_id: i32) -> sqlx::Result<bool> {
+        Self::user_already_tracks_in_tx(&mut *self.pool.acquire().await?, user_id, item_id).await
+    }
+
+    /// In-transaction variant of `user_already_tracks`. Same semantics, but
+    /// observes the caller's transaction snapshot.
+    ///
+    /// # Errors
+    /// Returns the underlying sqlx error on query failure.
+    pub async fn user_already_tracks_in_tx(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+        item_id: i32,
+    ) -> sqlx::Result<bool> {
         sqlx::query_scalar!(
             r#"SELECT EXISTS(
                  SELECT 1 FROM calendar_items ci
@@ -51,7 +78,7 @@ impl ShowCountService {
             user_id,
             item_id,
         )
-        .fetch_one(&self.pool)
+        .fetch_one(conn)
         .await
     }
 
@@ -60,13 +87,25 @@ impl ShowCountService {
     /// # Errors
     /// Returns the underlying sqlx error on query failure.
     pub async fn count_calendars_for_user(&self, user_id: i32) -> sqlx::Result<i64> {
+        Self::count_calendars_for_user_in_tx(&mut *self.pool.acquire().await?, user_id).await
+    }
+
+    /// In-transaction variant of `count_calendars_for_user`. Same semantics,
+    /// but observes the caller's transaction snapshot.
+    ///
+    /// # Errors
+    /// Returns the underlying sqlx error on query failure.
+    pub async fn count_calendars_for_user_in_tx(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+    ) -> sqlx::Result<i64> {
         sqlx::query_scalar!(
             r#"SELECT COUNT(*) AS "count!"
                FROM calendars
                WHERE user_id = $1 AND deleted_at IS NULL"#,
             user_id,
         )
-        .fetch_one(&self.pool)
+        .fetch_one(conn)
         .await
     }
 }
@@ -167,6 +206,61 @@ mod tests {
         let svc = ShowCountService::new(pool.clone());
         assert!(svc.user_already_tracks(user_id, 42).await.unwrap());
         assert!(!svc.user_already_tracks(user_id, 99).await.unwrap());
+        cleanup(&pool, user_id).await;
+    }
+
+    #[tokio::test]
+    async fn count_distinct_in_tx_matches_pool_variant() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_id = create_test_user(&pool).await;
+        insert_calendar(&pool, user_id, vec![100, 200]).await;
+        insert_calendar(&pool, user_id, vec![100, 300]).await;
+
+        let mut conn = pool.acquire().await.unwrap();
+        let in_tx = ShowCountService::count_distinct_for_user_in_tx(&mut conn, user_id)
+            .await
+            .unwrap();
+        drop(conn);
+        let svc = ShowCountService::new(pool.clone());
+        let pooled = svc.count_distinct_for_user(user_id).await.unwrap();
+        assert_eq!(in_tx, pooled);
+        assert_eq!(in_tx, 3);
+
+        cleanup(&pool, user_id).await;
+    }
+
+    #[tokio::test]
+    async fn user_already_tracks_in_tx_matches_pool_variant() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_id = create_test_user(&pool).await;
+        insert_calendar(&pool, user_id, vec![55]).await;
+
+        let mut conn = pool.acquire().await.unwrap();
+        let tracked = ShowCountService::user_already_tracks_in_tx(&mut conn, user_id, 55)
+            .await
+            .unwrap();
+        let untracked = ShowCountService::user_already_tracks_in_tx(&mut conn, user_id, 999)
+            .await
+            .unwrap();
+        assert!(tracked);
+        assert!(!untracked);
+
+        cleanup(&pool, user_id).await;
+    }
+
+    #[tokio::test]
+    async fn count_calendars_in_tx_matches_pool_variant() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_id = create_test_user(&pool).await;
+        insert_calendar(&pool, user_id, vec![]).await;
+        insert_calendar(&pool, user_id, vec![]).await;
+
+        let mut conn = pool.acquire().await.unwrap();
+        let in_tx = ShowCountService::count_calendars_for_user_in_tx(&mut conn, user_id)
+            .await
+            .unwrap();
+        assert_eq!(in_tx, 2);
+
         cleanup(&pool, user_id).await;
     }
 
