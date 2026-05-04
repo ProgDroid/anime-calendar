@@ -1,10 +1,21 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
+import type { UpgradeReason } from '@/composables/useUpgradeInterrupt'
 import UiButton from '@/components/ui/UiButton.vue'
 import IconSparkle from '@/components/ui/icons/IconSparkle.vue'
 
 defineOptions({ name: 'UpgradeInterruptModalBody' })
+
+interface Props {
+  /**
+   * Selects the heading + description copy. Default `pro_accent` mirrors
+   * the backend's behaviour when it omits the reason on a 402.
+   */
+  reason?: UpgradeReason
+}
+const props = withDefaults(defineProps<Props>(), { reason: 'pro_accent' })
 
 const emit = defineEmits<{
   close: []
@@ -12,6 +23,9 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const router = useRouter()
+
+const headingKey = computed(() => `interrupt.heading.${props.reason}`)
+const descriptionKey = computed(() => `interrupt.description.${props.reason}`)
 
 function close() {
   emit('close')
@@ -27,10 +41,14 @@ function goToUpgrade() {
   <div class="p-4">
     <div class="flex items-center gap-2">
       <span class="text-accent-1-text [&_svg]:h-4 [&_svg]:w-4"><IconSparkle /></span>
-      <h2 class="text-lg font-semibold text-fg-1">{{ t('interrupt.heading') }}</h2>
+      <h2 class="text-lg font-semibold text-fg-1" data-testid="upgrade-interrupt-heading">
+        {{ t(headingKey) }}
+      </h2>
     </div>
 
-    <p class="mt-3 text-sm text-fg-2">{{ t('interrupt.description') }}</p>
+    <p class="mt-3 text-sm text-fg-2" data-testid="upgrade-interrupt-description">
+      {{ t(descriptionKey) }}
+    </p>
     <ul class="mt-3 flex flex-col gap-1.5 text-sm text-fg-1">
       <li class="flex gap-2">
         <span aria-hidden="true">·</span>

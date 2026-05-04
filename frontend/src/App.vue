@@ -6,9 +6,11 @@ import { computed, ref, watch } from 'vue'
 import { applySettings } from './services/applySettings'
 import { useTheme } from './composables/useTheme'
 import { useViewportLayout } from './composables/useViewportLayout'
+import { useUpgradeInterrupt } from './composables/useUpgradeInterrupt'
 import UiToastHost from './components/ui/UiToastHost.vue'
 import UiMenu from './components/ui/UiMenu.vue'
 import UiBottomTabBar from './components/ui/UiBottomTabBar.vue'
+import UpgradeInterruptModal from './components/UpgradeInterruptModal.vue'
 import IconLogo from './components/ui/icons/IconLogo.vue'
 import IconSun from './components/ui/icons/IconSun.vue'
 import IconMoon from './components/ui/icons/IconMoon.vue'
@@ -19,6 +21,7 @@ const route = useRoute()
 const mobileOpen = ref(false)
 const { theme, setTheme } = useTheme()
 const { isMobile } = useViewportLayout()
+const { open: upgradeOpen, reason: upgradeReason, setOpen: setUpgradeOpen } = useUpgradeInterrupt()
 
 const bottomBarVisible = computed(
   () => isMobile.value && route.meta.bottomTabBar !== false,
@@ -222,5 +225,13 @@ watch(
     </main>
     <UiBottomTabBar />
     <UiToastHost />
+    <!-- Global upgrade interrupt — driven by useUpgradeInterrupt + the axios
+         402 interceptor. One mount per app keeps multiple instances from
+         racing on open/close state. -->
+    <UpgradeInterruptModal
+      :open="upgradeOpen"
+      :reason="upgradeReason"
+      @update:open="setUpgradeOpen"
+    />
   </div>
 </template>

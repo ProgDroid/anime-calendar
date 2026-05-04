@@ -433,8 +433,16 @@
   },
   "interrupt": {
     "ariaLabel": "Upgrade to Pro",
-    "heading": "This accent is part of Pro",
-    "description": "Pro unlocks premium accents and the rest of the polished feature set.",
+    "heading": {
+      "cap_calendars": "You've reached the calendar limit",
+      "cap_shows": "You've reached the show limit",
+      "pro_accent": "This accent is part of Pro"
+    },
+    "description": {
+      "cap_calendars": "Free accounts include 3 calendars. Upgrade to Pro for unlimited calendars and the rest of the polished feature set.",
+      "cap_shows": "Free accounts include 25 shows tracked at once. Upgrade to Pro for unlimited shows and the rest of the polished feature set.",
+      "pro_accent": "Pro unlocks premium accents and the rest of the polished feature set."
+    },
     "features": {
       "accents": "Premium accents (Matcha, Sakura, Citron)",
       "priority": "Priority support",
@@ -442,6 +450,14 @@
     },
     "cta": "See plans",
     "maybeLater": "Maybe later"
+  },
+  "calendars_limits": {
+    "counter": "{count} / {max} calendars"
+  },
+  "calendar_limits": {
+    "counter": "{count} / {max} shows",
+    "warningBanner": "You're approaching the {max}-show free limit ({count} of {max}). Upgrade for unlimited.",
+    "dismiss": "Dismiss"
   },
   "mobile": {
     "tabBar": {

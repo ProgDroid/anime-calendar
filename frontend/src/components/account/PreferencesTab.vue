@@ -12,7 +12,7 @@ import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import IconGlobe from '@/components/ui/icons/IconGlobe.vue'
 import AccentPicker from '@/components/account/AccentPicker.vue'
-import UpgradeInterruptModal from '@/components/UpgradeInterruptModal.vue'
+import { useUpgradeInterrupt } from '@/composables/useUpgradeInterrupt'
 import { getMySubscription, type Tier } from '@/services/subscription'
 
 defineOptions({ name: 'PreferencesTab' })
@@ -31,7 +31,7 @@ const settings = ref<UserSettings>(userSettingsStore.getDefaultSettings())
 // read as paid here — the entitlement service grants access during dunning.
 const tier = ref<Tier>('free')
 const isPaid = computed(() => tier.value === 'paid')
-const upgradeModalOpen = ref(false)
+const { openUpgradeModal } = useUpgradeInterrupt()
 
 const fetchUserSettings = async () => {
   try {
@@ -66,7 +66,7 @@ const handleAccentChange = (accent: Accent) => {
 // Free user clicked a Pro accent. AccentPicker prevents the apply; here we
 // just open the upgrade modal. The accent stays at its previous value.
 const handleAccentInterrupt = () => {
-  upgradeModalOpen.value = true
+  openUpgradeModal('pro_accent')
 }
 
 onMounted(async () => {
@@ -178,5 +178,4 @@ onMounted(async () => {
       </div>
     </div>
   </section>
-  <UpgradeInterruptModal v-model:open="upgradeModalOpen" />
 </template>

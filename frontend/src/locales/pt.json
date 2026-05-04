@@ -433,8 +433,16 @@
   },
   "interrupt": {
     "ariaLabel": "Fazer upgrade para Pro",
-    "heading": "Este acento faz parte do Pro",
-    "description": "O Pro desbloqueia acentos premium e o resto do conjunto de funcionalidades.",
+    "heading": {
+      "cap_calendars": "Atingiste o limite de calendários",
+      "cap_shows": "Atingiste o limite de séries",
+      "pro_accent": "Este acento faz parte do Pro"
+    },
+    "description": {
+      "cap_calendars": "Contas grátis incluem 3 calendários. Faz upgrade para Pro para calendários ilimitados e o resto do conjunto de funcionalidades.",
+      "cap_shows": "Contas grátis incluem 25 séries acompanhadas em simultâneo. Faz upgrade para Pro para séries ilimitadas e o resto do conjunto de funcionalidades.",
+      "pro_accent": "O Pro desbloqueia acentos premium e o resto do conjunto de funcionalidades."
+    },
     "features": {
       "accents": "Acentos premium (Matcha, Sakura, Citron)",
       "priority": "Suporte prioritário",
@@ -442,6 +450,14 @@
     },
     "cta": "Ver planos",
     "maybeLater": "Talvez mais tarde"
+  },
+  "calendars_limits": {
+    "counter": "{count} / {max} calendários"
+  },
+  "calendar_limits": {
+    "counter": "{count} / {max} séries",
+    "warningBanner": "Estás a aproximar-te do limite grátis de {max} séries ({count} de {max}). Faz upgrade para ilimitadas.",
+    "dismiss": "Fechar"
   },
   "mobile": {
     "tabBar": {
