@@ -2,7 +2,7 @@ use actix_web::{HttpResponse, get, web};
 use actix_web_lab::extract::Query;
 use common::{
     id::Id,
-    item::{Repository, Type},
+    item::{AnimeDataSource, Type},
 };
 use log::error;
 use serde::Deserialize;

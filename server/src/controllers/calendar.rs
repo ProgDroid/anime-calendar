@@ -14,7 +14,7 @@ use chrono::{NaiveDateTime, Utc};
 use common::{
     calendar::Calendar,
     id::Id,
-    item::{Item, Repository},
+    item::{AnimeDataSource, Item},
     language::Language,
     schedule::Schedule,
 };

@@ -55,7 +55,7 @@ pub struct Item {
     pub recommendations: Vec<Recommendation>,
 }
 
-pub trait Repository {
+pub trait AnimeDataSource {
     fn get_item(&self, id: Id) -> impl std::future::Future<Output = Option<Item>> + Send;
 
     fn get_items(&self, ids: Vec<Id>) -> impl std::future::Future<Output = Vec<Item>> + Send;

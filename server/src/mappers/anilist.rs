@@ -6,7 +6,7 @@ use anilist::{
 };
 use common::{
     id::Id,
-    item::{Item, Repository as RepositoryItem, Type},
+    item::{AnimeDataSource, Item, Type},
     media_cover::MediaCover,
     recommendation::{Recommendation, RecommendationMedia},
     schedule::Schedule,
@@ -35,7 +35,7 @@ impl Default for Anilist {
     }
 }
 
-impl RepositoryItem for Anilist {
+impl AnimeDataSource for Anilist {
     async fn get_item(&self, id: Id) -> Option<Item> {
         match std::convert::TryInto::<i64>::try_into(id.to_int()) {
             Ok(id) => match self.client.get_item(id).await {
