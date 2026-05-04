@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
 import MediaItemCard from '@/components/shared/MediaItemCard.vue'
 import RecommendationsSection from './RecommendationsSection.vue'
 import UiButton from '@/components/ui/UiButton.vue'
+import { FREE_SHOW_CAP, CAP_WARN_THRESHOLD } from '@/stores/usageStore'
 
 defineOptions({ name: 'EditorItemsPanelMobile' })
 
@@ -14,6 +15,12 @@ const props = defineProps<{
   items: Item[]
   calendarLanguage: 'english' | 'romaji' | 'native'
   recommendations?: Item[]
+  /**
+   * Total distinct shows this user tracks across all calendars (for the
+   * counter chip + 80% banner). Optional — when undefined the chip and
+   * banner don't render. Pro users should be passed undefined or `null`.
+   */
+  showCount?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -23,6 +30,25 @@ const emit = defineEmits<{
 }>()
 
 const recs = computed(() => props.recommendations ?? [])
+
+const hasShowCount = computed(
+  () => typeof props.showCount === 'number' && props.showCount >= 0,
+)
+const capReached = computed(
+  () => hasShowCount.value && (props.showCount ?? 0) >= FREE_SHOW_CAP,
+)
+const showWarningBanner = computed(
+  () =>
+    hasShowCount.value &&
+    !capReached.value &&
+    (props.showCount ?? 0) / FREE_SHOW_CAP >= CAP_WARN_THRESHOLD,
+)
+
+// Per-session dismissal — clearing the banner sticks until the tab closes.
+const bannerDismissed = ref(false)
+function dismissBanner() {
+  bannerDismissed.value = true
+}
 
 const getTitle = (item: Item): string => {
   switch (props.calendarLanguage) {
@@ -36,6 +62,41 @@ const getTitle = (item: Item): string => {
 
 <template>
   <div class="flex flex-col gap-3 px-4 pb-tab-bar">
+    <!-- Free-tier counter chip -->
+    <div
+      v-if="hasShowCount"
+      class="flex items-center gap-2"
+      data-testid="show-counter-row"
+    >
+      <span
+        data-testid="show-counter-chip"
+        class="inline-flex items-center rounded-full bg-bg-1 border border-line text-fg-2 px-2.5 py-0.5 text-xs"
+        :class="{ 'border-warning text-warning': capReached }"
+      >
+        {{ t('calendar_limits.counter', { count: props.showCount, max: FREE_SHOW_CAP }) }}
+      </span>
+    </div>
+
+    <!-- 80% soft warning banner — dismissible per session -->
+    <div
+      v-if="showWarningBanner && !bannerDismissed"
+      data-testid="show-warning-banner"
+      role="status"
+      class="rounded-md border border-warning/40 bg-warning/10 text-warning px-3 py-2 text-sm flex items-start gap-2"
+    >
+      <span class="flex-1">
+        {{ t('calendar_limits.warningBanner', { count: props.showCount, max: FREE_SHOW_CAP }) }}
+      </span>
+      <button
+        type="button"
+        data-testid="show-warning-banner-dismiss"
+        class="text-warning/80 hover:text-warning text-xs underline shrink-0"
+        @click="dismissBanner"
+      >
+        {{ t('calendar_limits.dismiss') }}
+      </button>
+    </div>
+
     <div
       v-if="items.length === 0"
       class="flex flex-col items-center justify-center py-16 text-center gap-2"

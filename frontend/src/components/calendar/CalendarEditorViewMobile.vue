@@ -8,7 +8,9 @@ import type { Item } from '@/types/item'
 import type { Calendar } from '@/types/calendar'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { useEditorSelectionStore } from '@/stores/editorSelection'
+import { useUsageStore } from '@/stores/usageStore'
 import { useRecommendations } from '@/composables/useRecommendations'
+import { getMySubscription } from '@/services/subscription'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import IconPlus from '@/components/ui/icons/IconPlus.vue'
 import EditorItemsPanelMobile from './EditorItemsPanelMobile.vue'
@@ -22,6 +24,8 @@ const route = useRoute()
 const router = useRouter()
 const userSettingsStore = useUserSettingsStore()
 const selection = useEditorSelectionStore()
+const usage = useUsageStore()
+const isFreeTier = ref(true)
 
 const { recommendations, calculateRecommendations } = useRecommendations()
 
@@ -35,6 +39,10 @@ const currentCalendar = ref<Calendar | null>(null)
 
 const loading = computed(() => submitLoading.value)
 const itemCount = computed(() => itemsInCalendar.value.length)
+// Pro users see no chip / banner / disabled add — pass `null` through.
+const editorShowCount = computed(() =>
+  isFreeTier.value && usage.loaded ? usage.showCount : null,
+)
 
 // Tab state
 type Tab = 'items' | 'search'
@@ -61,6 +69,7 @@ const addItemFromSearch = (items: Item[]) => {
   itemsInCalendar.value.push(...newItems)
   selection.clear()
   calculateRecommendations(itemsInCalendar.value)
+  if (isFreeTier.value) void usage.refresh()
   // Switch back to items tab to see the added items
   tab.value = 'items'
 }
@@ -69,11 +78,13 @@ const addRecommendation = (item: Item) => {
   if (itemsInCalendar.value.some(c => c.id === item.id)) return
   itemsInCalendar.value.push(item)
   calculateRecommendations(itemsInCalendar.value)
+  if (isFreeTier.value) void usage.refresh()
 }
 
 const removeItemFromCalendar = (id: number) => {
   itemsInCalendar.value = itemsInCalendar.value.filter(item => item.id !== id)
   calculateRecommendations(itemsInCalendar.value)
+  if (isFreeTier.value) void usage.refresh()
 }
 
 const clearCalendar = () => {
@@ -143,6 +154,18 @@ onBeforeUnmount(() => {
 // Clear selection on route changes
 onBeforeRouteUpdate(() => selection.clear())
 onBeforeRouteLeave(() => selection.clear())
+
+// Bootstrap effective tier + usage counts (mobile editor). Free users get
+// the counter chip + 80% banner + cap-aware add buttons; Pro users do not.
+void (async () => {
+  try {
+    const ent = await getMySubscription()
+    isFreeTier.value = ent.tier !== 'paid'
+  } catch {
+    isFreeTier.value = true
+  }
+  if (isFreeTier.value) void usage.refresh()
+})()
 
 // Load calendar on mount — same logic as desktop onBeforeMount
 const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
@@ -227,6 +250,7 @@ if (calendarId && calendarId !== 'new') {
           :items="itemsInCalendar"
           :calendar-language="calendarLanguage"
           :recommendations="recommendations"
+          :show-count="editorShowCount"
           @remove="removeItemFromCalendar"
           @clear="clearCalendar"
           @add-recommendation="addRecommendation"
@@ -237,6 +261,7 @@ if (calendarId && calendarId !== 'new') {
           :items-in-calendar="itemsInCalendar"
           :calendar-language="calendarLanguage"
           :recommendations="recommendations"
+          :show-count="editorShowCount"
           @add-selected="addItemFromSearch"
           @add-recommendation="addRecommendation"
         />

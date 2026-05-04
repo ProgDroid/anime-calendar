@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
 import { useEditorSelectionStore } from '@/stores/editorSelection'
 import { useCalendarSearch } from '@/composables/useCalendarSearch'
+import { useUpgradeInterrupt } from '@/composables/useUpgradeInterrupt'
+import { FREE_SHOW_CAP } from '@/stores/usageStore'
 import MediaItemCard from '@/components/shared/MediaItemCard.vue'
 import RecommendationsSection from './RecommendationsSection.vue'
 import UiButton from '@/components/ui/UiButton.vue'
@@ -20,6 +22,13 @@ const props = defineProps<{
   itemsInCalendar: Item[]
   calendarLanguage: 'english' | 'romaji' | 'native'
   recommendations?: Item[]
+  /**
+   * Total distinct shows the user tracks across all calendars. When at or
+   * over `FREE_SHOW_CAP`, adds of new (untracked) media are gated behind
+   * the upgrade modal. Already-tracked items remain addable. Pass
+   * undefined for Pro users — they bypass the gate entirely.
+   */
+  showCount?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -34,6 +43,27 @@ const searchInputRef = ref<{ focus: () => void } | null>(null)
 const hasResults = computed(() => fetchedItems.value.length > 0)
 const selectionCount = computed(() => selection.selectedMediaIds.size)
 const hasRecommendations = computed(() => (props.recommendations?.length ?? 0) > 0)
+
+const { openUpgradeModal } = useUpgradeInterrupt()
+const capReached = computed(
+  () =>
+    typeof props.showCount === 'number' && props.showCount >= FREE_SHOW_CAP,
+)
+function isAlreadyTracked(itemId: number): boolean {
+  return props.itemsInCalendar.some((c) => c.id === itemId)
+}
+/**
+ * Free user at cap clicking on a new (untracked) item — block selection and
+ * route to the upgrade modal. Already-tracked items remain selectable.
+ */
+function handleCardClick(item: Item) {
+  if (isAlreadyTracked(item.id)) return
+  if (capReached.value) {
+    openUpgradeModal('cap_shows')
+    return
+  }
+  selection.toggle(item.id)
+}
 
 const submitSelected = () => {
   const items = fetchedItems.value.filter(
@@ -151,7 +181,8 @@ defineExpose({
         :is-selected="selection.has(item.id)"
         :is-in-calendar="itemsInCalendar.some(c => c.id === item.id)"
         :compact="true"
-        @click="!itemsInCalendar.some(c => c.id === item.id) && selection.toggle(item.id)"
+        :class="{ 'opacity-60': capReached && !isAlreadyTracked(item.id) }"
+        @click="handleCardClick(item)"
       />
     </div>
 

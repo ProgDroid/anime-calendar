@@ -18,6 +18,7 @@
           <CalendarItemsList
             :items="itemsInCalendar"
             :calendar-language="calendarLanguage"
+            :show-count="editorShowCount"
             @remove="removeItemFromCalendar"
             @clear="clearCalendar"
           />
@@ -36,6 +37,7 @@
               :loading="loading"
               :calendar-language="calendarLanguage"
               :search-error="searchError"
+              :show-count="editorShowCount"
               @search="handleSearch"
               @toggle-selection="toggleItemSelection"
               @add-selected="addItemToCalendar"
@@ -65,8 +67,10 @@ import type { Calendar } from '@/types/calendar'
 import api from '@/config/api'
 import { toastService } from '@/services/toastService'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
+import { useUsageStore } from '@/stores/usageStore'
 import { useCalendarSearch } from '@/composables/useCalendarSearch'
 import { useRecommendations } from '@/composables/useRecommendations'
+import { getMySubscription } from '@/services/subscription'
 import CalendarSettingsForm from '@/components/calendar/CalendarSettingsForm.vue'
 import CalendarItemsList from '@/components/calendar/CalendarItemsList.vue'
 import ItemSearchPanel from '@/components/calendar/ItemSearchPanel.vue'
@@ -78,6 +82,8 @@ const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
 const userSettingsStore = useUserSettingsStore()
+const usage = useUsageStore()
+const isFreeTier = ref(true)
 
 const { fetchedItems, selectedItems, loading: searchLoading, searchError, handleSearch, toggleItemSelection } = useCalendarSearch()
 const { recommendations, calculateRecommendations } = useRecommendations()
@@ -90,6 +96,9 @@ const calendarError = ref<string | null>(null)
 const currentCalendar = ref<Calendar | null>(null)
 
 const loading = computed(() => searchLoading.value || submitLoading.value)
+const editorShowCount = computed(() =>
+  isFreeTier.value && usage.loaded ? usage.showCount : null,
+)
 
 const addItemToCalendar = () => {
   const newItems = fetchedItems.value.filter(
@@ -99,18 +108,21 @@ const addItemToCalendar = () => {
   itemsInCalendar.value.push(...newItems)
   selectedItems.value = []
   if (itemsInCalendar.value.length > 0) calculateRecommendations(itemsInCalendar.value)
+  if (isFreeTier.value) void usage.refresh()
 }
 
 const addItemToCalendarSingle = (item: Item) => {
   if (!itemsInCalendar.value.some(c => c.id === item.id)) {
     itemsInCalendar.value.push(item)
     calculateRecommendations(itemsInCalendar.value)
+    if (isFreeTier.value) void usage.refresh()
   }
 }
 
 const removeItemFromCalendar = (id: number) => {
   itemsInCalendar.value = itemsInCalendar.value.filter(item => item.id !== id)
   calculateRecommendations(itemsInCalendar.value)
+  if (isFreeTier.value) void usage.refresh()
 }
 
 const clearCalendar = () => {
@@ -207,6 +219,15 @@ onBeforeUnmount(() => {
 })
 
 onBeforeMount(async () => {
+  // Bootstrap effective tier + usage counts. Free users get the counter
+  // chip + 80% banner + cap-aware add gates; Pro users do not.
+  try {
+    const ent = await getMySubscription()
+    isFreeTier.value = ent.tier !== 'paid'
+  } catch {
+    isFreeTier.value = true
+  }
+  if (isFreeTier.value) void usage.refresh()
   const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
   if (calendarId && calendarId !== 'new') {
     submitLoading.value = true

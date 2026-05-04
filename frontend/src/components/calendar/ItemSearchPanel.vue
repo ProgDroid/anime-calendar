@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
+import { useUpgradeInterrupt } from '@/composables/useUpgradeInterrupt'
+import { FREE_SHOW_CAP } from '@/stores/usageStore'
 import MediaItemCard from '@/components/shared/MediaItemCard.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
@@ -15,6 +17,11 @@ const props = defineProps<{
   loading: boolean
   calendarLanguage: 'english' | 'romaji' | 'native'
   searchError?: string | null
+  /**
+   * Free-tier distinct-show count, used for cap-aware add gating. Pass
+   * undefined for Pro users — they bypass the gate.
+   */
+  showCount?: number | null
 }>()
 
 const emit = defineEmits<{
@@ -22,6 +29,33 @@ const emit = defineEmits<{
   'toggle-selection': [id: number]
   'add-selected': []
 }>()
+
+const { openUpgradeModal } = useUpgradeInterrupt()
+const capReached = computed(
+  () =>
+    typeof props.showCount === 'number' && props.showCount >= FREE_SHOW_CAP,
+)
+function isAlreadyTracked(itemId: number): boolean {
+  return props.itemsInCalendar.some((c) => c.id === itemId)
+}
+function handleCardClick(item: Item) {
+  if (isAlreadyTracked(item.id)) return
+  if (capReached.value) {
+    openUpgradeModal('cap_shows')
+    return
+  }
+  emit('toggle-selection', item.id)
+}
+const addSelectedDisabled = computed(
+  () => props.selectedItems.length === 0 || capReached.value,
+)
+function handleAddSelected() {
+  if (capReached.value) {
+    openUpgradeModal('cap_shows')
+    return
+  }
+  emit('add-selected')
+}
 
 const nameInput = ref('')
 const mediaType = ref<'' | 'ANIME' | 'MANGA'>('')
@@ -91,16 +125,17 @@ const handleSearch = () => {
         :display-title="getTitle(item)"
         :is-selected="selectedItems.includes(item.id)"
         :is-in-calendar="itemsInCalendar.some(c => c.id === item.id)"
-        @click="!itemsInCalendar.some(c => c.id === item.id) && emit('toggle-selection', item.id)"
+        :class="{ 'opacity-60': capReached && !isAlreadyTracked(item.id) }"
+        @click="handleCardClick(item)"
       />
     </div>
 
     <UiButton
       data-testid="add-selected-btn"
       variant="primary"
-      :disabled="selectedItems.length === 0"
+      :disabled="addSelectedDisabled"
       class="w-full"
-      @click="emit('add-selected')"
+      @click="handleAddSelected"
     >
       {{ t('calendar.addSelectedToCalendar') }}
     </UiButton>
