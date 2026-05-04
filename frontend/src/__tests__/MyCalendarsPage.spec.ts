@@ -12,7 +12,17 @@ vi.mock('@/config/api', () => ({
   getApiUrl: (path: string) => `http://localhost/api${path}`,
 }))
 
+const openUpgradeModalMock = vi.fn()
+vi.mock('@/composables/useUpgradeInterrupt', () => ({
+  useUpgradeInterrupt: () => ({ openUpgradeModal: openUpgradeModalMock }),
+}))
+
+vi.mock('@/services/subscription', () => ({
+  getMySubscription: vi.fn(),
+}))
+
 import api from '@/config/api'
+import { getMySubscription } from '@/services/subscription'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 const router = createRouter({
@@ -64,8 +74,17 @@ describe('MyCalendarsPage', () => {
     })
     vi.mocked(api.get).mockImplementation(async (url: string) => {
       if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 2 } }
       return { data: { data: mockCalendars, pagination: mockPagination } }
     })
+    vi.mocked(getMySubscription).mockResolvedValue({
+      tier: 'free',
+      status: null,
+      current_period_end: null,
+      cancel_at_period_end: false,
+      trial_end: null,
+    })
+    openUpgradeModalMock.mockClear()
   })
 
   it('renders the page title', async () => {
@@ -86,6 +105,7 @@ describe('MyCalendarsPage', () => {
   it('shows empty state when no calendars returned', async () => {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
       if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 0 } }
       return { data: { data: [], pagination: { ...mockPagination, total: 0 } } }
     })
     const wrapper = mountPage()
@@ -171,6 +191,7 @@ describe('MyCalendarsPage', () => {
   it('renders the summed airing stat when calendars have airing items', async () => {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
       if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 2 } }
       return {
         data: {
           data: [
@@ -202,8 +223,17 @@ describe('MyCalendarsPage mobile layout', () => {
     })
     vi.mocked(api.get).mockImplementation(async (url: string) => {
       if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 2 } }
       return { data: { data: mockCalendars, pagination: mockPagination } }
     })
+    vi.mocked(getMySubscription).mockResolvedValue({
+      tier: 'free',
+      status: null,
+      current_period_end: null,
+      cancel_at_period_end: false,
+      trial_end: null,
+    })
+    openUpgradeModalMock.mockClear()
   })
 
   afterEach(() => {
@@ -248,6 +278,99 @@ describe('MyCalendarsPage mobile layout', () => {
     await flushPromises()
     await wrapper.find('[data-testid="my-calendars-mobile-create"]').trigger('click')
     expect(pushSpy).toHaveBeenCalledWith('/calendar/new')
+    wrapper.unmount()
+  })
+})
+
+describe('MyCalendarsPage free-tier cap UX', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn().mockReturnValue(null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    })
+    openUpgradeModalMock.mockClear()
+  })
+
+  function withFree(calendarCount: number) {
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage'))
+        return { data: { shows: 0, calendars: calendarCount } }
+      return { data: { data: mockCalendars, pagination: mockPagination } }
+    })
+    vi.mocked(getMySubscription).mockResolvedValue({
+      tier: 'free',
+      status: null,
+      current_period_end: null,
+      cancel_at_period_end: false,
+      trial_end: null,
+    })
+  }
+
+  function withPaid() {
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage')) return { data: { shows: 99, calendars: 99 } }
+      return { data: { data: mockCalendars, pagination: mockPagination } }
+    })
+    vi.mocked(getMySubscription).mockResolvedValue({
+      tier: 'paid',
+      status: 'active',
+      current_period_end: null,
+      cancel_at_period_end: false,
+      trial_end: null,
+    })
+  }
+
+  it('shows the calendar counter chip for a free user', async () => {
+    withFree(2)
+    const wrapper = mountPage()
+    await flushPromises()
+    const chip = wrapper.find('[data-testid="calendar-counter-chip"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.text()).toContain('2')
+    expect(chip.text()).toContain('3')
+    wrapper.unmount()
+  })
+
+  it('hides the calendar counter chip for a paid user', async () => {
+    withPaid()
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="calendar-counter-chip"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('marks the new-calendar button as aria-disabled when free user is at the calendar cap', async () => {
+    withFree(3)
+    const wrapper = mountPage()
+    await flushPromises()
+    const btn = wrapper.find('[data-testid="my-calendars-new"]')
+    expect(btn.attributes('aria-disabled')).toBe('true')
+    wrapper.unmount()
+  })
+
+  it('opens the upgrade modal with cap_calendars when the at-cap new-calendar button is clicked', async () => {
+    withFree(3)
+    const pushSpy = vi.spyOn(router, 'push')
+    const wrapper = mountPage()
+    await flushPromises()
+    await wrapper.find('[data-testid="my-calendars-new"]').trigger('click')
+    expect(openUpgradeModalMock).toHaveBeenCalledWith('cap_calendars')
+    expect(pushSpy).not.toHaveBeenCalledWith('/calendar/new')
+    wrapper.unmount()
+  })
+
+  it('does not flag the new-calendar button as aria-disabled below the cap', async () => {
+    withFree(1)
+    const wrapper = mountPage()
+    await flushPromises()
+    const btn = wrapper.find('[data-testid="my-calendars-new"]')
+    expect(btn.attributes('aria-disabled')).toBe('false')
     wrapper.unmount()
   })
 })

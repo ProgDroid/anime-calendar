@@ -3,12 +3,23 @@
     <header class="flex flex-col gap-4 sm:flex-row sm:items-end sm:gap-4">
       <div class="min-w-0 sm:flex-1">
         <p class="text-xs uppercase tracking-wider text-fg-2">{{ $t('calendars.yourLibrary') }}</p>
-        <h1 class="font-display text-3xl sm:text-4xl text-fg-1 mt-1">{{ $t('calendars.title') }}</h1>
+        <div class="flex items-center gap-3 flex-wrap mt-1">
+          <h1 class="font-display text-3xl sm:text-4xl text-fg-1">{{ $t('calendars.title') }}</h1>
+          <span
+            v-if="showCounter"
+            data-testid="calendar-counter-chip"
+            class="inline-flex items-center rounded-full bg-bg-1 border border-line text-fg-2 px-2.5 py-0.5 text-xs"
+            :class="{ 'border-warning text-warning': calendarCapReached }"
+          >
+            {{ $t('calendars_limits.counter', { count: usage.calendarCount, max: 3 }) }}
+          </span>
+        </div>
       </div>
       <UiButton
         data-testid="my-calendars-new"
         variant="primary"
-        class="self-start sm:self-auto"
+        :class="['self-start sm:self-auto', { 'opacity-60': newCalendarDisabled }]"
+        :aria-disabled="newCalendarDisabled"
         @click="createNewCalendar"
       >
         <IconPlus class="w-3.5 h-3.5" /> {{ $t('calendars.createNew') }}
@@ -85,7 +96,13 @@
       <button
         type="button"
         data-testid="my-calendars-mobile-create"
-        class="rounded-xl border border-dashed border-line px-5 py-6 text-fg-2 hover:border-line-strong hover:bg-bg-1 hover:text-fg-1 focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2 transition"
+        :class="[
+          'rounded-xl border border-dashed border-line px-5 py-6 focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2 transition',
+          newCalendarDisabled
+            ? 'cursor-not-allowed opacity-60 text-fg-2'
+            : 'text-fg-2 hover:border-line-strong hover:bg-bg-1 hover:text-fg-1',
+        ]"
+        :aria-disabled="newCalendarDisabled"
         @click="createNewCalendar"
       >
         + {{ $t('calendars.createNew') }}
@@ -139,6 +156,9 @@ import type { PageCalendar } from '@/types/calendar'
 import api, { getApiUrl } from '@/config/api'
 import { toastService } from '@/services/toastService'
 import { useViewportLayout } from '@/composables/useViewportLayout'
+import { useUpgradeInterrupt } from '@/composables/useUpgradeInterrupt'
+import { useUsageStore, FREE_CALENDAR_CAP } from '@/stores/usageStore'
+import { getMySubscription } from '@/services/subscription'
 import PaginationControls from '@/components/shared/PaginationControls.vue'
 import ConfirmModal from '@/components/shared/ConfirmModal.vue'
 import CalendarTile from '@/components/shared/CalendarTile.vue'
@@ -151,6 +171,8 @@ defineOptions({ name: 'MyCalendarsPage' })
 const { t } = useI18n()
 const router = useRouter()
 const { isMobile } = useViewportLayout()
+const usage = useUsageStore()
+const { openUpgradeModal } = useUpgradeInterrupt()
 
 const calendars = ref<PageCalendar[]>([])
 const loading = ref(false)
@@ -158,6 +180,14 @@ const error = ref<string | null>(null)
 const pagination = ref({ page: 1, page_size: 6, total: 0, total_pages: 0 })
 const confirmModalOpen = ref(false)
 const calendarToDelete = ref<number | null>(null)
+const isFreeTier = ref(true)
+
+// Free-tier counter chip + cap state. Pro users see no chip.
+const showCounter = computed(() => isFreeTier.value && usage.loaded)
+const calendarCapReached = computed(
+  () => isFreeTier.value && usage.calendarCount >= FREE_CALENDAR_CAP,
+)
+const newCalendarDisabled = computed(() => calendarCapReached.value)
 
 const totalItems = computed(() =>
   calendars.value.reduce((sum, c) => sum + c.item_count, 0),
@@ -167,7 +197,21 @@ const totalAiring = computed(() =>
   calendars.value.reduce((sum, c) => sum + (c.airing_count ?? 0), 0),
 )
 
-onMounted(() => loadCalendars(1))
+onMounted(async () => {
+  void loadCalendars(1)
+  // Resolve effective tier so we know whether to render the cap chip.
+  // Silent on failure — defaults to free, which is the safer fallback for
+  // counter visibility (the chip just sits there showing real counts).
+  try {
+    const ent = await getMySubscription()
+    isFreeTier.value = ent.tier !== 'paid'
+  } catch {
+    isFreeTier.value = true
+  }
+  if (isFreeTier.value) {
+    void usage.refresh()
+  }
+})
 
 async function loadCalendars(page: number = 1) {
   error.value = null
@@ -189,6 +233,10 @@ async function loadCalendars(page: number = 1) {
 }
 
 function createNewCalendar() {
+  if (newCalendarDisabled.value) {
+    openUpgradeModal('cap_calendars')
+    return
+  }
   router.push('/calendar/new')
 }
 
@@ -207,6 +255,7 @@ async function executeDelete() {
   try {
     await api.delete(`/calendars/${calendarToDelete.value}`)
     await loadCalendars(pagination.value.page)
+    if (isFreeTier.value) void usage.refresh()
   } catch {
     error.value = t('calendars.deleteFailed')
   } finally {
