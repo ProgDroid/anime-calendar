@@ -238,15 +238,6 @@ impl Cache {
         self.delete(&format!("subscribe:{token}")).await
     }
 
-    // Invalidate cache for a specific item
-    /// # Errors
-    /// Fails if Redis query fails.
-    pub async fn invalidate_item(&self, item_id: i64) -> RedisResult<()> {
-        let item_key = generate_item_key(item_id);
-        self.delete(&item_key).await?;
-        Ok(())
-    }
-
     // Invalidate cache for search results
     /// # Errors
     /// Fails if Redis query fails.
@@ -303,8 +294,13 @@ pub fn generate_calendar_items_key(id: i32) -> String {
 }
 
 #[must_use]
-pub fn generate_item_key(id: i64) -> String {
-    format!("item:{id}")
+pub fn generate_item_meta_key(id: i64) -> String {
+    format!("item:meta:{id}")
+}
+
+#[must_use]
+pub fn generate_item_airing_key(id: i64) -> String {
+    format!("item:airing:{id}")
 }
 
 #[must_use]
@@ -313,12 +309,6 @@ pub fn generate_search_key(query: &str, media_type: Option<&str>) -> String {
         || format!("search:{query}"),
         |type_str| format!("search:{query}:{type_str}"),
     )
-}
-
-#[must_use]
-pub fn generate_items_key(ids: &[common::id::Id]) -> String {
-    let id_string: Vec<String> = ids.iter().map(|id| id.to_int().to_string()).collect();
-    format!("items:{}", id_string.join(","))
 }
 
 #[must_use]
@@ -350,40 +340,6 @@ pub fn generate_user_paged_calendars_key(user_id: i32) -> String {
 pub trait Cacheable {
     fn cache_key(&self) -> String;
     fn cache_ttl(&self) -> u64;
-}
-
-// Cache middleware configuration
-#[derive(Debug, Clone)]
-pub struct CacheConfig {
-    pub ttl_seconds: u64,
-    pub enabled: bool,
-}
-
-impl Default for CacheConfig {
-    fn default() -> Self {
-        Self {
-            ttl_seconds: CACHE_TTL_ITEM,
-            enabled: true,
-        }
-    }
-}
-
-impl CacheConfig {
-    #[must_use]
-    pub const fn new(ttl_seconds: u64) -> Self {
-        Self {
-            ttl_seconds,
-            enabled: true,
-        }
-    }
-
-    #[must_use]
-    pub const fn disabled() -> Self {
-        Self {
-            ttl_seconds: 3600,
-            enabled: false,
-        }
-    }
 }
 
 #[cfg(test)]
@@ -576,16 +532,6 @@ mod tests {
         let key = format!("subscribe:{token}");
         cache.set(&key, &"cal", 300).await.unwrap();
         cache.invalidate_subscription(token).await.unwrap();
-        assert!(!cache.exists(&key).await.unwrap());
-    }
-
-    #[tokio::test]
-    async fn invalidate_item_removes_key() {
-        let cache = Cache::for_tests().await;
-        let id = 9_999_991_i64;
-        let key = generate_item_key(id);
-        cache.set(&key, &"item", 300).await.unwrap();
-        cache.invalidate_item(id).await.unwrap();
         assert!(!cache.exists(&key).await.unwrap());
     }
 
