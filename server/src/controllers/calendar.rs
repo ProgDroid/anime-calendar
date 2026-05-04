@@ -889,7 +889,12 @@ mod integration_tests {
             ShowCountService::new(pool.clone()),
             l,
         );
-        let ics_export = IcsExportService::new(pool.clone(), (**cached).clone());
+        let ics_export = IcsExportService::new(
+            pool.clone(),
+            (**cached).clone(),
+            crate::mappers::user_settings::UserSettingsMapper::from_pool(pool.clone()),
+            entitlement.clone(),
+        );
         let frozen_ics = FrozenIcsService::new(pool.clone(), ics_export);
         (
             web::Data::new(UserMapper::from_pool(pool.clone())),
@@ -1351,7 +1356,12 @@ mod integration_tests {
                 ShowCountService::new(pool.clone()),
                 &limits(3, 25),
             );
-            let ics_export = IcsExportService::new(pool.clone(), (**cached).clone());
+            let ics_export = IcsExportService::new(
+                pool.clone(),
+                (**cached).clone(),
+                crate::mappers::user_settings::UserSettingsMapper::from_pool(pool.clone()),
+                entitlement.clone(),
+            );
             let frozen_ics = FrozenIcsService::new(pool.clone(), ics_export.clone());
             test::init_service(
                 App::new()

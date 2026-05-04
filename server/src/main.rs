@@ -91,8 +91,12 @@ async fn main() -> ServerResult<()> {
     let ics_pool = server::mappers::database::Database::new(db_config.clone())
         .await?
         .pool;
-    let ics_export =
-        server::services::ics_export::IcsExportService::new(ics_pool.clone(), cached_anilist.clone());
+    let ics_export = server::services::ics_export::IcsExportService::new(
+        ics_pool.clone(),
+        cached_anilist.clone(),
+        user_settings_mapper.clone(),
+        entitlement_service.clone(),
+    );
     let frozen_ics =
         server::services::frozen_ics::FrozenIcsService::new(ics_pool, ics_export.clone());
 

@@ -506,12 +506,29 @@ mod tests {
     // produces. EventObject parsing is upstream of the logic under test.
 
     async fn build_frozen_ics(pool: PgPool) -> FrozenIcsService {
+        use crate::config::server::LimitsConfig;
+        use crate::mappers::subscription::SubscriptionMapper;
+        use crate::mappers::user_settings::UserSettingsMapper;
+        use crate::services::entitlement::EntitlementService;
+        use crate::services::show_count::ShowCountService;
+
         let cached = CachedAnilist::new(
             Anilist::default(),
             Cache::for_tests().await,
             &CacheConfig::default(),
         );
-        let ics_export = IcsExportService::new(pool.clone(), cached);
+        let user_settings_mapper = UserSettingsMapper::from_pool(pool.clone());
+        let entitlement = EntitlementService::new(
+            SubscriptionMapper::from_pool(pool.clone()),
+            ShowCountService::new(pool.clone()),
+            &LimitsConfig::default(),
+        );
+        let ics_export = IcsExportService::new(
+            pool.clone(),
+            cached,
+            user_settings_mapper,
+            entitlement,
+        );
         FrozenIcsService::new(pool, ics_export)
     }
 
