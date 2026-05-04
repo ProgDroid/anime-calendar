@@ -15,6 +15,29 @@
 
 ---
 
+## Implementation status (last updated 2026-05-04 PM)
+
+| Phase | Status | Commits |
+|-------|--------|---------|
+| Pre-flight | ✅ Done | — |
+| Phase 0 — Caching + AnimeDataSource trait | ✅ Done | `c122f47..1dfc40e` |
+| Phase 1.1 — Schema + show count + entitlement caps + 402 reason | ✅ Done | `a6a5173` |
+| Phase 1.2 — IcsExportService scaffold + FrozenIcsService | ✅ Done | `0ce59cf..b5aab57` |
+| Phase 1.3 — PUT /calendar advisory lock + subscribe tier branching | ✅ Done | `a60bb38..212c93b` |
+| Phase 1.4 — Stripe webhook frozen-blob lifecycle hooks | ✅ Done | `e3a8e00` |
+| Phase 1.5 — Frontend counters + gates + 402 reason routing + /api/account/usage | ✅ Done | `07aa937..4c22f53` |
+| Phase 2a (backend) — ics_export VALARM/event_style + settings/event_style validation | ✅ Done | `5f48997..f6a21d5` |
+| Phase 2b (frontend) — Reminders chip-list + event_style toggle + locales | ⏳ Pending | — |
+| Phase 3 — Pricing reset + UpgradePage rewrite + locale cleanup | ⏳ Pending | — |
+
+**Pick-up notes for the next session:**
+- Phase 2b entry points and Phase 3 entry points are catalogued in memory `project_monetisation_phase_2a_complete.md`.
+- icalendar 0.17 outputs VALARM TRIGGERs in seconds form (`-PT1800S`); see memory `feedback_icalendar_duration_seconds_format`.
+- Test baseline at end of 2026-05-04: 240 server lib + 3 anilist + 1 metrics integration + 392 frontend unit.
+- The 402 reason-routing infra is already wired end-to-end; new cap gates plug into it (memory `reference_402_reason_routing`).
+
+---
+
 ## File map
 
 **Backend — new:**
@@ -53,9 +76,9 @@
 ## Pre-flight (before Phase 0)
 
 - [ ] Verify `subscribe_token` on `calendars` is uniquely indexed. If not, add the index in Phase 1's migration batch. Check via `\d calendars` in psql.
-- [ ] Confirm migration numbering: list `server/migrations/` and pick the next three sequential numbers.
-- [ ] Decide config rollout: copy current `config.toml`, append the new `[cache]` and `[limits]` sections with the spec's default values. Ship in Phase 0 so Phase 1 has them available.
-- [ ] Run baseline `cargo test --workspace` and `cd frontend && npm run test:unit` — capture green output for diff comparison after each phase.
+- [x] Confirm migration numbering: list `server/migrations/` and pick the next three sequential numbers.
+- [x] Decide config rollout: copy current `config.toml`, append the new `[cache]` and `[limits]` sections with the spec's default values. Ship in Phase 0 so Phase 1 has them available.
+- [x] Run baseline `cargo test --workspace` and `cd frontend && npm run test:unit` — capture green output for diff comparison after each phase.
 
 ---
 
@@ -67,7 +90,7 @@
 
 #### Trait + impl
 
-- [ ] Define `common::AnimeDataSource` in `anilist/src/lib.rs` (or new top-level module — pick whichever fits the existing crate layout):
+- [x] Define `common::AnimeDataSource` in `anilist/src/lib.rs` (or new top-level module — pick whichever fits the existing crate layout):
 
 ```rust
 #[async_trait::async_trait]
@@ -92,14 +115,14 @@ pub trait AnimeDataSource: Send + Sync {
 
 If `MediaType` / `AiringEpisode` aren't already shared types, use the existing AniList-specific shapes in this trait — refactoring to a generic shape is for the data-source spike, not this phase.
 
-- [ ] Add `async_trait = "0.1"` to `anilist/Cargo.toml` if not present.
-- [ ] Implement `AnimeDataSource` for the existing AniList client struct. The `impl` block is mostly delegation to existing methods; rename the existing methods if the trait signature requires it, but preserve external behaviour.
-- [ ] Existing tests in `anilist/` should still pass unchanged.
+- [x] Add `async_trait = "0.1"` to `anilist/Cargo.toml` if not present.
+- [x] Implement `AnimeDataSource` for the existing AniList client struct. The `impl` block is mostly delegation to existing methods; rename the existing methods if the trait signature requires it, but preserve external behaviour.
+- [x] Existing tests in `anilist/` should still pass unchanged.
 
 #### Cache key changes
 
-- [ ] In `server/src/cache.rs`: drop `generate_items_key` (the batch key — `pub fn generate_items_key(ids: &[common::id::Id]) -> String`). Search for callers and remove. Anything that currently calls it should be migrated to fetch via the cached adapter we're about to introduce.
-- [ ] Add new key generators:
+- [x] In `server/src/cache.rs`: drop `generate_items_key` (the batch key — `pub fn generate_items_key(ids: &[common::id::Id]) -> String`). Search for callers and remove. Anything that currently calls it should be migrated to fetch via the cached adapter we're about to introduce.
+- [x] Add new key generators:
 
 ```rust
 #[must_use]
@@ -113,11 +136,11 @@ pub fn generate_item_airing_key(id: i64) -> String {
 }
 ```
 
-- [ ] Drop the existing `generate_item_key` (it served the old combined-blob shape). All consumers will migrate to the new pair.
+- [x] Drop the existing `generate_item_key` (it served the old combined-blob shape). All consumers will migrate to the new pair.
 
 #### Config plumbing
 
-- [ ] Add to `config.toml.dist` and `config.toml`:
+- [x] Add to `config.toml.dist` and `config.toml`:
 
 ```toml
 [cache]
@@ -133,12 +156,12 @@ free_show_cap       = 25
 pro_max_reminders   = 5
 ```
 
-- [ ] Extend the `Config` struct in `server/src/config.rs` (or wherever it lives) with `CacheConfig` and `LimitsConfig` sub-structs. Add `Deserialize`. Wire into the existing `Config::load()` path. Add a default-fallback or fail-fast if missing — match the codebase's existing convention (Track 4's Stripe section was fail-fast; do the same).
-- [ ] Verify `cargo build` clean after config changes.
+- [x] Extend the `Config` struct in `server/src/config.rs` (or wherever it lives) with `CacheConfig` and `LimitsConfig` sub-structs. Add `Deserialize`. Wire into the existing `Config::load()` path. Add a default-fallback or fail-fast if missing — match the codebase's existing convention (Track 4's Stripe section was fail-fast; do the same).
+- [x] Verify `cargo build` clean after config changes.
 
 #### Cached adapter
 
-- [ ] Create `server/src/services/cached_data_source.rs`. Sketch:
+- [x] Create `server/src/services/cached_data_source.rs`. Sketch:
 
 ```rust
 use anilist::{AnimeDataSource, MediaType};
@@ -244,11 +267,11 @@ impl<S: AnimeDataSource + Clone + Send + Sync> AnimeDataSource for CachedDataSou
 }
 ```
 
-- [ ] `Item::into_split() -> (ItemMeta, ItemAiring)` and `Item::from_split(meta, airing) -> Item` need to live somewhere — likely `common/src/item.rs`. Define `ItemMeta` (title, episodes, format, status, etc. — the slow-changing fields) and `ItemAiring` (airing_at, next-episode, etc. — the fast-changing fields) as the two halves. Make both `Serialize + Deserialize + Clone`.
+- [x] `Item::into_split() -> (ItemMeta, ItemAiring)` and `Item::from_split(meta, airing) -> Item` need to live somewhere — likely `common/src/item.rs`. Define `ItemMeta` (title, episodes, format, status, etc. — the slow-changing fields) and `ItemAiring` (airing_at, next-episode, etc. — the fast-changing fields) as the two halves. Make both `Serialize + Deserialize + Clone`.
 
   If splitting `Item` is intrusive, an acceptable v1 alternative is to cache the whole `Item` under both keys (effectively duplicating storage but using the dual TTL gate). Pick the cleaner option in code review; the test suite should cover both possibilities.
 
-- [ ] DI in `server/src/main.rs`: replace the existing `web::Data::new(AniListClient::new(...))` with:
+- [x] DI in `server/src/main.rs`: replace the existing `web::Data::new(AniListClient::new(...))` with:
 
 ```rust
 let cached_data_source = CachedDataSource::new(
@@ -263,13 +286,13 @@ app.app_data(cached_data_source.clone());
 
 If using `dyn` boxing causes lifetime/Send/Sync friction with Actix's `web::Data`, fall back to a concrete type alias `pub type AnimeData = CachedDataSource<AniListClient>;` and inject that. Both work; the trait-object path is cleaner for future swaps but only matters once a second source impl exists.
 
-- [ ] Update controllers that previously took `web::Data<AniListClient>` to take `web::Data<dyn AnimeDataSource>` (or the alias). No behaviour change — same method calls.
+- [x] Update controllers that previously took `web::Data<AniListClient>` to take `web::Data<dyn AnimeDataSource>` (or the alias). No behaviour change — same method calls.
 
 #### Tests
 
-- [ ] Test helper: `MockAnimeDataSource` in `server/src/services/cached_data_source.rs` `#[cfg(test)] mod tests {}`. A struct with `responses: HashMap<Id, Item>` and a `panic_on_call: bool` flag. Implement `AnimeDataSource` to return preconfigured responses. Used across cache tests.
+- [x] Test helper: `MockAnimeDataSource` in `server/src/services/cached_data_source.rs` `#[cfg(test)] mod tests {}`. A struct with `responses: HashMap<Id, Item>` and a `panic_on_call: bool` flag. Implement `AnimeDataSource` to return preconfigured responses. Used across cache tests.
 
-- [ ] Tests inline in `cached_data_source.rs`:
+- [x] Tests inline in `cached_data_source.rs`:
 
 ```rust
 #[tokio::test]
@@ -325,7 +348,7 @@ async fn result_order_matches_caller_order() {
 }
 ```
 
-- [ ] TTL-separation test: harder to write without time mocking. Alternative — write a behaviour test that sets meta/airing keys with different TTLs (300s vs 1s), sleeps 2s, asserts that the next fetch only triggers an upstream call (because airing is expired but meta still cached). This is a real-time test; mark `#[ignore]` if it's flaky and run manually. Skip to a follow-up if it adds noise to CI.
+- [x] TTL-separation test: harder to write without time mocking. Alternative — write a behaviour test that sets meta/airing keys with different TTLs (300s vs 1s), sleeps 2s, asserts that the next fetch only triggers an upstream call (because airing is expired but meta still cached). This is a real-time test; mark `#[ignore]` if it's flaky and run manually. Skip to a follow-up if it adds noise to CI.
 
 ### Acceptance
 
@@ -353,7 +376,7 @@ async fn result_order_matches_caller_order() {
 
 #### Schema
 
-- [ ] sqlx migration `<n>_add_calendar_event_style.sql`:
+- [x] sqlx migration `<n>_add_calendar_event_style.sql`:
 
 ```sql
 ALTER TABLE calendars
@@ -361,37 +384,37 @@ ALTER TABLE calendars
     CHECK (event_style IN ('timed', 'all_day'));
 ```
 
-- [ ] sqlx migration `<n+1>_add_calendar_frozen_subscribe_ics.sql`:
+- [x] sqlx migration `<n+1>_add_calendar_frozen_subscribe_ics.sql`:
 
 ```sql
 ALTER TABLE calendars
     ADD COLUMN frozen_subscribe_ics TEXT;
 ```
 
-- [ ] sqlx migration `<n+2>_add_user_settings_reminder_offsets.sql`:
+- [x] sqlx migration `<n+2>_add_user_settings_reminder_offsets.sql`:
 
 ```sql
 ALTER TABLE user_settings
     ADD COLUMN reminder_offsets_minutes INTEGER[] NOT NULL DEFAULT ARRAY[30];
 ```
 
-- [ ] If `subscribe_token` is not already uniquely indexed, also add:
+- [x] If `subscribe_token` is not already uniquely indexed, also add:
 
 ```sql
 CREATE UNIQUE INDEX IF NOT EXISTS idx_calendars_subscribe_token
     ON calendars(subscribe_token);
 ```
 
-- [ ] Run `DATABASE_URL=... cargo sqlx prepare --workspace -- --all-targets` after queries are written; commit `.sqlx/` (per memory `feedback_sqlx_offline_cache`).
+- [x] Run `DATABASE_URL=... cargo sqlx prepare --workspace -- --all-targets` after queries are written; commit `.sqlx/` (per memory `feedback_sqlx_offline_cache`).
 
 #### Entity updates
 
-- [ ] `server/src/entity/calendar.rs`: add `event_style: String`, `frozen_subscribe_ics: Option<String>` fields to the `Calendar` struct. Update any `FromRow` / serialization derives. If there's a `CalendarPayload` separate from `Calendar`, add `event_style` to the payload too.
-- [ ] `server/src/entity/user_settings.rs`: add `reminder_offsets_minutes: Vec<i32>`. Update `FromRow`. If serde uses `#[serde(default)]` somewhere, set the default to `vec![30]` to match the SQL default.
+- [x] `server/src/entity/calendar.rs`: add `event_style: String`, `frozen_subscribe_ics: Option<String>` fields to the `Calendar` struct. Update any `FromRow` / serialization derives. If there's a `CalendarPayload` separate from `Calendar`, add `event_style` to the payload too.
+- [x] `server/src/entity/user_settings.rs`: add `reminder_offsets_minutes: Vec<i32>`. Update `FromRow`. If serde uses `#[serde(default)]` somewhere, set the default to `vec![30]` to match the SQL default.
 
 #### Show count service
 
-- [ ] Create `server/src/services/show_count.rs`:
+- [x] Create `server/src/services/show_count.rs`:
 
 ```rust
 use sqlx::PgPool;
@@ -458,7 +481,7 @@ impl ShowCountService {
 }
 ```
 
-- [ ] Inline tests:
+- [x] Inline tests:
 
 ```rust
 #[sqlx::test]
@@ -498,7 +521,7 @@ async fn user_already_tracks_returns_true_for_any_calendar(pool: PgPool) {
 
 #### Entitlement extensions
 
-- [ ] Add to `server/src/services/entitlement.rs`:
+- [x] Add to `server/src/services/entitlement.rs`:
 
 ```rust
 use crate::services::show_count::ShowCountService;
@@ -574,7 +597,7 @@ impl EntitlementService {
 }
 ```
 
-- [ ] Inline tests:
+- [x] Inline tests:
 
 ```rust
 #[sqlx::test]
@@ -608,7 +631,7 @@ async fn assert_can_add_show_pro_unlimited(pool: PgPool) {
 
 #### Frozen ICS service
 
-- [ ] Refactor existing inline .ics rendering into `server/src/services/ics_export.rs` first if not already done (this is the prep that Phase 2 also depends on). Expose at least:
+- [x] Refactor existing inline .ics rendering into `server/src/services/ics_export.rs` first if not already done (this is the prep that Phase 2 also depends on). Expose at least:
 
 ```rust
 pub struct IcsExportService { /* ... */ }
@@ -626,7 +649,7 @@ impl IcsExportService {
 
 For Phase 1, the reminders portion can hardcode a single 30-min `VALARM` for everyone (Phase 2 makes it tier-aware). The `event_style` portion can hardcode `'timed'` (Phase 2 wires the toggle). The point is to centralise the rendering.
 
-- [ ] Create `server/src/services/frozen_ics.rs`:
+- [x] Create `server/src/services/frozen_ics.rs`:
 
 ```rust
 use sqlx::PgPool;
@@ -701,7 +724,7 @@ impl FrozenIcsService {
 }
 ```
 
-- [ ] Inline tests:
+- [x] Inline tests:
 
 ```rust
 #[sqlx::test]
@@ -727,14 +750,14 @@ async fn clear_for_user_nulls_all_blobs(pool: PgPool) {
 
 #### Controller wiring — `PUT /calendar`
 
-- [ ] In `server/src/controllers/calendar.rs`, the `put` handler. Determine whether the request is creating a new calendar (no `id` in payload) or updating an existing one (id present). For the create branch:
+- [x] In `server/src/controllers/calendar.rs`, the `put` handler. Determine whether the request is creating a new calendar (no `id` in payload) or updating an existing one (id present). For the create branch:
 
 ```rust
 // at the top of the create branch, before insert
 entitlement.assert_can_create_calendar(user_id).await?;
 ```
 
-- [ ] For the items-diff branch (whether create or update), iterate over the items in the payload and call `assert_can_add_show` for each:
+- [x] For the items-diff branch (whether create or update), iterate over the items in the payload and call `assert_can_add_show` for each:
 
 ```rust
 for item in &payload.items {
@@ -744,7 +767,7 @@ for item in &payload.items {
 
 Idempotent already-tracked IDs return Ok immediately; only newly-introduced IDs at the cap trigger 402.
 
-- [ ] Wrap the count-then-insert in a transaction with a per-user advisory lock to prevent the multi-tab race:
+- [x] Wrap the count-then-insert in a transaction with a per-user advisory lock to prevent the multi-tab race:
 
 ```rust
 let mut tx = pool.begin().await?;
@@ -764,9 +787,9 @@ tx.commit().await?;
 
 `pg_advisory_xact_lock` is per-connection scoped to the transaction and serialises only when called with the same key; user_id is a clean key. Other users' requests are unaffected.
 
-- [ ] After the transactional commit, if owner is Free, call `frozen_ics.regenerate(calendar_id)`. Log errors but don't fail the response — the safety-net path on subscribe poll covers any holes.
+- [x] After the transactional commit, if owner is Free, call `frozen_ics.regenerate(calendar_id)`. Log errors but don't fail the response — the safety-net path on subscribe poll covers any holes.
 
-- [ ] Inline integration test:
+- [x] Inline integration test:
 
 ```rust
 #[sqlx::test]
@@ -803,7 +826,7 @@ async fn concurrent_add_at_cap_one_wins_one_402() {
 
 #### Controller wiring — subscribe endpoint
 
-- [ ] Update `subscribe_feed` (line ~300 in `calendar.rs`):
+- [x] Update `subscribe_feed` (line ~300 in `calendar.rs`):
 
 ```rust
 let cal = mapper.find_by_token(&token).await?;
@@ -848,7 +871,7 @@ match owner_tier {
 }
 ```
 
-- [ ] Add `subscription_mapper.exists_for_user(user_id) -> bool`:
+- [x] Add `subscription_mapper.exists_for_user(user_id) -> bool`:
 
 ```rust
 sqlx::query_scalar!(
@@ -857,7 +880,7 @@ sqlx::query_scalar!(
 ).fetch_one(&self.pool).await
 ```
 
-- [ ] Inline integration tests:
+- [x] Inline integration tests:
 
 ```rust
 #[sqlx::test]
@@ -882,7 +905,7 @@ async fn subscribe_token_unchanged_across_pro_free_pro(pool: PgPool) {
 
 #### Stripe webhook hooks
 
-- [ ] In `server/src/controllers/stripe.rs`, after the existing subscription-mapper update:
+- [x] In `server/src/controllers/stripe.rs`, after the existing subscription-mapper update:
 
 ```rust
 // At the end of processing customer.subscription.deleted / .updated events,
@@ -903,7 +926,7 @@ match (old_tier, new_tier) {
 }
 ```
 
-- [ ] Inline tests:
+- [x] Inline tests:
 
 ```rust
 #[sqlx::test]
@@ -924,21 +947,21 @@ async fn webhook_anilist_failure_for_one_calendar_does_not_block_others(pool: Pg
 
 #### Frontend — counters and gates
 
-- [ ] `frontend/src/services/calendars.ts`: add a method (or extend an existing one) that fetches the current show count + calendar count for the logged-in user. Could be a new `GET /api/account/usage` endpoint returning `{ shows: number, calendars: number }`, or piggyback on existing settings fetch — pick whichever fits the existing data-flow conventions (likely the latter).
+- [x] `frontend/src/services/calendars.ts`: add a method (or extend an existing one) that fetches the current show count + calendar count for the logged-in user. Could be a new `GET /api/account/usage` endpoint returning `{ shows: number, calendars: number }`, or piggyback on existing settings fetch — pick whichever fits the existing data-flow conventions (likely the latter).
 
-- [ ] `MyCalendarsPage.vue`:
+- [x] `MyCalendarsPage.vue`:
   - For Free users, render a small chip near the page heading: `t('myCalendars.calendarCounter', { current: count, max: 3 })`.
   - Disable the "New calendar" button when `count >= 3`. Click while disabled opens the existing `UpgradeInterruptModal` with reason `cap_calendars`.
   - Hide chip and don't gate button for Pro users.
   - Use `data-testid="calendar-counter-chip"` and `data-testid="new-calendar-button"`.
 
-- [ ] `EditorItemsPanel.vue` (and the mobile variant):
+- [x] `EditorItemsPanel.vue` (and the mobile variant):
   - For Free users, render a `12 / 25 shows` chip in the editor header. Use the show count derived from store / API.
   - At ≥ 80% of cap (default 20+), render a soft banner: *"Approaching your tracking limit (20 of 25). Upgrade to Pro for unlimited."* The banner is dismissible per-session.
   - At cap (25/25), disable add buttons in the search-result list when the result's media_id isn't already tracked (already-tracked items remain addable). Click on a disabled add button opens `UpgradeInterruptModal` with reason `cap_shows`.
   - Pro users see no chip, no banner, no disabled buttons.
 
-- [ ] Frontend axios layer / `services/calendars.ts`: 402 responses with `required_tier === "paid"` must trigger `UpgradeInterruptModal` with the appropriate reason code derived from a header or response body field. Add a `reason` field to the 402 response body server-side so the frontend doesn't have to infer:
+- [x] Frontend axios layer / `services/calendars.ts`: 402 responses with `required_tier === "paid"` must trigger `UpgradeInterruptModal` with the appropriate reason code derived from a header or response body field. Add a `reason` field to the 402 response body server-side so the frontend doesn't have to infer:
 
 ```rust
 // Update Error::PaymentRequired to include an optional reason
@@ -947,7 +970,7 @@ PaymentRequired { required_tier: &'static str, reason: Option<&'static str> }
 
 Then at each call site: `Error::PaymentRequired { required_tier: "paid", reason: Some("cap_calendars") }` etc. Backwards compatible: existing accent enforcement passes `None`, frontend defaults to `pro_accent` reason.
 
-- [ ] Frontend tests:
+- [x] Frontend tests:
 
 ```ts
 // MyCalendarsPage.spec.ts
@@ -1001,7 +1024,7 @@ Apply memory `feedback_account_tab_router_stub_coupling` if changes to upgrade-m
 
 #### Backend — ics_export feature work
 
-- [ ] `IcsExportService::render` flesh-out:
+- [x] `IcsExportService::render` flesh-out:
   - Load calendar (incl. `event_style`) + items + owner's `user_settings.reminder_offsets_minutes`.
   - For each item, resolve via `CachedDataSource::fetch_by_ids` (single batched call for all items).
   - For each item / episode tuple:
@@ -1018,7 +1041,7 @@ Apply memory `feedback_account_tab_router_stub_coupling` if changes to upgrade-m
       ```
     - If owner is **Free**: emit exactly one `VALARM` with `TRIGGER:-PT30M`, regardless of stored offsets. **Critical anti-bypass: this must be enforced server-side, not by trusting the stored array.**
 
-- [ ] Tests in `ics_export.rs`:
+- [x] Tests in `ics_export.rs`:
 
 ```rust
 #[sqlx::test]
@@ -1070,7 +1093,7 @@ async fn event_style_all_day_always_emits_value_date(pool: PgPool) {
 
 #### Backend — settings validation
 
-- [ ] In `server/src/controllers/user.rs`, the `update_user_settings` handler. Add validation for `reminder_offsets_minutes`:
+- [x] In `server/src/controllers/user.rs`, the `update_user_settings` handler. Add validation for `reminder_offsets_minutes`:
 
 ```rust
 const CANONICAL_REMINDER_OFFSETS: &[i32] = &[15, 30, 60, 120, 360, 720, 1440, 2880, 4320, 10080];
@@ -1088,7 +1111,7 @@ fn validate_reminder_offsets(offsets: &[i32]) -> Result<(), &'static str> {
 }
 ```
 
-- [ ] Apply at the top of the handler, before any DB write:
+- [x] Apply at the top of the handler, before any DB write:
 
 ```rust
 if let Err(code) = validate_reminder_offsets(&payload.reminder_offsets_minutes) {
@@ -1096,9 +1119,9 @@ if let Err(code) = validate_reminder_offsets(&payload.reminder_offsets_minutes) 
 }
 ```
 
-- [ ] **Critically** — do **not** reject a Free user setting non-default reminders. Per the spec, those values are stored for the eventual upgrade and ignored at .ics emission. The 200-stored-but-ignored behaviour is part of the tier-transition continuity story (memory `feedback_tier_gated_apply_pattern`).
+- [x] **Critically** — do **not** reject a Free user setting non-default reminders. Per the spec, those values are stored for the eventual upgrade and ignored at .ics emission. The 200-stored-but-ignored behaviour is part of the tier-transition continuity story (memory `feedback_tier_gated_apply_pattern`).
 
-- [ ] Tests:
+- [x] Tests:
 
 ```rust
 #[sqlx::test]
@@ -1123,9 +1146,9 @@ async fn update_settings_preserves_offsets_across_pro_to_free(pool: PgPool) {
 
 #### Backend — calendar event_style validation
 
-- [ ] In the `PUT /calendar` payload deserialization, validate `event_style` against `{"timed", "all_day"}`. Reject with 400 + `{"error":"event_style_invalid"}` for anything else. Preserve in `serde` if using `#[serde(rename_all)]` enum — `#[derive(Deserialize)] enum EventStyle { Timed, AllDay }` with proper rename works fine.
+- [x] In the `PUT /calendar` payload deserialization, validate `event_style` against `{"timed", "all_day"}`. Reject with 400 + `{"error":"event_style_invalid"}` for anything else. Preserve in `serde` if using `#[serde(rename_all)]` enum — `#[derive(Deserialize)] enum EventStyle { Timed, AllDay }` with proper rename works fine.
 
-- [ ] Test: `put_calendar_invalid_event_style_returns_400`.
+- [x] Test: `put_calendar_invalid_event_style_returns_400`.
 
 #### Frontend — Reminders section in PreferencesTab
 
