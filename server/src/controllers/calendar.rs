@@ -346,7 +346,7 @@ async fn subscribe_feed(
     security(("bearer_auth" = []))
 )]
 #[put("/calendar")]
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 async fn put(
     user_mapper: web::Data<UserMapper>,
     anilist: web::Data<CachedAnilist>,
@@ -462,13 +462,13 @@ async fn put(
         .effective_tier(user.id)
         .await
         .unwrap_or(Tier::Free);
-    if matches!(owner_tier, Tier::Free) {
-        if let Err(e) = frozen_ics.regenerate(calendar.id).await {
-            error!(
-                "put: failed to regenerate frozen_subscribe_ics for calendar {}: {e:?}",
-                calendar.id
-            );
-        }
+    if matches!(owner_tier, Tier::Free)
+        && let Err(e) = frozen_ics.regenerate(calendar.id).await
+    {
+        error!(
+            "put: failed to regenerate frozen_subscribe_ics for calendar {}: {e:?}",
+            calendar.id
+        );
     }
 
     let response_item_ids: Vec<Id> = calendar
@@ -902,7 +902,7 @@ mod integration_tests {
         )
     }
 
-    /// Build a JSON Item payload that satisfies common::item::Item's serde
+    /// Build a JSON Item payload that satisfies `common::item::Item`'s serde
     /// deserialiser. Required because Item has many nested fields and tests
     /// would otherwise hit a 400 from JSON deserialisation rather than the
     /// 402 path under test.
@@ -946,7 +946,7 @@ mod integration_tests {
     }
 
     /// Cleanup helper: removes calendar items, calendars, subscriptions, and
-    /// the user. Matches the pattern from frozen_ics tests.
+    /// the user. Matches the pattern from `frozen_ics` tests.
     async fn cleanup_user(pool: &sqlx::PgPool, user_id: i32) {
         sqlx::query(
             "DELETE FROM calendar_items WHERE calendar_id IN (SELECT id FROM calendars WHERE user_id = $1)",
@@ -1340,7 +1340,7 @@ mod integration_tests {
 
     // ─── GET /calendars/subscribe/{token} (Phase 1.3 tier branching) ─────────
 
-    /// Build a service-init-app for subscribe_feed with all required
+    /// Build a service-init-app for `subscribe_feed` with all required
     /// Phase-1.3 extractors wired.
     macro_rules! subscribe_app {
         ($pool:expr) => {{
