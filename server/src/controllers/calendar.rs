@@ -6,7 +6,7 @@ use crate::{
     error::Error,
     mappers::{calendar::CalendarMapper, user::UserMapper},
     middleware::auth::Claims,
-    services::{cached_anilist::CachedAnilist, calendar_export::generate_calendar_export},
+    services::{cached_anilist::CachedAnilist, ics_export::IcsExportService},
 };
 
 use actix_web::{HttpResponse, ResponseError, delete, get, put, web};
@@ -171,7 +171,7 @@ const fn default_page_size() -> usize {
 async fn export(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
-    anilist: web::Data<CachedAnilist>,
+    ics_export: web::Data<IcsExportService>,
     cache: web::Data<Cache>,
     id: web::Path<u64>,
     claims: Claims,
@@ -183,108 +183,54 @@ async fn export(
         }
     };
 
-    // TODO * Calendar sharing? (with permissions)
-    // TODO * Calendar public/private visibility
-    // TODO * Generate links, maybe endpoint to generate needs to be wildly different
-    // TODO * gcal integration?
-    // TODO * anilist list?
-    // TODO * Calendar templates? (predefined items)
-    // TODO * config.toml in frontend is accessible via URL and downloadable. This needs to be changed
-    // TODO * search calendar
-    // TODO * are item endpoints needed?
-
-    match calendar_mapper
+    // Ownership check stays in the handler — IcsExportService::render
+    // intentionally omits owner enforcement (it's also used by the public
+    // subscribe_feed and by FrozenIcsService).
+    let calendar_data = match calendar_mapper
         .get_calendar_by_id(*id as i32, user.id)
         .await
     {
-        Ok(calendar_data) => {
-            // TODO Check if calendar belongs to the current user or is public
-            // For now, we'll assume all calendars are user-specific
-            let item_ids: Vec<Id> = calendar_data
-                .item_ids
-                .iter()
-                .filter_map(|id| Id::new(i64::from(*id)))
-                .collect();
+        Ok(c) => c,
+        Err(e) => return e.error_response(),
+    };
 
-            if item_ids.is_empty() {
-                let filename = format!(
-                    "{}.ics",
-                    calendar_data.name.replace(' ', "_").to_lowercase()
-                );
-                return HttpResponse::Ok()
-                    .append_header(("Content-Type", "text/calendar"))
-                    .append_header((
-                        "Content-Disposition",
-                        format!("attachment; filename=\"{filename}\""),
-                    ))
-                    .body(
-                        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//anime-calendar//EN\r\nEND:VCALENDAR\r\n",
-                    );
-            }
+    let calendar_id = calendar_data.id;
+    let filename = format!(
+        "{}.ics",
+        calendar_data.name.replace(' ', "_").to_lowercase()
+    );
 
-            let items = anilist.get_items(item_ids).await;
+    let cache_key = crate::cache::generate_export_key(calendar_id);
+    let cache_ttl = CACHE_TTL_CALENDAR;
 
-            if items.is_empty() {
-                return Error::NotFound.error_response();
-            }
-
-            if let Some(id) = Id::new(calendar_data.id.into()) {
-                let calendar = Calendar {
-                    id: id.clone(),
-                    items,
-                    language: calendar_data.language.to_common_language(),
-                    name: calendar_data.name,
-                    created_at: calendar_data.created_at,
-                    updated_at: calendar_data.updated_at,
-                };
-
-                let file = generate_calendar_export(&calendar);
-
-                // Cache the export separately from the JSON response to avoid key collision
-                let cache_key = crate::cache::generate_export_key(id.to_int() as i32);
-                let cache_ttl = CACHE_TTL_CALENDAR;
-
-                // If cache is available, try to get from cache
-                match cache
-                    .cached_response(&cache_key, cache_ttl, || async { Ok(format!("{file}")) })
-                    .await
-                {
-                    Ok(cached_file) => {
-                        return HttpResponse::Ok()
-                            .append_header(("Content-Type", "text/calendar"))
-                            .append_header((
-                                "Content-Disposition",
-                                format!(
-                                    "attachment; filename=\"{}.{}\"",
-                                    calendar.name.replace(' ', "_").to_lowercase(),
-                                    "ics"
-                                ),
-                            ))
-                            .body(cached_file);
-                    }
-                    Err(e) => {
-                        // Log error but continue with regular processing
-                        error!("Cache error: {e:?}");
-                    }
-                }
-
-                HttpResponse::Ok()
-                    .append_header(("Content-Type", "text/calendar"))
-                    .append_header((
-                        "Content-Disposition",
-                        format!(
-                            "attachment; filename=\"{}.{}\"",
-                            calendar.name.replace(' ', "_").to_lowercase(),
-                            "ics"
-                        ),
-                    ))
-                    .body(format!("{file}"))
-            } else {
-                Error::NotFound.error_response()
-            }
-        }
-        Err(e) => e.error_response(),
+    // Cache hit short-circuit. Cache errors are non-fatal (we still render
+    // fresh below).
+    if let Ok(Some(cached)) = cache.get::<String>(&cache_key).await {
+        return HttpResponse::Ok()
+            .append_header(("Content-Type", "text/calendar"))
+            .append_header((
+                "Content-Disposition",
+                format!("attachment; filename=\"{filename}\""),
+            ))
+            .body(cached);
     }
+
+    let body = match ics_export.render(calendar_id).await {
+        Ok(s) => s,
+        Err(err) => return err.error_response(),
+    };
+
+    if let Err(e) = cache.set(&cache_key, &body, cache_ttl).await {
+        error!("export: failed to write cache: {e:?}");
+    }
+
+    HttpResponse::Ok()
+        .append_header(("Content-Type", "text/calendar"))
+        .append_header((
+            "Content-Disposition",
+            format!("attachment; filename=\"{filename}\""),
+        ))
+        .body(body)
 }
 
 #[utoipa::path(
@@ -300,62 +246,37 @@ async fn export(
 #[get("/calendars/subscribe/{token}")]
 async fn subscribe_feed(
     calendar_mapper: web::Data<CalendarMapper>,
-    anilist: web::Data<CachedAnilist>,
+    ics_export: web::Data<IcsExportService>,
     cache: web::Data<Cache>,
     token: web::Path<String>,
 ) -> HttpResponse {
-    match calendar_mapper.get_calendar_by_token(&token).await {
-        Ok(calendar_data) => {
-            let item_ids: Vec<Id> = calendar_data
-                .item_ids
-                .iter()
-                .filter_map(|id| Id::new(i64::from(*id)))
-                .collect();
+    let calendar_data = match calendar_mapper.get_calendar_by_token(&token).await {
+        Ok(c) => c,
+        Err(e) => return e.error_response(),
+    };
+    let calendar_id = calendar_data.id;
 
-            let items = anilist.get_items(item_ids).await;
+    let cache_key = format!("subscribe:{}", token.as_str());
+    let cache_ttl = CACHE_TTL_ITEM;
 
-            if items.is_empty() {
-                return Error::NotFound.error_response();
-            }
-
-            let Some(id) = Id::new(calendar_data.id.into()) else {
-                return Error::NotFound.error_response();
-            };
-
-            let calendar = Calendar {
-                id: id.clone(),
-                items,
-                language: calendar_data.language.to_common_language(),
-                name: calendar_data.name,
-                created_at: calendar_data.created_at,
-                updated_at: calendar_data.updated_at,
-            };
-
-            let file = generate_calendar_export(&calendar);
-
-            let cache_key = format!("subscribe:{}", token.as_str());
-            let cache_ttl = CACHE_TTL_ITEM;
-
-            match cache
-                .cached_response(&cache_key, cache_ttl, || async { Ok(format!("{file}")) })
-                .await
-            {
-                Ok(cached_file) => {
-                    return HttpResponse::Ok()
-                        .append_header(("Content-Type", "text/calendar; charset=utf-8"))
-                        .body(cached_file);
-                }
-                Err(e) => {
-                    error!("Cache error: {e:?}");
-                }
-            }
-
-            HttpResponse::Ok()
-                .append_header(("Content-Type", "text/calendar; charset=utf-8"))
-                .body(format!("{file}"))
-        }
-        Err(e) => e.error_response(),
+    if let Ok(Some(cached)) = cache.get::<String>(&cache_key).await {
+        return HttpResponse::Ok()
+            .append_header(("Content-Type", "text/calendar; charset=utf-8"))
+            .body(cached);
     }
+
+    let body = match ics_export.render(calendar_id).await {
+        Ok(s) => s,
+        Err(err) => return err.error_response(),
+    };
+
+    if let Err(e) = cache.set(&cache_key, &body, cache_ttl).await {
+        error!("subscribe_feed: failed to write cache: {e:?}");
+    }
+
+    HttpResponse::Ok()
+        .append_header(("Content-Type", "text/calendar; charset=utf-8"))
+        .body(body)
 }
 
 #[utoipa::path(
