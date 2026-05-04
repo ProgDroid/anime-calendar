@@ -112,6 +112,16 @@ mod airing_count_tests {
     }
 }
 
+/// Accepted values for `CalendarRequest::event_style`. Mirrors the
+/// `calendars.event_style` column shape — `"timed"` (DTSTART:datetime) or
+/// `"all_day"` (DTSTART;VALUE=DATE). Everything else returns 400 with
+/// `{"error":"event_style_invalid"}`.
+const VALID_EVENT_STYLES: &[&str] = &["timed", "all_day"];
+
+fn default_event_style() -> String {
+    "timed".to_owned()
+}
+
 #[derive(Deserialize, Serialize, utoipa::ToSchema)]
 pub struct CalendarRequest {
     #[serde(default)]
@@ -120,6 +130,10 @@ pub struct CalendarRequest {
     pub items: Vec<Item>,
     pub language: Language,
     pub name: String,
+    /// `"timed"` (default) or `"all_day"`. Drives DTSTART format in the
+    /// rendered .ics. Validated on the server; unknown values → 400.
+    #[serde(default = "default_event_style")]
+    pub event_style: String,
 }
 
 impl CalendarRequest {
@@ -373,6 +387,11 @@ async fn put(
         }));
     }
 
+    if !VALID_EVENT_STYLES.contains(&body.event_style.as_str()) {
+        return HttpResponse::BadRequest()
+            .json(serde_json::json!({"error": "event_style_invalid"}));
+    }
+
     if body.items.len() > MAX_ITEMS {
         return Error::InvalidRequest.error_response();
     }
@@ -408,7 +427,7 @@ async fn put(
         user_id: user.id,
         created_at: NaiveDateTime::default(),
         updated_at: NaiveDateTime::default(),
-        event_style: "timed".to_owned(),
+        event_style: body.event_style.clone(),
         frozen_subscribe_ics: None,
     };
 
@@ -1140,6 +1159,104 @@ mod integration_tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
+
+        cleanup_user(&pool, user.id).await;
+    }
+
+    // ─── PUT /calendar — event_style validation (Phase 2a) ───────────────────
+
+    #[tokio::test]
+    async fn put_calendar_invalid_event_style_returns_400() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let app = put_app!(pool.clone(), &limits(3, 25));
+        let req = test::TestRequest::put()
+            .uri("/calendar")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "id": 0,
+                "name": "Bad",
+                "language": "english",
+                "items": [],
+                "event_style": "foo"
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
+        let body: Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"], "event_style_invalid");
+
+        cleanup_user(&pool, user.id).await;
+    }
+
+    #[tokio::test]
+    async fn put_calendar_event_style_timed_persists() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let app = put_app!(pool.clone(), &limits(3, 25));
+        let req = test::TestRequest::put()
+            .uri("/calendar")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "id": 0,
+                "name": "Timed Cal",
+                "language": "english",
+                "items": [],
+                "event_style": "timed"
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        // Empty items branch returns 404 from the existing handler logic
+        // (anilist.get_items is empty), but the calendar row IS created
+        // before that branch. Verify the row's event_style.
+        // Tolerate either OK (with items) or NOT_FOUND (empty items branch).
+        assert!(
+            matches!(resp.status(), StatusCode::OK | StatusCode::NOT_FOUND),
+            "unexpected status: {}",
+            resp.status()
+        );
+        let stored: String = sqlx::query_scalar(
+            "SELECT event_style FROM calendars WHERE user_id = $1 AND name = 'Timed Cal'",
+        )
+        .bind(user.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(stored, "timed");
+
+        cleanup_user(&pool, user.id).await;
+    }
+
+    #[tokio::test]
+    async fn put_calendar_event_style_all_day_persists() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let app = put_app!(pool.clone(), &limits(3, 25));
+        let req = test::TestRequest::put()
+            .uri("/calendar")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "id": 0,
+                "name": "All Day Cal",
+                "language": "english",
+                "items": [],
+                "event_style": "all_day"
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert!(
+            matches!(resp.status(), StatusCode::OK | StatusCode::NOT_FOUND),
+            "unexpected status: {}",
+            resp.status()
+        );
+        let stored: String = sqlx::query_scalar(
+            "SELECT event_style FROM calendars WHERE user_id = $1 AND name = 'All Day Cal'",
+        )
+        .bind(user.id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(stored, "all_day");
 
         cleanup_user(&pool, user.id).await;
     }
