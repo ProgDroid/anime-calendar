@@ -43,7 +43,7 @@ async fn main() -> ServerResult<()> {
         server::services::show_count::ShowCountService::new(show_count_pool);
     let entitlement_service = EntitlementService::new(
         subscription_mapper.clone(),
-        show_count_service,
+        show_count_service.clone(),
         &settings.limits,
     );
 
@@ -120,6 +120,7 @@ async fn main() -> ServerResult<()> {
         stripe_event_mapper,
         email_service,
         entitlement_service,
+        show_count_service,
         stripe_client,
         stripe_config,
         controller_pool,

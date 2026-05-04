@@ -21,9 +21,9 @@ use crate::{
     cache::Cache,
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig, StripeConfig},
     controllers::{
-        auth, calendar, email_verification, item, items, oauth, password_reset, public_config,
-        refresh, stripe as stripe_controller, stripe_webhook as stripe_webhook_controller,
-        subscription as subscription_controller, user,
+        account, auth, calendar, email_verification, item, items, oauth, password_reset,
+        public_config, refresh, stripe as stripe_controller,
+        stripe_webhook as stripe_webhook_controller, subscription as subscription_controller, user,
     },
     error::Error,
     mappers::{
@@ -35,7 +35,7 @@ use crate::{
     openapi::ApiDoc,
     services::{
         cached_anilist::CachedAnilist, email::EmailService, entitlement::EntitlementService,
-        frozen_ics::FrozenIcsService, ics_export::IcsExportService,
+        frozen_ics::FrozenIcsService, ics_export::IcsExportService, show_count::ShowCountService,
     },
     ServerResult,
 };
@@ -113,6 +113,7 @@ pub fn start(
     stripe_event_mapper: StripeEventMapper,
     email_service: EmailService,
     entitlement_service: EntitlementService,
+    show_count_service: ShowCountService,
     stripe_client: StripeClient,
     stripe_config: StripeConfig,
     pg_pool: sqlx::PgPool,
@@ -223,6 +224,7 @@ pub fn start(
             .app_data(web::Data::new(stripe_event_mapper.clone()))
             .app_data(web::Data::new(email_service.clone()))
             .app_data(web::Data::new(entitlement_service.clone()))
+            .app_data(web::Data::new(show_count_service.clone()))
             .app_data(web::Data::new(stripe_client.clone()))
             .app_data(web::Data::new(stripe_config.clone()))
             .app_data(web::Data::new(app_base_url.clone()))
@@ -259,6 +261,7 @@ pub fn start(
             .service(stripe_controller::create_portal_session)
             .service(stripe_webhook_controller::stripe_webhook)
             .service(subscription_controller::get_my_subscription)
+            .service(account::get_usage)
     })
     .bind(format!("{host}:{port}"))?
     .run())

@@ -1,12 +1,13 @@
 #![allow(clippy::needless_for_each)]
 
 use utoipa::{
-    Modify, OpenApi,
     openapi::security::{HttpAuthScheme, HttpBuilder, SecurityScheme},
+    Modify, OpenApi,
 };
 
 use crate::{
     controllers::{
+        account::UsageResponse,
         auth::{AuthResponse, ErrorResponse, LoginRequest, RegisterRequest},
         calendar::{CalendarRequest, PageCalendar, PaginatedResponse, PaginationInfo},
         oauth::{GoogleOAuthRequest, GoogleOAuthResponse},
@@ -67,6 +68,8 @@ impl Modify for BearerAuth {
         crate::controllers::email_verification::resend_verification,
         // oauth
         crate::controllers::oauth::google_oauth,
+        // account (free-tier usage counts)
+        crate::controllers::account::get_usage,
         // user
         crate::controllers::user::get_user_details,
         crate::controllers::user::update_user,
@@ -124,6 +127,8 @@ impl Modify for BearerAuth {
         PaginatedResponse,
         PaginationInfo,
         EntityLanguage,
+        // account types
+        UsageResponse,
         // subscription / stripe types
         BillingInterval,
         CheckoutRequest,
