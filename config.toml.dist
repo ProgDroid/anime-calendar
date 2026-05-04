@@ -50,3 +50,15 @@ from_address = "noreply@example.com"
 enabled = true
 host = "127.0.0.1"
 port = 9090
+
+[cache]
+metadata_ttl_seconds       = 86400
+airing_ttl_seconds         = 900
+search_ttl_seconds         = 3600
+calendar_items_ttl_seconds = 300
+export_ttl_seconds         = 300
+
+[limits]
+free_calendar_limit = 3
+free_show_cap       = 25
+pro_max_reminders   = 5

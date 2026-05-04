@@ -31,6 +31,10 @@ pub struct Server {
     pub stripe: StripeConfig,
     #[serde(default)]
     pub reconcile: ReconcileConfig,
+    #[serde(default)]
+    pub cache: CacheConfig,
+    #[serde(default)]
+    pub limits: LimitsConfig,
 }
 
 #[must_use]
@@ -69,6 +73,8 @@ impl Default for Server {
             app: AppConfig::default(),
             stripe: StripeConfig::default(),
             reconcile: ReconcileConfig::default(),
+            cache: CacheConfig::default(),
+            limits: LimitsConfig::default(),
         }
     }
 }
@@ -163,6 +169,83 @@ impl Default for ReconcileConfig {
 
 const fn default_reconcile_interval_secs() -> u64 {
     3600
+}
+
+/// TTL settings (in seconds) for the per-item / per-calendar / search /
+/// export cache layers. Lower TTLs trade staleness for cache miss rate.
+/// Metadata is stable; airing schedule changes faster.
+#[derive(Debug, Deserialize, Clone)]
+pub struct CacheConfig {
+    #[serde(default = "default_cache_metadata_ttl_seconds")]
+    pub metadata_ttl_seconds: u64,
+    #[serde(default = "default_cache_airing_ttl_seconds")]
+    pub airing_ttl_seconds: u64,
+    #[serde(default = "default_cache_search_ttl_seconds")]
+    pub search_ttl_seconds: u64,
+    #[serde(default = "default_cache_calendar_items_ttl_seconds")]
+    pub calendar_items_ttl_seconds: u64,
+    #[serde(default = "default_cache_export_ttl_seconds")]
+    pub export_ttl_seconds: u64,
+}
+
+const fn default_cache_metadata_ttl_seconds() -> u64 {
+    86_400
+} // 24h
+const fn default_cache_airing_ttl_seconds() -> u64 {
+    900
+} // 15m
+const fn default_cache_search_ttl_seconds() -> u64 {
+    3_600
+} // 1h
+const fn default_cache_calendar_items_ttl_seconds() -> u64 {
+    300
+} // 5m
+const fn default_cache_export_ttl_seconds() -> u64 {
+    300
+} // 5m
+
+impl Default for CacheConfig {
+    fn default() -> Self {
+        Self {
+            metadata_ttl_seconds: default_cache_metadata_ttl_seconds(),
+            airing_ttl_seconds: default_cache_airing_ttl_seconds(),
+            search_ttl_seconds: default_cache_search_ttl_seconds(),
+            calendar_items_ttl_seconds: default_cache_calendar_items_ttl_seconds(),
+            export_ttl_seconds: default_cache_export_ttl_seconds(),
+        }
+    }
+}
+
+/// Free-tier caps and Pro-tier ceilings. Read by the entitlement service
+/// to gate calendar creation, show tracking, and per-event reminder count.
+#[derive(Debug, Deserialize, Clone)]
+pub struct LimitsConfig {
+    #[serde(default = "default_free_calendar_limit")]
+    pub free_calendar_limit: u32,
+    #[serde(default = "default_free_show_cap")]
+    pub free_show_cap: u32,
+    #[serde(default = "default_pro_max_reminders")]
+    pub pro_max_reminders: u32,
+}
+
+const fn default_free_calendar_limit() -> u32 {
+    3
+}
+const fn default_free_show_cap() -> u32 {
+    25
+}
+const fn default_pro_max_reminders() -> u32 {
+    5
+}
+
+impl Default for LimitsConfig {
+    fn default() -> Self {
+        Self {
+            free_calendar_limit: default_free_calendar_limit(),
+            free_show_cap: default_free_show_cap(),
+            pro_max_reminders: default_pro_max_reminders(),
+        }
+    }
 }
 
 #[derive(Debug, Deserialize, Clone, Default)]
