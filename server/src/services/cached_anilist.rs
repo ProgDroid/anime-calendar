@@ -234,7 +234,7 @@ mod tests {
 
     /// Half-cached (only meta, no airing) — verify the adapter treats this
     /// as a miss and refetches. Marked `#[ignore]` because hitting upstream
-    /// AniList in CI is expensive without a network mock; kept as a contract
+    /// `AniList` in CI is expensive without a network mock; kept as a contract
     /// check for manual runs.
     #[tokio::test]
     #[ignore = "would hit AniList for the missing id; manual run only"]
