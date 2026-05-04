@@ -35,6 +35,7 @@ use crate::{
     openapi::ApiDoc,
     services::{
         cached_anilist::CachedAnilist, email::EmailService, entitlement::EntitlementService,
+        frozen_ics::FrozenIcsService, ics_export::IcsExportService,
     },
     ServerResult,
 };
@@ -98,6 +99,8 @@ impl KeyExtractor for WebhookExemptKeyExtractor {
 pub fn start(
     config: ServerConfig,
     cached_anilist: CachedAnilist,
+    ics_export: IcsExportService,
+    frozen_ics: FrozenIcsService,
     google_oauth: GoogleOauth,
     cache: Cache,
     user_mapper: UserMapper,
@@ -206,6 +209,8 @@ pub fn start(
             .app_data(web::Data::new(calendar_mapper.clone()))
             .app_data(web::Data::new(user_settings_mapper.clone()))
             .app_data(web::Data::new(cached_anilist.clone()))
+            .app_data(web::Data::new(ics_export.clone()))
+            .app_data(web::Data::new(frozen_ics.clone()))
             .app_data(web::Data::new(google_oauth.clone()))
             .app_data(web::Data::new(cache.clone()))
             .app_data(web::Data::new(jwt_secret.clone()))
