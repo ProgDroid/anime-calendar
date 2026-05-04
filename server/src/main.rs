@@ -96,6 +96,13 @@ async fn main() -> ServerResult<()> {
     let frozen_ics =
         server::services::frozen_ics::FrozenIcsService::new(ics_pool, ics_export.clone());
 
+    // Dedicated pool for the PUT /calendar advisory-locked transaction.
+    // Cheap (Arc-backed) and keeps the controller independent of any single
+    // mapper's lifetime.
+    let controller_pool = server::mappers::database::Database::new(db_config.clone())
+        .await?
+        .pool;
+
     Ok(server::server::start(
         settings,
         cached_anilist,
@@ -115,6 +122,7 @@ async fn main() -> ServerResult<()> {
         entitlement_service,
         stripe_client,
         stripe_config,
+        controller_pool,
     )?
     .await?)
 }

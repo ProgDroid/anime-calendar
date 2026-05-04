@@ -2,11 +2,17 @@
 
 use crate::{
     cache::{CACHE_TTL_CALENDAR, CACHE_TTL_ITEM, CACHE_TTL_SEARCH, Cache},
-    entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
+    entity::{
+        calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
+        subscription::Tier,
+    },
     error::Error,
-    mappers::{calendar::CalendarMapper, user::UserMapper},
+    mappers::{calendar::CalendarMapper, subscription::SubscriptionMapper, user::UserMapper},
     middleware::auth::Claims,
-    services::{cached_anilist::CachedAnilist, ics_export::IcsExportService},
+    services::{
+        cached_anilist::CachedAnilist, entitlement::EntitlementService,
+        frozen_ics::FrozenIcsService, ics_export::IcsExportService,
+    },
 };
 
 use actix_web::{HttpResponse, ResponseError, delete, get, put, web};
@@ -247,7 +253,10 @@ async fn export(
 async fn subscribe_feed(
     calendar_mapper: web::Data<CalendarMapper>,
     ics_export: web::Data<IcsExportService>,
+    frozen_ics: web::Data<FrozenIcsService>,
     cache: web::Data<Cache>,
+    entitlement: web::Data<EntitlementService>,
+    subscription_mapper: web::Data<SubscriptionMapper>,
     token: web::Path<String>,
 ) -> HttpResponse {
     let calendar_data = match calendar_mapper.get_calendar_by_token(&token).await {
@@ -255,25 +264,69 @@ async fn subscribe_feed(
         Err(e) => return e.error_response(),
     };
     let calendar_id = calendar_data.id;
+    let owner_id = calendar_data.user_id;
 
-    let cache_key = format!("subscribe:{}", token.as_str());
-    let cache_ttl = CACHE_TTL_ITEM;
-
-    if let Ok(Some(cached)) = cache.get::<String>(&cache_key).await {
-        return HttpResponse::Ok()
-            .append_header(("Content-Type", "text/calendar; charset=utf-8"))
-            .body(cached);
-    }
-
-    let body = match ics_export.render(calendar_id).await {
-        Ok(s) => s,
-        Err(err) => return err.error_response(),
+    let owner_tier = match entitlement.effective_tier(owner_id).await {
+        Ok(t) => t,
+        Err(e) => return e.error_response(),
     };
 
-    if let Err(e) = cache.set(&cache_key, &body, cache_ttl).await {
-        error!("subscribe_feed: failed to write cache: {e:?}");
+    // Paid: live render with controller-level cache.
+    if matches!(owner_tier, Tier::Paid) {
+        let cache_key = format!("subscribe:{}", token.as_str());
+        let cache_ttl = CACHE_TTL_ITEM;
+
+        if let Ok(Some(cached)) = cache.get::<String>(&cache_key).await {
+            return HttpResponse::Ok()
+                .append_header(("Content-Type", "text/calendar; charset=utf-8"))
+                .body(cached);
+        }
+
+        let body = match ics_export.render(calendar_id).await {
+            Ok(s) => s,
+            Err(err) => return err.error_response(),
+        };
+
+        if let Err(e) = cache.set(&cache_key, &body, cache_ttl).await {
+            error!("subscribe_feed: failed to write cache: {e:?}");
+        }
+
+        return HttpResponse::Ok()
+            .append_header(("Content-Type", "text/calendar; charset=utf-8"))
+            .body(body);
     }
 
+    // Free: serve the frozen blob if present (the blob IS the cache — no
+    // controller-level cache layer). If null, decide between 404 (never
+    // had Pro) and lazy regen (had Pro before; blob was never written).
+    if let Some(blob) = calendar_data.frozen_subscribe_ics.clone() {
+        return HttpResponse::Ok()
+            .append_header(("Content-Type", "text/calendar; charset=utf-8"))
+            .body(blob);
+    }
+
+    let has_history = match subscription_mapper
+        .find_latest_customer_id_for_user(owner_id)
+        .await
+    {
+        Ok(opt) => opt.is_some(),
+        Err(e) => return e.error_response(),
+    };
+
+    if !has_history {
+        return Error::NotFound.error_response();
+    }
+
+    log::warn!(
+        "subscribe_feed: frozen_subscribe_ics null for previously-paid user {owner_id} on calendar {calendar_id}; lazy regenerating",
+    );
+    if let Err(e) = frozen_ics.regenerate(calendar_id).await {
+        return e.error_response();
+    }
+    let body = match ics_export.render(calendar_id).await {
+        Ok(s) => s,
+        Err(e) => return e.error_response(),
+    };
     HttpResponse::Ok()
         .append_header(("Content-Type", "text/calendar; charset=utf-8"))
         .body(body)
@@ -293,11 +346,14 @@ async fn subscribe_feed(
     security(("bearer_auth" = []))
 )]
 #[put("/calendar")]
+#[allow(clippy::too_many_arguments)]
 async fn put(
     user_mapper: web::Data<UserMapper>,
-    calendar_mapper: web::Data<CalendarMapper>,
     anilist: web::Data<CachedAnilist>,
     cache: web::Data<Cache>,
+    entitlement: web::Data<EntitlementService>,
+    frozen_ics: web::Data<FrozenIcsService>,
+    pool: web::Data<sqlx::PgPool>,
     body: web::Json<CalendarRequest>,
     claims: Claims,
 ) -> HttpResponse {
@@ -327,6 +383,22 @@ async fn put(
         .map(|item| item.id.to_int() as i32)
         .collect();
 
+    let is_create = body.id.to_int() == 0;
+
+    // Fast-path tier check (outside lock). Best-effort: short-circuits
+    // obviously-blocked requests cheaply. The authoritative re-check runs
+    // inside the advisory-locked transaction below.
+    if is_create
+        && let Err(e) = entitlement.assert_can_create_calendar(user.id).await
+    {
+        return e.error_response();
+    }
+    for &item_id in &item_ids {
+        if let Err(e) = entitlement.assert_can_add_show(user.id, item_id).await {
+            return e.error_response();
+        }
+    }
+
     let calendar_entity = CalendarEntity {
         id: body.id.to_int() as i32,
         item_ids,
@@ -340,42 +412,94 @@ async fn put(
         frozen_subscribe_ics: None,
     };
 
-    // Create calendar with the authenticated user's ID
-    match calendar_mapper.save_calendar(calendar_entity).await {
-        Ok(calendar) => {
-            let item_ids: Vec<Id> = calendar
-                .item_ids
-                .iter()
-                .filter_map(|id| Id::new(i64::from(*id)))
-                .collect();
+    // Acquire transaction + per-user advisory lock. Anything inside the lock
+    // serialises against concurrent PUTs from the same user (multi-tab race).
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return Error::Database(e).error_response(),
+    };
+    if let Err(e) = sqlx::query!("SELECT pg_advisory_xact_lock($1)", i64::from(user.id))
+        .execute(&mut *tx)
+        .await
+    {
+        return Error::Database(e).error_response();
+    }
 
-            let items = anilist.get_items(item_ids).await;
-
-            if items.is_empty() {
-                return Error::NotFound.error_response();
-            }
-
-            if let Some(id) = Id::new(calendar.id.into()) {
-                // Invalidate cache for this calendar (controller-level invalidation)
-                let _ = cache.invalidate_calendar(calendar.id).await;
-                let _ = cache.invalidate_user_paged_calendars(user.id).await;
-                let _ = cache
-                    .invalidate_subscription(&calendar.subscription_token)
-                    .await;
-
-                HttpResponse::Ok().json(Calendar {
-                    id,
-                    items,
-                    language: calendar.language.to_common_language(),
-                    name: calendar.name,
-                    created_at: calendar.created_at,
-                    updated_at: calendar.updated_at,
-                })
-            } else {
-                Error::NotFound.error_response()
-            }
+    // Authoritative cap re-check inside the lock. Pool-bound checks would
+    // observe pre-INSERT state from concurrent transactions and bypass the
+    // lock; the in-tx variants run on the locked connection.
+    if is_create
+        && let Err(e) = entitlement
+            .assert_can_create_calendar_in_tx(&mut tx, user.id)
+            .await
+    {
+        return e.error_response();
+    }
+    for item_id in &calendar_entity.item_ids {
+        if let Err(e) = entitlement
+            .assert_can_add_show_in_tx(&mut tx, user.id, *item_id)
+            .await
+        {
+            return e.error_response();
         }
-        Err(e) => e.error_response(),
+    }
+
+    // Save calendar via _with helpers so the write participates in the
+    // locked transaction.
+    let calendar = match CalendarMapper::save_calendar_with(&mut tx, calendar_entity).await {
+        Ok(c) => c,
+        Err(e) => return e.error_response(),
+    };
+
+    if let Err(e) = tx.commit().await {
+        return Error::Database(e).error_response();
+    }
+
+    // Best-effort post-commit refresh of the frozen subscribe blob for Free
+    // owners. Failures here are non-fatal: subscribe_feed has a lazy-regen
+    // safety net for null blobs on previously-paid users.
+    let owner_tier = entitlement
+        .effective_tier(user.id)
+        .await
+        .unwrap_or(Tier::Free);
+    if matches!(owner_tier, Tier::Free) {
+        if let Err(e) = frozen_ics.regenerate(calendar.id).await {
+            error!(
+                "put: failed to regenerate frozen_subscribe_ics for calendar {}: {e:?}",
+                calendar.id
+            );
+        }
+    }
+
+    let response_item_ids: Vec<Id> = calendar
+        .item_ids
+        .iter()
+        .filter_map(|id| Id::new(i64::from(*id)))
+        .collect();
+
+    let items = anilist.get_items(response_item_ids).await;
+
+    if items.is_empty() {
+        return Error::NotFound.error_response();
+    }
+
+    if let Some(id) = Id::new(calendar.id.into()) {
+        let _ = cache.invalidate_calendar(calendar.id).await;
+        let _ = cache.invalidate_user_paged_calendars(user.id).await;
+        let _ = cache
+            .invalidate_subscription(&calendar.subscription_token)
+            .await;
+
+        HttpResponse::Ok().json(Calendar {
+            id,
+            items,
+            language: calendar.language.to_common_language(),
+            name: calendar.name,
+            created_at: calendar.created_at,
+            updated_at: calendar.updated_at,
+        })
+    } else {
+        Error::NotFound.error_response()
     }
 }
 
@@ -729,19 +853,129 @@ mod integration_tests {
 
     // ─── PUT /calendar (validation / auth) ───────────────────────────────────
 
+    use crate::config::server::LimitsConfig;
+    use crate::mappers::subscription::SubscriptionMapper;
+    use crate::services::entitlement::EntitlementService;
+    use crate::services::frozen_ics::FrozenIcsService;
+    use crate::services::ics_export::IcsExportService;
+    use crate::services::show_count::ShowCountService;
+
+    fn limits(free_calendar_limit: u32, free_show_cap: u32) -> LimitsConfig {
+        LimitsConfig {
+            free_calendar_limit,
+            free_show_cap,
+            pro_max_reminders: 5,
+        }
+    }
+
+    /// Build the App configured for PUT-handler tests with the supplied
+    /// limits. Returned as a closure-callable inline via `init_service` so
+    /// tests can keep the concrete `actix_web::test` service type.
+    async fn build_put_services(
+        pool: sqlx::PgPool,
+        l: &LimitsConfig,
+    ) -> (
+        web::Data<UserMapper>,
+        web::Data<CalendarMapper>,
+        web::Data<CachedAnilist>,
+        web::Data<Cache>,
+        web::Data<EntitlementService>,
+        web::Data<FrozenIcsService>,
+        web::Data<sqlx::PgPool>,
+    ) {
+        let cached = cached_anilist_data().await;
+        let entitlement = EntitlementService::new(
+            SubscriptionMapper::from_pool(pool.clone()),
+            ShowCountService::new(pool.clone()),
+            l,
+        );
+        let ics_export = IcsExportService::new(pool.clone(), (**cached).clone());
+        let frozen_ics = FrozenIcsService::new(pool.clone(), ics_export);
+        (
+            web::Data::new(UserMapper::from_pool(pool.clone())),
+            web::Data::new(CalendarMapper::from_pool(pool.clone())),
+            cached,
+            web::Data::new(Cache::for_tests().await),
+            web::Data::new(entitlement),
+            web::Data::new(frozen_ics),
+            web::Data::new(pool),
+        )
+    }
+
+    /// Build a JSON Item payload that satisfies common::item::Item's serde
+    /// deserialiser. Required because Item has many nested fields and tests
+    /// would otherwise hit a 400 from JSON deserialisation rather than the
+    /// 402 path under test.
+    fn item_json(id: i64) -> serde_json::Value {
+        serde_json::json!({
+            "id": id,
+            "id_mal": null,
+            "title": { "english": "x", "native": "x", "romaji": "x" },
+            "airing_schedule": [],
+            "episode_duration": 0,
+            "media_type": "ANIME",
+            "cover_image": {
+                "extra_large": "",
+                "large": "",
+                "medium": "",
+                "color": ""
+            },
+            "banner_image": "",
+            "recommendations": []
+        })
+    }
+
+    macro_rules! put_app {
+        ($pool:expr, $limits:expr) => {{
+            let (um, cm, ca, ch, ent, fi, pp) =
+                build_put_services($pool, $limits).await;
+            test::init_service(
+                App::new()
+                    .app_data(um)
+                    .app_data(cm)
+                    .app_data(ca)
+                    .app_data(ch)
+                    .app_data(ent)
+                    .app_data(fi)
+                    .app_data(pp)
+                    .app_data(jwt_data())
+                    .service(put),
+            )
+            .await
+        }};
+    }
+
+    /// Cleanup helper: removes calendar items, calendars, subscriptions, and
+    /// the user. Matches the pattern from frozen_ics tests.
+    async fn cleanup_user(pool: &sqlx::PgPool, user_id: i32) {
+        sqlx::query(
+            "DELETE FROM calendar_items WHERE calendar_id IN (SELECT id FROM calendars WHERE user_id = $1)",
+        )
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query("DELETE FROM calendars WHERE user_id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM subscriptions WHERE user_id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
     #[tokio::test]
     async fn put_calendar_without_token_returns_401() {
         let pool = crate::test_helpers::test_pool().await;
-        let app = test::init_service(
-            App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
-                .app_data(cached_anilist_data().await)
-                .app_data(web::Data::new(Cache::for_tests().await))
-                .app_data(jwt_data())
-                .service(put),
-        )
-        .await;
+        let app = put_app!(pool.clone(), &limits(3, 25));
         let req = test::TestRequest::put()
             .uri("/calendar")
             .set_json(serde_json::json!({ "id": 0, "name": "My Cal", "language": "english", "items": [] }))
@@ -756,16 +990,7 @@ mod integration_tests {
     async fn put_calendar_empty_name_returns_400() {
         let pool = crate::test_helpers::test_pool().await;
         let user = seed_user(&pool).await;
-        let app = test::init_service(
-            App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
-                .app_data(cached_anilist_data().await)
-                .app_data(web::Data::new(Cache::for_tests().await))
-                .app_data(jwt_data())
-                .service(put),
-        )
-        .await;
+        let app = put_app!(pool.clone(), &limits(3, 25));
         let req = test::TestRequest::put()
             .uri("/calendar")
             .insert_header(("Cookie", format!("auth_token={}", user.token)))
@@ -777,22 +1002,14 @@ mod integration_tests {
             test::call_service(&app, req).await.status(),
             StatusCode::BAD_REQUEST
         );
+        cleanup_user(&pool, user.id).await;
     }
 
     #[tokio::test]
     async fn put_calendar_name_too_long_returns_400() {
         let pool = crate::test_helpers::test_pool().await;
         let user = seed_user(&pool).await;
-        let app = test::init_service(
-            App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
-                .app_data(cached_anilist_data().await)
-                .app_data(web::Data::new(Cache::for_tests().await))
-                .app_data(jwt_data())
-                .service(put),
-        )
-        .await;
+        let app = put_app!(pool.clone(), &limits(3, 25));
         let long_name = "a".repeat(101);
         let req = test::TestRequest::put()
             .uri("/calendar")
@@ -803,22 +1020,14 @@ mod integration_tests {
             test::call_service(&app, req).await.status(),
             StatusCode::BAD_REQUEST
         );
+        cleanup_user(&pool, user.id).await;
     }
 
     #[tokio::test]
     async fn put_calendar_too_many_items_returns_400() {
         let pool = crate::test_helpers::test_pool().await;
         let user = seed_user(&pool).await;
-        let app = test::init_service(
-            App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
-                .app_data(cached_anilist_data().await)
-                .app_data(web::Data::new(Cache::for_tests().await))
-                .app_data(jwt_data())
-                .service(put),
-        )
-        .await;
+        let app = put_app!(pool.clone(), &limits(3, 25));
         // Build a vec of 2001 minimal items — one over the cap.
         let items: Vec<serde_json::Value> = (0..2001)
             .map(|i| serde_json::json!({ "id": i, "title": "x", "episodes": [] }))
@@ -837,6 +1046,97 @@ mod integration_tests {
             test::call_service(&app, req).await.status(),
             StatusCode::BAD_REQUEST
         );
+        cleanup_user(&pool, user.id).await;
+    }
+
+    // ─── PUT /calendar (entitlement enforcement, Phase 1.3) ──────────────────
+
+    #[tokio::test]
+    async fn put_calendar_create_at_cap_returns_402() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        // Seed 3 calendars at the configured cap.
+        seed_calendar(&pool, user.id, "A").await;
+        seed_calendar(&pool, user.id, "B").await;
+        seed_calendar(&pool, user.id, "C").await;
+
+        let app = put_app!(pool.clone(), &limits(3, 25));
+        let req = test::TestRequest::put()
+            .uri("/calendar")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "id": 0, "name": "D", "language": "english", "items": []
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::PAYMENT_REQUIRED);
+        let body: Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"], "upgrade_required");
+        assert_eq!(body["reason"], "cap_calendars");
+
+        cleanup_user(&pool, user.id).await;
+    }
+
+    #[tokio::test]
+    async fn put_calendar_add_new_item_at_show_cap_returns_402() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        // Seed a calendar containing 2 items so the user is at the show cap.
+        let (cal_id, _) = seed_calendar(&pool, user.id, "Existing").await;
+        sqlx::query("INSERT INTO calendar_items (calendar_id, item_id) VALUES ($1, 1001), ($1, 1002)")
+            .bind(cal_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let app = put_app!(pool.clone(), &limits(5, 2));
+        // Try to update the same calendar with a brand-new item id 9999 — over cap.
+        let req = test::TestRequest::put()
+            .uri("/calendar")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "id": cal_id,
+                "name": "Existing",
+                "language": "english",
+                "items": [item_json(1001), item_json(1002), item_json(9999)]
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::PAYMENT_REQUIRED);
+        let body: Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"], "upgrade_required");
+        assert_eq!(body["reason"], "cap_shows");
+
+        cleanup_user(&pool, user.id).await;
+    }
+
+    #[tokio::test]
+    async fn put_calendar_add_already_tracked_item_at_cap_passes() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let (cal_id, _) = seed_calendar(&pool, user.id, "Existing").await;
+        sqlx::query("INSERT INTO calendar_items (calendar_id, item_id) VALUES ($1, 1001), ($1, 1002)")
+            .bind(cal_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let app = put_app!(pool.clone(), &limits(5, 2));
+        // Re-PUT same calendar with the same item ids — idempotent, should pass.
+        let req = test::TestRequest::put()
+            .uri("/calendar")
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .set_json(serde_json::json!({
+                "id": cal_id,
+                "name": "Existing",
+                "language": "english",
+                "items": [item_json(1001), item_json(1002)]
+            }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        cleanup_user(&pool, user.id).await;
     }
 
     // ─── GET /calendars ───────────────────────────────────────────────────────

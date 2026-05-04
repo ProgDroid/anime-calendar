@@ -408,10 +408,10 @@ impl CalendarMapper {
     }
 }
 
-// Test-only write variants that run on a caller-supplied connection.
-// These exist solely for rollback-based test isolation and are not part of the
-// production code path.
-#[cfg(test)]
+// Write variants that run on a caller-supplied connection. Used by:
+//   - `#[cfg(test)]` rollback-based mapper tests for isolation
+//   - PUT /calendar so the cap-check + INSERT/UPDATE happen inside one
+//     advisory-locked transaction (multi-tab race protection)
 impl CalendarMapper {
     pub(crate) async fn save_calendar_with(
         conn: &mut sqlx::PgConnection,
