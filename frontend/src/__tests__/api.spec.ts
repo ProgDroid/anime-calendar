@@ -5,6 +5,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 vi.unmock('../config/api')
 vi.unmock('@/config/api')
 
+// Mock useUpgradeInterrupt so the 402 interceptor's call to it is observable
+// without needing a Pinia store / Vue runtime. The factory is hoisted by
+// vitest, so we expose the spies via a captured-ref pattern.
+const openUpgradeModalMock = vi.fn()
+vi.mock('@/composables/useUpgradeInterrupt', () => ({
+  useUpgradeInterrupt: () => ({ openUpgradeModal: openUpgradeModalMock }),
+}))
+
 type LocationStub = { pathname: string; href: string; origin: string }
 
 const setLocation = (pathname: string): LocationStub => {
@@ -35,9 +43,24 @@ const buildAxiosError = (status: number, config: Record<string, unknown> = {}) =
   return err
 }
 
-describe('api interceptor', () => {
+type Handler = {
+  fulfilled: (r: unknown) => unknown
+  rejected: (e: unknown) => Promise<unknown>
+}
+
+/**
+ * The api module registers two response interceptors: 401-refresh first,
+ * 402-upgrade second. Index by registration order.
+ */
+const get401Handler = (api: { interceptors: { response: unknown } }) =>
+  (api.interceptors.response as unknown as { handlers: Handler[] }).handlers[0]!
+const get402Handler = (api: { interceptors: { response: unknown } }) =>
+  (api.interceptors.response as unknown as { handlers: Handler[] }).handlers[1]!
+
+describe('api interceptor — 401 refresh', () => {
   beforeEach(() => {
     vi.resetModules()
+    openUpgradeModalMock.mockClear()
   })
 
   afterEach(() => {
@@ -48,13 +71,7 @@ describe('api interceptor', () => {
     setLocation('/my-calendars')
     const { default: api } = await import('@/config/api')
 
-    // Re-derive the response handler the same way axios runs it: we reach
-    // into the interceptor handlers directly. The response handler is the
-    // 1st arg of `use()`.
-    const handlers = (api.interceptors.response as unknown as {
-      handlers: Array<{ fulfilled: (r: unknown) => unknown; rejected: (e: unknown) => unknown }>
-    }).handlers
-    const handler = handlers[handlers.length - 1]!
+    const handler = get401Handler(api)
 
     const response = { status: 200, data: { ok: true } }
     expect(handler.fulfilled(response)).toEqual(response)
@@ -66,10 +83,7 @@ describe('api interceptor', () => {
 
     const postSpy = vi.spyOn(api, 'post').mockRejectedValueOnce(new Error('refresh failed'))
 
-    const handlers = (api.interceptors.response as unknown as {
-      handlers: Array<{ fulfilled: (r: unknown) => unknown; rejected: (e: unknown) => Promise<unknown> }>
-    }).handlers
-    const handler = handlers[handlers.length - 1]!
+    const handler = get401Handler(api)
 
     const config = { url: '/user' }
     const err = buildAxiosError(401, config)
@@ -87,10 +101,7 @@ describe('api interceptor', () => {
 
     vi.spyOn(api, 'post').mockRejectedValueOnce(new Error('refresh failed'))
 
-    const handlers = (api.interceptors.response as unknown as {
-      handlers: Array<{ fulfilled: (r: unknown) => unknown; rejected: (e: unknown) => Promise<unknown> }>
-    }).handlers
-    const handler = handlers[handlers.length - 1]!
+    const handler = get401Handler(api)
 
     const config = { url: '/user' }
     const err = buildAxiosError(401, config)
@@ -125,10 +136,7 @@ describe('api interceptor', () => {
       })
     api.defaults.adapter = adapter as never
 
-    const handlers = (api.interceptors.response as unknown as {
-      handlers: Array<{ fulfilled: (r: unknown) => unknown; rejected: (e: unknown) => Promise<unknown> }>
-    }).handlers
-    const handler = handlers[handlers.length - 1]!
+    const handler = get401Handler(api)
 
     const config = { url: '/user', method: 'get', headers: {} }
     const err = buildAxiosError(401, config)
@@ -146,16 +154,117 @@ describe('api interceptor', () => {
 
     const postSpy = vi.spyOn(api, 'post')
 
-    const handlers = (api.interceptors.response as unknown as {
-      handlers: Array<{ fulfilled: (r: unknown) => unknown; rejected: (e: unknown) => Promise<unknown> }>
-    }).handlers
-    const handler = handlers[handlers.length - 1]!
+    const handler = get401Handler(api)
 
     const config = { url: '/user', _retried: true }
     const err = buildAxiosError(401, config)
 
     await expect(handler.rejected(err)).rejects.toBe(err)
     expect(postSpy).not.toHaveBeenCalled()
+  })
+})
+
+describe('api interceptor — 402 upgrade routing', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    openUpgradeModalMock.mockClear()
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  function buildPaymentRequiredError(body: Record<string, unknown> | undefined) {
+    const err = buildAxiosError(402)
+    ;(err as { response: { data: unknown; status: number } }).response = {
+      status: 402,
+      data: body,
+    }
+    return err
+  }
+
+  it('triggers openUpgradeModal with the backend reason on a 402 with required_tier=paid', async () => {
+    setLocation('/my-calendars')
+    const { default: api } = await import('@/config/api')
+
+    const handler = get402Handler(api)
+    const err = buildPaymentRequiredError({
+      error: 'upgrade_required',
+      required_tier: 'paid',
+      reason: 'cap_shows',
+    })
+
+    await expect(handler.rejected(err)).rejects.toBe(err)
+    expect(openUpgradeModalMock).toHaveBeenCalledTimes(1)
+    expect(openUpgradeModalMock).toHaveBeenCalledWith('cap_shows')
+  })
+
+  it('defaults to pro_accent when the backend omits the reason', async () => {
+    setLocation('/my-calendars')
+    const { default: api } = await import('@/config/api')
+
+    const handler = get402Handler(api)
+    const err = buildPaymentRequiredError({
+      error: 'upgrade_required',
+      required_tier: 'paid',
+    })
+
+    await expect(handler.rejected(err)).rejects.toBe(err)
+    expect(openUpgradeModalMock).toHaveBeenCalledTimes(1)
+    expect(openUpgradeModalMock).toHaveBeenCalledWith('pro_accent')
+  })
+
+  it('defaults to pro_accent when the backend reason is unknown', async () => {
+    setLocation('/my-calendars')
+    const { default: api } = await import('@/config/api')
+
+    const handler = get402Handler(api)
+    const err = buildPaymentRequiredError({
+      error: 'upgrade_required',
+      required_tier: 'paid',
+      reason: 'something_unrecognised',
+    })
+
+    await expect(handler.rejected(err)).rejects.toBe(err)
+    expect(openUpgradeModalMock).toHaveBeenCalledWith('pro_accent')
+  })
+
+  it('does not trigger the modal on non-402 errors', async () => {
+    setLocation('/my-calendars')
+    const { default: api } = await import('@/config/api')
+
+    const handler = get402Handler(api)
+    const err = buildAxiosError(500)
+
+    await expect(handler.rejected(err)).rejects.toBe(err)
+    expect(openUpgradeModalMock).not.toHaveBeenCalled()
+  })
+
+  it('does not trigger the modal when required_tier is missing', async () => {
+    setLocation('/my-calendars')
+    const { default: api } = await import('@/config/api')
+
+    const handler = get402Handler(api)
+    const err = buildPaymentRequiredError({ error: 'upgrade_required' })
+
+    await expect(handler.rejected(err)).rejects.toBe(err)
+    expect(openUpgradeModalMock).not.toHaveBeenCalled()
+  })
+
+  it('re-throws the original error after handling', async () => {
+    setLocation('/my-calendars')
+    const { default: api } = await import('@/config/api')
+
+    const handler = get402Handler(api)
+    const err = buildPaymentRequiredError({
+      error: 'upgrade_required',
+      required_tier: 'paid',
+      reason: 'cap_calendars',
+    })
+
+    // The exact same error instance must surface — call sites need access to
+    // err.response so they can handle inline messaging.
+    await expect(handler.rejected(err)).rejects.toBe(err)
   })
 })
 

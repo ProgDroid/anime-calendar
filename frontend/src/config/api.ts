@@ -1,9 +1,39 @@
 import axios from 'axios'
+import { useUpgradeInterrupt, type UpgradeReason } from '@/composables/useUpgradeInterrupt'
 
 const api = axios.create({
   baseURL: '/api',
   withCredentials: true,
 })
+
+/**
+ * Body shape of a 402 PaymentRequired response from the backend
+ * (`Error::PaymentRequired` in `server/src/error.rs`):
+ *
+ * ```json
+ * { "error": "upgrade_required", "required_tier": "paid", "reason": "cap_calendars" }
+ * ```
+ *
+ * The `reason` field is optional — the backend's accent-enforcement path
+ * omits it. The interceptor below defaults to `pro_accent` in that case.
+ */
+interface PaymentRequiredBody {
+  error?: string
+  required_tier?: string
+  reason?: string
+}
+
+const VALID_REASONS: ReadonlySet<UpgradeReason> = new Set([
+  'cap_calendars',
+  'cap_shows',
+  'pro_accent',
+])
+
+function coerceReason(raw: unknown): UpgradeReason {
+  return typeof raw === 'string' && VALID_REASONS.has(raw as UpgradeReason)
+    ? (raw as UpgradeReason)
+    : 'pro_accent'
+}
 
 /**
  * Returns an absolute URL for a backend path.
@@ -55,6 +85,25 @@ api.interceptors.response.use(
         if (!isPublicRoute(window.location.pathname)) {
           window.location.href = '/login'
         }
+      }
+    }
+    return Promise.reject(error)
+  },
+)
+
+// 402 interceptor: when the backend returns PaymentRequired with
+// `required_tier: "paid"`, surface the upgrade modal globally. The reason
+// code routes the modal copy. Errors are still re-thrown so call sites can
+// render their own inline state if they care (e.g. cap-aware editor flows
+// that already disable the trigger button optimistically).
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (axios.isAxiosError(error) && error.response?.status === 402) {
+      const body = (error.response.data ?? {}) as PaymentRequiredBody
+      if (body.required_tier === 'paid') {
+        const { openUpgradeModal } = useUpgradeInterrupt()
+        openUpgradeModal(coerceReason(body.reason))
       }
     }
     return Promise.reject(error)
