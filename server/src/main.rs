@@ -9,7 +9,9 @@ use server::{
         refresh_token::RefreshTokenMapper, stripe_event::StripeEventMapper,
         subscription::SubscriptionMapper, user::UserMapper, user_settings::UserSettingsMapper,
     },
-    services::{email::EmailService, entitlement::EntitlementService},
+    services::{
+        cached_anilist::CachedAnilist, email::EmailService, entitlement::EntitlementService,
+    },
 };
 use stripe::Client as StripeClient;
 
@@ -71,9 +73,11 @@ async fn main() -> ServerResult<()> {
     .await
     .expect("Failed to initialize Redis cache");
 
+    let cached_anilist = CachedAnilist::new(anilist, cache.clone(), &settings.cache);
+
     Ok(server::server::start(
         settings,
-        anilist,
+        cached_anilist,
         google_oauth,
         cache,
         user_mapper,

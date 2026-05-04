@@ -4,9 +4,9 @@ use crate::{
     cache::{CACHE_TTL_CALENDAR, CACHE_TTL_ITEM, CACHE_TTL_SEARCH, Cache},
     entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity},
     error::Error,
-    mappers::{anilist::Anilist, calendar::CalendarMapper, user::UserMapper},
+    mappers::{calendar::CalendarMapper, user::UserMapper},
     middleware::auth::Claims,
-    services::calendar_export::generate_calendar_export,
+    services::{cached_anilist::CachedAnilist, calendar_export::generate_calendar_export},
 };
 
 use actix_web::{HttpResponse, ResponseError, delete, get, put, web};
@@ -171,7 +171,7 @@ const fn default_page_size() -> usize {
 async fn export(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
-    anilist: web::Data<Anilist>,
+    anilist: web::Data<CachedAnilist>,
     cache: web::Data<Cache>,
     id: web::Path<u64>,
     claims: Claims,
@@ -300,7 +300,7 @@ async fn export(
 #[get("/calendars/subscribe/{token}")]
 async fn subscribe_feed(
     calendar_mapper: web::Data<CalendarMapper>,
-    anilist: web::Data<Anilist>,
+    anilist: web::Data<CachedAnilist>,
     cache: web::Data<Cache>,
     token: web::Path<String>,
 ) -> HttpResponse {
@@ -375,7 +375,7 @@ async fn subscribe_feed(
 async fn put(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
-    anilist: web::Data<Anilist>,
+    anilist: web::Data<CachedAnilist>,
     cache: web::Data<Cache>,
     body: web::Json<CalendarRequest>,
     claims: Claims,
@@ -499,7 +499,7 @@ async fn get_calendars(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
     cache: web::Data<Cache>,
-    anilist: web::Data<Anilist>,
+    anilist: web::Data<CachedAnilist>,
     claims: Claims,
     params: web::Query<PaginationParams>,
 ) -> HttpResponse {
@@ -629,7 +629,7 @@ async fn get_calendars(
 async fn get_calendar(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
-    anilist: web::Data<Anilist>,
+    anilist: web::Data<CachedAnilist>,
     cache: web::Data<Cache>,
     id: web::Path<i64>,
     claims: Claims,
@@ -741,10 +741,12 @@ async fn delete_calendar(
 mod integration_tests {
     use super::*;
     use crate::cache::Cache;
-    use crate::config::server::JwtSecret;
+    use crate::config::server::{CacheConfig, JwtSecret};
+    use crate::mappers::anilist::Anilist;
     use crate::mappers::calendar::CalendarMapper;
     use crate::mappers::user::UserMapper;
     use crate::services::auth::hash_password;
+    use crate::services::cached_anilist::CachedAnilist;
     use actix_web::{App, http::StatusCode, test, web};
     use secrecy::SecretString;
     use serde_json::Value;
@@ -754,6 +756,14 @@ mod integration_tests {
 
     fn jwt_data() -> web::Data<JwtSecret> {
         web::Data::new(JwtSecret::new(SecretString::from(SECRET)))
+    }
+
+    async fn cached_anilist_data() -> web::Data<CachedAnilist> {
+        web::Data::new(CachedAnilist::new(
+            Anilist::default(),
+            Cache::for_tests().await,
+            &CacheConfig::default(),
+        ))
     }
 
     struct SeedUser {
@@ -803,7 +813,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
-                .app_data(web::Data::new(Anilist::default()))
+                .app_data(cached_anilist_data().await)
                 .app_data(web::Data::new(Cache::for_tests().await))
                 .app_data(jwt_data())
                 .service(put),
@@ -827,7 +837,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
-                .app_data(web::Data::new(Anilist::default()))
+                .app_data(cached_anilist_data().await)
                 .app_data(web::Data::new(Cache::for_tests().await))
                 .app_data(jwt_data())
                 .service(put),
@@ -854,7 +864,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
-                .app_data(web::Data::new(Anilist::default()))
+                .app_data(cached_anilist_data().await)
                 .app_data(web::Data::new(Cache::for_tests().await))
                 .app_data(jwt_data())
                 .service(put),
@@ -880,7 +890,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
-                .app_data(web::Data::new(Anilist::default()))
+                .app_data(cached_anilist_data().await)
                 .app_data(web::Data::new(Cache::for_tests().await))
                 .app_data(jwt_data())
                 .service(put),
@@ -920,7 +930,7 @@ mod integration_tests {
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
                 .app_data(web::Data::new(Cache::for_tests().await))
-                .app_data(web::Data::new(Anilist::default()))
+                .app_data(cached_anilist_data().await)
                 .app_data(jwt_data())
                 .service(get_calendars),
         )
@@ -944,7 +954,7 @@ mod integration_tests {
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
                 .app_data(web::Data::new(Cache::for_tests().await))
-                .app_data(web::Data::new(Anilist::default()))
+                .app_data(cached_anilist_data().await)
                 .app_data(jwt_data())
                 .service(get_calendars),
         )
@@ -969,7 +979,7 @@ mod integration_tests {
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
                 .app_data(web::Data::new(Cache::for_tests().await))
-                .app_data(web::Data::new(Anilist::default()))
+                .app_data(cached_anilist_data().await)
                 .app_data(jwt_data())
                 .service(get_calendars),
         )
@@ -1001,7 +1011,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
-                .app_data(web::Data::new(Anilist::default()))
+                .app_data(cached_anilist_data().await)
                 .app_data(web::Data::new(Cache::for_tests().await))
                 .app_data(jwt_data())
                 .service(get_calendar),
@@ -1022,7 +1032,7 @@ mod integration_tests {
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
-                .app_data(web::Data::new(Anilist::default()))
+                .app_data(cached_anilist_data().await)
                 .app_data(web::Data::new(Cache::for_tests().await))
                 .app_data(jwt_data())
                 .service(get_calendar),

@@ -27,13 +27,15 @@ use crate::{
     },
     error::Error,
     mappers::{
-        anilist::Anilist, calendar::CalendarMapper, email_verification::EmailVerificationMapper,
+        calendar::CalendarMapper, email_verification::EmailVerificationMapper,
         google_oauth::GoogleOauth, password_reset::PasswordResetMapper,
         refresh_token::RefreshTokenMapper, stripe_event::StripeEventMapper,
         subscription::SubscriptionMapper, user::UserMapper, user_settings::UserSettingsMapper,
     },
     openapi::ApiDoc,
-    services::{email::EmailService, entitlement::EntitlementService},
+    services::{
+        cached_anilist::CachedAnilist, email::EmailService, entitlement::EntitlementService,
+    },
     ServerResult,
 };
 use stripe::Client as StripeClient;
@@ -95,7 +97,7 @@ impl KeyExtractor for WebhookExemptKeyExtractor {
 /// Returns an error if the server fails to start.
 pub fn start(
     config: ServerConfig,
-    anilist: Anilist,
+    cached_anilist: CachedAnilist,
     google_oauth: GoogleOauth,
     cache: Cache,
     user_mapper: UserMapper,
@@ -203,7 +205,7 @@ pub fn start(
             .app_data(web::Data::new(user_mapper.clone()))
             .app_data(web::Data::new(calendar_mapper.clone()))
             .app_data(web::Data::new(user_settings_mapper.clone()))
-            .app_data(web::Data::new(anilist.clone()))
+            .app_data(web::Data::new(cached_anilist.clone()))
             .app_data(web::Data::new(google_oauth.clone()))
             .app_data(web::Data::new(cache.clone()))
             .app_data(web::Data::new(jwt_secret.clone()))
