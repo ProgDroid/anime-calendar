@@ -48,7 +48,9 @@ use ::stripe_webhook::{EventObject, Webhook};
 
 use crate::{
     config::server::StripeConfig,
+    entity::subscription::Tier,
     mappers::{stripe_event::StripeEventMapper, subscription::SubscriptionMapper},
+    services::{entitlement::EntitlementService, frozen_ics::FrozenIcsService},
 };
 use secrecy::ExposeSecret as _;
 // SubscriptionMapper is used via its static `_in_tx` helpers in
@@ -74,6 +76,7 @@ pub async fn stripe_webhook(
     body: web::Bytes,
     event_mapper: web::Data<StripeEventMapper>,
     stripe_config: web::Data<StripeConfig>,
+    frozen_ics: web::Data<FrozenIcsService>,
 ) -> HttpResponse {
     if !stripe_config.is_configured() {
         // No Stripe credentials in this deployment — nothing should be
@@ -149,12 +152,20 @@ pub async fn stripe_webhook(
     let result = dispatch_event(&mut tx, event.data.object).await;
 
     match result {
-        Ok(()) => {
+        Ok(action) => {
             if let Err(e) = tx.commit().await {
                 error!("stripe webhook: commit failed for {event_id}: {e}");
                 return HttpResponse::InternalServerError()
                     .json(serde_json::json!({"error":"db error"}));
             }
+            // Post-commit: dispatch the frozen-blob lifecycle action that the
+            // tier transition (if any) implied. Never run before commit — if
+            // the outer txn rolls back we must not act on a phantom transition.
+            // FrozenIcsService uses its own pool, so its writes are independent
+            // of `tx`. We deliberately swallow errors here: the webhook itself
+            // succeeded, and a failed regenerate is recoverable via the lazy
+            // safety net on `GET /api/calendars/subscribe/:token`.
+            dispatch_frozen_action(&frozen_ics, action).await;
             HttpResponse::Ok().json(serde_json::json!({"received":true}))
         }
         Err(e) => {
@@ -167,10 +178,63 @@ pub async fn stripe_webhook(
     }
 }
 
-/// Route a verified Stripe event object to the right writer. Returns `Ok(())`
-/// for events we deliberately ignore — the idempotency insert is enough to
-/// stop Stripe retries.
-async fn dispatch_event(tx: &mut sqlx::PgConnection, object: EventObject) -> Result<(), String> {
+/// What `FrozenIcsService` action (if any) should fire after the outer
+/// webhook transaction commits. Computed inside `dispatch_event` by comparing
+/// the user's effective tier before vs. after the subscription mapper write.
+#[derive(Debug, Clone, Copy, Eq, PartialEq)]
+enum FrozenAction {
+    /// No tier transition; nothing to do.
+    None,
+    /// Free → Paid: null the user's frozen blobs (Pro serves live data).
+    Clear(i32),
+    /// Paid → Free: regenerate frozen blobs from current state.
+    Regenerate(i32),
+}
+
+/// Pure mapping from (old, new) tier to the implied frozen-blob action.
+/// Same-tier and any non-transition combination → `None`.
+const fn transition_action(user_id: i32, old: Tier, new: Tier) -> FrozenAction {
+    match (old, new) {
+        (Tier::Free, Tier::Paid) => FrozenAction::Clear(user_id),
+        (Tier::Paid, Tier::Free) => FrozenAction::Regenerate(user_id),
+        _ => FrozenAction::None,
+    }
+}
+
+/// Apply a `FrozenAction` against `FrozenIcsService`. Errors are logged but
+/// never propagated — the caller has already committed the outer transaction
+/// and returned 200 to Stripe.
+async fn dispatch_frozen_action(frozen_ics: &FrozenIcsService, action: FrozenAction) {
+    match action {
+        FrozenAction::None => {}
+        FrozenAction::Clear(uid) => {
+            if let Err(e) = frozen_ics.clear_for_user(uid).await {
+                error!("stripe webhook: clear_for_user({uid}) failed after commit: {e:?}");
+            }
+        }
+        FrozenAction::Regenerate(uid) => match frozen_ics.regenerate_for_user(uid).await {
+            Ok(0) => {}
+            Ok(n) => warn!(
+                "stripe webhook: regenerate_for_user({uid}): {n} calendar(s) failed to render"
+            ),
+            Err(e) => error!("stripe webhook: regenerate_for_user({uid}) errored: {e:?}"),
+        },
+    }
+}
+
+/// Route a verified Stripe event object to the right writer. Returns the
+/// `FrozenAction` (if any) implied by a tier transition the event caused, so
+/// the outer handler can fire the corresponding `FrozenIcsService` call
+/// **after** the transaction commits.
+///
+/// Events we deliberately ignore return `Ok(FrozenAction::None)` — the
+/// idempotency insert is enough to stop Stripe retries. Invoice events do
+/// not contribute to tier-transition detection (out of scope for Phase 1.4
+/// — the lazy-regen safety net on the subscribe endpoint covers any holes).
+async fn dispatch_event(
+    tx: &mut sqlx::PgConnection,
+    object: EventObject,
+) -> Result<FrozenAction, String> {
     match object {
         // checkout.session.completed: Stripe also fires
         // customer.subscription.created with the full subscription object and
@@ -180,34 +244,70 @@ async fn dispatch_event(tx: &mut sqlx::PgConnection, object: EventObject) -> Res
         | EventObject::CustomerSubscriptionUpdated(sub) => upsert_subscription(tx, &sub).await,
 
         EventObject::CustomerSubscriptionDeleted(sub) => {
-            let sub_id = sub.id.as_str();
-            let updated =
-                SubscriptionMapper::update_status_by_subscription_id_in_tx(tx, sub_id, "canceled")
-                    .await
-                    .map_err(|e| format!("update_status_by_subscription_id failed: {e}"))?;
-            if updated == 0 {
-                warn!(
-                    "stripe webhook: subscription.deleted for unknown stripe_subscription_id {sub_id}"
-                );
-            }
-            Ok(())
+            handle_subscription_deleted(tx, &sub).await
         }
 
         EventObject::InvoicePaymentSucceeded(invoice) => {
-            handle_invoice_succeeded(tx, &invoice).await
+            handle_invoice_succeeded(tx, &invoice).await?;
+            Ok(FrozenAction::None)
         }
 
-        EventObject::InvoicePaymentFailed(invoice) => handle_invoice_failed(tx, &invoice).await,
+        EventObject::InvoicePaymentFailed(invoice) => {
+            handle_invoice_failed(tx, &invoice).await?;
+            Ok(FrozenAction::None)
+        }
 
         // Any other event: idempotency-only path. Nothing to write.
-        EventObject::CheckoutSessionCompleted(_) | _ => Ok(()),
+        EventObject::CheckoutSessionCompleted(_) | _ => Ok(FrozenAction::None),
     }
+}
+
+/// Resolve the `user_id` referenced by a subscription payload, then handle
+/// a `customer.subscription.deleted` event by flipping its row to
+/// `canceled`. Reads effective tier on the same `tx` before and after the
+/// write, so the returned `FrozenAction` reflects whether downgrading this
+/// subscription actually moved the user from Paid to Free (other rows in
+/// other states could keep them Paid).
+async fn handle_subscription_deleted(
+    tx: &mut sqlx::PgConnection,
+    sub: &stripe_shared::Subscription,
+) -> Result<FrozenAction, String> {
+    let sub_id = sub.id.as_str();
+    let existing = SubscriptionMapper::find_by_stripe_id_with(&mut *tx, sub_id)
+        .await
+        .map_err(|e| format!("find_by_stripe_id_with failed: {e}"))?;
+    let Some(row) = existing else {
+        warn!("stripe webhook: subscription.deleted for unknown stripe_subscription_id {sub_id}");
+        return Ok(FrozenAction::None);
+    };
+    let user_id = row.user_id;
+    let old_tier = EntitlementService::effective_tier_in_tx(&mut *tx, user_id)
+        .await
+        .map_err(|e| format!("effective_tier_in_tx (old) failed: {e}"))?;
+    let updated =
+        SubscriptionMapper::update_status_by_subscription_id_in_tx(&mut *tx, sub_id, "canceled")
+            .await
+            .map_err(|e| format!("update_status_by_subscription_id failed: {e}"))?;
+    if updated == 0 {
+        // Defensive: we just read the row above on this same tx, so it
+        // exists. Log loudly if Stripe ever sends a delete for a row we
+        // can't update (e.g. concurrent admin tooling).
+        warn!(
+            "stripe webhook: subscription.deleted update affected 0 rows for {sub_id} \
+             despite earlier find succeeding"
+        );
+        return Ok(FrozenAction::None);
+    }
+    let new_tier = EntitlementService::effective_tier_in_tx(&mut *tx, user_id)
+        .await
+        .map_err(|e| format!("effective_tier_in_tx (new) failed: {e}"))?;
+    Ok(transition_action(user_id, old_tier, new_tier))
 }
 
 async fn upsert_subscription(
     tx: &mut sqlx::PgConnection,
     sub: &stripe_shared::Subscription,
-) -> Result<(), String> {
+) -> Result<FrozenAction, String> {
     let sub_id = sub.id.as_str();
     let stripe_customer_id = match &sub.customer {
         stripe_types::Expandable::Object(c) => c.id.to_string(),
@@ -225,7 +325,7 @@ async fn upsert_subscription(
     {
         uid
     } else if let Some(uid) =
-        SubscriptionMapper::find_user_id_by_customer_in_tx(tx, &stripe_customer_id)
+        SubscriptionMapper::find_user_id_by_customer_in_tx(&mut *tx, &stripe_customer_id)
             .await
             .map_err(|e| format!("find_user_id_by_customer failed: {e}"))?
     {
@@ -240,7 +340,7 @@ async fn upsert_subscription(
             "stripe webhook: subscription event for {sub_id} has no resolvable user_id \
              (metadata empty, no prior customer row for {stripe_customer_id})"
         );
-        return Ok(());
+        return Ok(FrozenAction::None);
     };
 
     let item = sub
@@ -256,8 +356,15 @@ async fn upsert_subscription(
         .ok_or_else(|| "missing current_period_end on item".to_string())?;
     let trial_end = sub.trial_end.and_then(naive_from_timestamp);
 
+    // Read effective tier *before* the upsert so we can detect a transition
+    // after the write below. The read is on the same `tx`, so it observes
+    // any earlier writes in this webhook delivery.
+    let old_tier = EntitlementService::effective_tier_in_tx(&mut *tx, user_id)
+        .await
+        .map_err(|e| format!("effective_tier_in_tx (old) failed: {e}"))?;
+
     SubscriptionMapper::upsert_from_stripe_in_tx(
-        tx,
+        &mut *tx,
         user_id,
         sub.status.as_str(),
         &stripe_customer_id,
@@ -269,7 +376,13 @@ async fn upsert_subscription(
         sub.cancel_at_period_end,
     )
     .await
-    .map_err(|e| format!("upsert_from_stripe_in_tx failed: {e}"))
+    .map_err(|e| format!("upsert_from_stripe_in_tx failed: {e}"))?;
+
+    let new_tier = EntitlementService::effective_tier_in_tx(&mut *tx, user_id)
+        .await
+        .map_err(|e| format!("effective_tier_in_tx (new) failed: {e}"))?;
+
+    Ok(transition_action(user_id, old_tier, new_tier))
 }
 
 async fn handle_invoice_succeeded(
@@ -339,4 +452,245 @@ async fn handle_invoice_failed(
 
 fn naive_from_timestamp(ts: Timestamp) -> Option<chrono::NaiveDateTime> {
     DateTime::from_timestamp(ts, 0).map(|dt| dt.naive_utc())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::cache::Cache;
+    use crate::config::server::CacheConfig;
+    use crate::mappers::anilist::Anilist;
+    use crate::services::cached_anilist::CachedAnilist;
+    use crate::services::ics_export::IcsExportService;
+    use chrono::{Duration, Utc};
+    use sqlx::PgPool;
+
+    // ---- transition_action: pure unit tests --------------------------------
+
+    #[test]
+    fn transition_action_free_to_paid_clears() {
+        assert_eq!(
+            transition_action(42, Tier::Free, Tier::Paid),
+            FrozenAction::Clear(42),
+        );
+    }
+
+    #[test]
+    fn transition_action_paid_to_free_regenerates() {
+        assert_eq!(
+            transition_action(7, Tier::Paid, Tier::Free),
+            FrozenAction::Regenerate(7),
+        );
+    }
+
+    #[test]
+    fn transition_action_same_tier_is_noop() {
+        assert_eq!(
+            transition_action(1, Tier::Free, Tier::Free),
+            FrozenAction::None,
+        );
+        assert_eq!(
+            transition_action(1, Tier::Paid, Tier::Paid),
+            FrozenAction::None,
+        );
+    }
+
+    // ---- end-to-end pipeline tests -----------------------------------------
+    //
+    // These deliberately bypass `EventObject` reconstruction (constructing
+    // `stripe_shared::Subscription` from scratch is impractical with the
+    // async-stripe rc.5 type layout). Instead they exercise the same
+    // primitives `dispatch_event` calls — `effective_tier_in_tx`,
+    // `update_status_by_subscription_id_in_tx`, `FrozenIcsService` — and
+    // assert the implied transition matches what `transition_action`
+    // produces. EventObject parsing is upstream of the logic under test.
+
+    async fn build_frozen_ics(pool: PgPool) -> FrozenIcsService {
+        let cached = CachedAnilist::new(
+            Anilist::default(),
+            Cache::for_tests().await,
+            &CacheConfig::default(),
+        );
+        let ics_export = IcsExportService::new(pool.clone(), cached);
+        FrozenIcsService::new(pool, ics_export)
+    }
+
+    async fn seed_user(pool: &PgPool) -> i32 {
+        let n: u64 = rand::random();
+        sqlx::query_scalar(
+            "INSERT INTO users (username, email, password_hash) \
+             VALUES ($1, $2, 'hash') RETURNING id",
+        )
+        .bind(format!("webhook_{n}"))
+        .bind(format!("webhook_{n}@test.com"))
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    async fn seed_calendar(pool: &PgPool, user_id: i32) -> i32 {
+        let n: u64 = rand::random();
+        sqlx::query_scalar(
+            "INSERT INTO calendars (name, language, user_id, subscription_token) \
+             VALUES ('Cal', 'english'::language, $1, $2) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(format!("tok-{n}"))
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    async fn seed_active_paid_subscription(pool: &PgPool, user_id: i32) -> String {
+        let n: u64 = rand::random();
+        let stripe_sub_id = format!("sub_test_{n}");
+        let now = Utc::now().naive_utc();
+        sqlx::query(
+            "INSERT INTO subscriptions \
+             (user_id, tier, status, stripe_customer_id, stripe_subscription_id, \
+              stripe_price_id, current_period_start, current_period_end, \
+              cancel_at_period_end) \
+             VALUES ($1, 'paid', 'active', $2, $3, 'price_test', $4, $5, false)",
+        )
+        .bind(user_id)
+        .bind(format!("cus_test_{n}"))
+        .bind(&stripe_sub_id)
+        .bind(now)
+        .bind(now + Duration::days(30))
+        .execute(pool)
+        .await
+        .unwrap();
+        stripe_sub_id
+    }
+
+    async fn frozen_blob(pool: &PgPool, calendar_id: i32) -> Option<String> {
+        sqlx::query_scalar("SELECT frozen_subscribe_ics FROM calendars WHERE id = $1")
+            .bind(calendar_id)
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    async fn cleanup_user(pool: &PgPool, user_id: i32) {
+        sqlx::query("DELETE FROM subscriptions WHERE user_id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query(
+            "DELETE FROM calendar_items WHERE calendar_id IN \
+             (SELECT id FROM calendars WHERE user_id = $1)",
+        )
+        .bind(user_id)
+        .execute(pool)
+        .await
+        .unwrap();
+        sqlx::query("DELETE FROM calendars WHERE user_id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    /// Paid → Free downgrade via `update_status_by_subscription_id_in_tx`
+    /// must produce a `Regenerate` action and `regenerate_for_user` must
+    /// then leave the calendar's `frozen_subscribe_ics` non-NULL.
+    #[tokio::test]
+    async fn paid_to_free_transition_regenerates_blob() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_id = seed_user(&pool).await;
+        let cal_id = seed_calendar(&pool, user_id).await;
+        let stripe_sub_id = seed_active_paid_subscription(&pool, user_id).await;
+
+        // Pro users serve live data — start with NULL frozen blob.
+        assert!(frozen_blob(&pool, cal_id).await.is_none());
+
+        // Read old tier (Paid), flip status to canceled, read new tier (Free).
+        let mut tx = pool.begin().await.unwrap();
+        let old_tier = EntitlementService::effective_tier_in_tx(&mut tx, user_id)
+            .await
+            .unwrap();
+        assert_eq!(old_tier, Tier::Paid);
+
+        let updated = SubscriptionMapper::update_status_by_subscription_id_in_tx(
+            &mut tx,
+            &stripe_sub_id,
+            "canceled",
+        )
+        .await
+        .unwrap();
+        assert_eq!(updated, 1);
+
+        let new_tier = EntitlementService::effective_tier_in_tx(&mut tx, user_id)
+            .await
+            .unwrap();
+        assert_eq!(new_tier, Tier::Free);
+        tx.commit().await.unwrap();
+
+        let action = transition_action(user_id, old_tier, new_tier);
+        assert_eq!(action, FrozenAction::Regenerate(user_id));
+
+        // Now apply the action — same call the post-commit dispatcher would.
+        let frozen = build_frozen_ics(pool.clone()).await;
+        let failures = frozen.regenerate_for_user(user_id).await.unwrap();
+        assert_eq!(failures, 0);
+        assert!(
+            frozen_blob(&pool, cal_id).await.is_some(),
+            "frozen blob must be populated after regenerate_for_user",
+        );
+
+        cleanup_user(&pool, user_id).await;
+    }
+
+    /// Free → Paid upgrade: a user with pre-existing frozen blobs (i.e. they
+    /// were previously a free subscriber) gets all blobs nulled by
+    /// `clear_for_user` after the transition fires.
+    #[tokio::test]
+    async fn free_to_paid_transition_clears_blobs() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_id = seed_user(&pool).await;
+        let cal_id = seed_calendar(&pool, user_id).await;
+
+        // User starts on Free with a populated frozen blob (matches the
+        // steady-state for Free subscribers — the subscribe endpoint or a
+        // prior edit primed it).
+        let frozen = build_frozen_ics(pool.clone()).await;
+        frozen.regenerate(cal_id).await.unwrap();
+        assert!(frozen_blob(&pool, cal_id).await.is_some());
+
+        // Old tier is Free (no subscription rows at all).
+        let mut tx = pool.begin().await.unwrap();
+        let old_tier = EntitlementService::effective_tier_in_tx(&mut tx, user_id)
+            .await
+            .unwrap();
+        assert_eq!(old_tier, Tier::Free);
+        tx.commit().await.unwrap();
+
+        // Insert a Paid sub row — equivalent to the upsert the webhook
+        // performs on subscription.created.
+        let _stripe_sub_id = seed_active_paid_subscription(&pool, user_id).await;
+
+        let mut tx2 = pool.begin().await.unwrap();
+        let new_tier = EntitlementService::effective_tier_in_tx(&mut tx2, user_id)
+            .await
+            .unwrap();
+        assert_eq!(new_tier, Tier::Paid);
+        tx2.commit().await.unwrap();
+
+        let action = transition_action(user_id, old_tier, new_tier);
+        assert_eq!(action, FrozenAction::Clear(user_id));
+
+        frozen.clear_for_user(user_id).await.unwrap();
+        assert!(
+            frozen_blob(&pool, cal_id).await.is_none(),
+            "blob must be NULL after clear_for_user — Pro serves live data",
+        );
+
+        cleanup_user(&pool, user_id).await;
+    }
 }
