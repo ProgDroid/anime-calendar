@@ -1336,4 +1336,180 @@ mod integration_tests {
             StatusCode::UNAUTHORIZED
         );
     }
+
+
+    // ─── GET /calendars/subscribe/{token} (Phase 1.3 tier branching) ─────────
+
+    /// Build a service-init-app for subscribe_feed with all required
+    /// Phase-1.3 extractors wired.
+    macro_rules! subscribe_app {
+        ($pool:expr) => {{
+            let pool = $pool;
+            let cached = cached_anilist_data().await;
+            let entitlement = EntitlementService::new(
+                SubscriptionMapper::from_pool(pool.clone()),
+                ShowCountService::new(pool.clone()),
+                &limits(3, 25),
+            );
+            let ics_export = IcsExportService::new(pool.clone(), (**cached).clone());
+            let frozen_ics = FrozenIcsService::new(pool.clone(), ics_export.clone());
+            test::init_service(
+                App::new()
+                    .app_data(web::Data::new(CalendarMapper::from_pool(pool.clone())))
+                    .app_data(web::Data::new(ics_export))
+                    .app_data(web::Data::new(frozen_ics))
+                    .app_data(web::Data::new(Cache::for_tests().await))
+                    .app_data(web::Data::new(entitlement))
+                    .app_data(web::Data::new(SubscriptionMapper::from_pool(pool)))
+                    .service(subscribe_feed),
+            )
+            .await
+        }};
+    }
+
+    async fn make_paid(pool: &sqlx::PgPool, user_id: i32) {
+        use chrono::{Duration, Utc};
+        let n: u64 = rand::random();
+        let now = Utc::now().naive_utc();
+        sqlx::query(
+            "INSERT INTO subscriptions \
+             (user_id, tier, status, stripe_customer_id, stripe_subscription_id, \
+              stripe_price_id, current_period_start, current_period_end, \
+              cancel_at_period_end) \
+             VALUES ($1, 'paid', 'active', $2, $3, 'price_test', $4, $5, false)",
+        )
+        .bind(user_id)
+        .bind(format!("cus_test_{n}"))
+        .bind(format!("sub_test_{n}"))
+        .bind(now)
+        .bind(now + Duration::days(30))
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    /// Insert a historic (canceled, expired) subscription row so the
+    /// `find_latest_customer_id_for_user` lookup returns Some(_) without
+    /// granting active entitlement.
+    async fn make_history(pool: &sqlx::PgPool, user_id: i32) {
+        use chrono::{Duration, Utc};
+        let n: u64 = rand::random();
+        let then = (Utc::now() - Duration::days(60)).naive_utc();
+        sqlx::query(
+            "INSERT INTO subscriptions \
+             (user_id, tier, status, stripe_customer_id, stripe_subscription_id, \
+              stripe_price_id, current_period_start, current_period_end, \
+              cancel_at_period_end) \
+             VALUES ($1, 'paid', 'canceled', $2, $3, 'price_test', $4, $5, false)",
+        )
+        .bind(user_id)
+        .bind(format!("cus_hist_{n}"))
+        .bind(format!("sub_hist_{n}"))
+        .bind(then)
+        .bind(then + Duration::days(30))
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn subscribe_feed_paid_user_serves_live_render() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        make_paid(&pool, user.id).await;
+        let (_, token) = seed_calendar(&pool, user.id, "Live").await;
+
+        let app = subscribe_app!(pool.clone());
+        let req = test::TestRequest::get()
+            .uri(&format!("/calendars/subscribe/{token}"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        let s = std::str::from_utf8(&body).unwrap();
+        assert!(s.contains("BEGIN:VCALENDAR"));
+
+        cleanup_user(&pool, user.id).await;
+    }
+
+    #[tokio::test]
+    async fn subscribe_feed_free_with_frozen_blob_serves_blob() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let (cal_id, token) = seed_calendar(&pool, user.id, "Frozen").await;
+        // Stamp a sentinel blob that the live render would never produce.
+        let sentinel = "BEGIN:VCALENDAR\r\nX-FROZEN-SENTINEL:yes\r\nEND:VCALENDAR\r\n";
+        sqlx::query("UPDATE calendars SET frozen_subscribe_ics = $1 WHERE id = $2")
+            .bind(sentinel)
+            .bind(cal_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let app = subscribe_app!(pool.clone());
+        let req = test::TestRequest::get()
+            .uri(&format!("/calendars/subscribe/{token}"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        let s = std::str::from_utf8(&body).unwrap();
+        assert!(s.contains("X-FROZEN-SENTINEL:yes"));
+
+        cleanup_user(&pool, user.id).await;
+    }
+
+    #[tokio::test]
+    async fn subscribe_feed_free_no_blob_no_history_returns_404() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        let (_, token) = seed_calendar(&pool, user.id, "NoHistory").await;
+
+        let app = subscribe_app!(pool.clone());
+        let req = test::TestRequest::get()
+            .uri(&format!("/calendars/subscribe/{token}"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::NOT_FOUND);
+
+        cleanup_user(&pool, user.id).await;
+    }
+
+    #[tokio::test]
+    async fn subscribe_feed_free_no_blob_with_history_lazy_regenerates() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        make_history(&pool, user.id).await; // canceled sub → has history
+        let (cal_id, token) = seed_calendar(&pool, user.id, "Lazy").await;
+
+        // Pre-condition: blob is null.
+        let pre: Option<String> =
+            sqlx::query_scalar("SELECT frozen_subscribe_ics FROM calendars WHERE id = $1")
+                .bind(cal_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert!(pre.is_none());
+
+        let app = subscribe_app!(pool.clone());
+        let req = test::TestRequest::get()
+            .uri(&format!("/calendars/subscribe/{token}"))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body = test::read_body(resp).await;
+        let s = std::str::from_utf8(&body).unwrap();
+        assert!(s.contains("BEGIN:VCALENDAR"));
+
+        // Post-condition: blob written by lazy regen.
+        let post: Option<String> =
+            sqlx::query_scalar("SELECT frozen_subscribe_ics FROM calendars WHERE id = $1")
+                .bind(cal_id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert!(post.is_some());
+
+        cleanup_user(&pool, user.id).await;
+    }
 }
