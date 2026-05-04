@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(DISTINCT ci.item_id) AS \"count!\"\n               FROM calendar_items ci\n               JOIN calendars c ON c.id = ci.calendar_id\n               WHERE c.user_id = $1\n                 AND c.deleted_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ef29c273bb1bc1f0758483d835bed5ecdb3677db663fc8a1726452683e7256c1"
+}

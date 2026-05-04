@@ -29,7 +29,7 @@ impl Language {
     }
 }
 
-#[derive(Clone, Default, Deserialize, Serialize)]
+#[derive(Clone, Deserialize, Serialize)]
 pub struct Calendar {
     #[serde(default)]
     pub id: i32,
@@ -40,4 +40,34 @@ pub struct Calendar {
     pub user_id: i32,
     pub created_at: chrono::NaiveDateTime,
     pub updated_at: chrono::NaiveDateTime,
+    /// Per-calendar event style: `"timed"` (DTSTART:datetime) or
+    /// `"all_day"` (DTSTART;VALUE=DATE). Phase 1 ships the column; Phase 2
+    /// wires the toggle and consumer logic into `ics_export`.
+    #[serde(default = "default_event_style")]
+    pub event_style: String,
+    /// Frozen .ics blob for Free-tier subscribe URLs. Server-managed: never
+    /// deserialised from request bodies.
+    #[serde(skip_deserializing, default)]
+    pub frozen_subscribe_ics: Option<String>,
+}
+
+impl Default for Calendar {
+    fn default() -> Self {
+        Self {
+            id: 0,
+            item_ids: Vec::new(),
+            language: Language::default(),
+            name: String::new(),
+            subscription_token: String::new(),
+            user_id: 0,
+            created_at: chrono::NaiveDateTime::default(),
+            updated_at: chrono::NaiveDateTime::default(),
+            event_style: default_event_style(),
+            frozen_subscribe_ics: None,
+        }
+    }
+}
+
+fn default_event_style() -> String {
+    "timed".to_owned()
 }

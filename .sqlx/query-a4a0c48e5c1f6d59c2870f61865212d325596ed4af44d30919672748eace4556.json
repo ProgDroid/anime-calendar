@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS(\n                 SELECT 1 FROM calendar_items ci\n                 JOIN calendars c ON c.id = ci.calendar_id\n                 WHERE c.user_id = $1\n                   AND c.deleted_at IS NULL\n                   AND ci.item_id = $2\n               ) AS \"exists!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "exists!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a4a0c48e5c1f6d59c2870f61865212d325596ed4af44d30919672748eace4556"
+}

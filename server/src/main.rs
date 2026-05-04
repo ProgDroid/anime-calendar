@@ -34,7 +34,18 @@ async fn main() -> ServerResult<()> {
     let subscription_mapper = SubscriptionMapper::new(db_config.clone()).await?;
     let stripe_event_mapper = StripeEventMapper::new(db_config.clone()).await?;
     let email_service = EmailService::new(settings.smtp.clone());
-    let entitlement_service = EntitlementService::new(subscription_mapper.clone());
+    // Dedicated pool for the show-count service. Cheap (Arc-backed) and
+    // keeps EntitlementService independent of any single mapper's lifetime.
+    let show_count_pool = server::mappers::database::Database::new(db_config.clone())
+        .await?
+        .pool;
+    let show_count_service =
+        server::services::show_count::ShowCountService::new(show_count_pool);
+    let entitlement_service = EntitlementService::new(
+        subscription_mapper.clone(),
+        show_count_service,
+        &settings.limits,
+    );
 
     // Stripe client uses an empty secret when not configured — this keeps
     // dev environments where Stripe isn't set up runnable. Handlers that need

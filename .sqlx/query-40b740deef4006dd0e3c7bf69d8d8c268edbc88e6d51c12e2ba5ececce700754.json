@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT user_id, theme_preference as \"theme_preference: Theme\", language_preference as \"language_preference: SiteLanguage\", title_language_preference as \"title_language_preference: Language\", accent_preference as \"accent_preference: Accent\", timezone, created_at, updated_at FROM user_settings WHERE user_id = $1",
+  "query": "SELECT user_id, theme_preference as \"theme_preference: Theme\", language_preference as \"language_preference: SiteLanguage\", title_language_preference as \"title_language_preference: Language\", accent_preference as \"accent_preference: Accent\", timezone, created_at, updated_at, reminder_offsets_minutes FROM user_settings WHERE user_id = $1",
   "describe": {
     "columns": [
       {
@@ -86,6 +86,11 @@
         "ordinal": 7,
         "name": "updated_at",
         "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 8,
+        "name": "reminder_offsets_minutes",
+        "type_info": "Int4Array"
       }
     ],
     "parameters": {
@@ -101,8 +106,9 @@
       false,
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "118ea8a41a7826300e80e967a3a5cc3274da7100651ce5940f6d6958db988e45"
+  "hash": "40b740deef4006dd0e3c7bf69d8d8c268edbc88e6d51c12e2ba5ececce700754"
 }

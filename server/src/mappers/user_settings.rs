@@ -46,7 +46,7 @@ impl UserSettingsMapper {
     ) -> ServerResult<UserSettings> {
         let settings: Option<UserSettings> = sqlx::query_as!(
             UserSettings,
-            "SELECT user_id, theme_preference as \"theme_preference: Theme\", language_preference as \"language_preference: SiteLanguage\", title_language_preference as \"title_language_preference: Language\", accent_preference as \"accent_preference: Accent\", timezone, created_at, updated_at FROM user_settings WHERE user_id = $1",
+            "SELECT user_id, theme_preference as \"theme_preference: Theme\", language_preference as \"language_preference: SiteLanguage\", title_language_preference as \"title_language_preference: Language\", accent_preference as \"accent_preference: Accent\", timezone, created_at, updated_at, reminder_offsets_minutes FROM user_settings WHERE user_id = $1",
             user_id
         )
         .fetch_optional(conn)
@@ -75,13 +75,14 @@ impl UserSettingsMapper {
         settings: &UserSettings,
     ) -> ServerResult<()> {
         sqlx::query!(
-                "INSERT INTO user_settings (user_id, theme_preference, language_preference, title_language_preference, accent_preference, timezone) VALUES ($1, $2, $3, $4, $5, $6) ON CONFLICT (user_id) DO UPDATE SET theme_preference = EXCLUDED.theme_preference, language_preference = EXCLUDED.language_preference, title_language_preference = EXCLUDED.title_language_preference, accent_preference = EXCLUDED.accent_preference, timezone = EXCLUDED.timezone",
+                "INSERT INTO user_settings (user_id, theme_preference, language_preference, title_language_preference, accent_preference, timezone, reminder_offsets_minutes) VALUES ($1, $2, $3, $4, $5, $6, $7) ON CONFLICT (user_id) DO UPDATE SET theme_preference = EXCLUDED.theme_preference, language_preference = EXCLUDED.language_preference, title_language_preference = EXCLUDED.title_language_preference, accent_preference = EXCLUDED.accent_preference, timezone = EXCLUDED.timezone, reminder_offsets_minutes = EXCLUDED.reminder_offsets_minutes",
                 user_id,
                 settings.theme_preference as Theme,
                 settings.language_preference as SiteLanguage,
                 settings.title_language_preference as Language,
                 settings.accent_preference as Accent,
                 settings.timezone,
+                &settings.reminder_offsets_minutes,
             )
             .execute(conn)
             .await?;
@@ -134,6 +135,7 @@ mod tests {
             timezone: "Europe/Lisbon".to_string(),
             created_at: chrono::NaiveDateTime::default(),
             updated_at: chrono::NaiveDateTime::default(),
+            reminder_offsets_minutes: vec![30],
         }
     }
 

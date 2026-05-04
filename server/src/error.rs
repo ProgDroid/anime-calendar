@@ -38,24 +38,36 @@ pub enum Error {
     StripeNotConfigured,
     #[error("Stripe API error: {0}")]
     Stripe(String),
-    /// HTTP 402: caller's tier doesn't allow the requested resource
-    /// (e.g. a free user trying to set a Pro accent on `PUT /user/settings`).
-    /// The body shape extends the `{"error": "..."}` convention with a
-    /// `required_tier` field so the frontend can route the user to the right
-    /// upgrade surface without parsing the message string.
+    /// HTTP 402: caller's tier doesn't allow the requested resource.
+    /// `required_tier` tells the frontend which surface to send the user
+    /// to. `reason` provides a stable code (e.g. `cap_calendars`,
+    /// `cap_shows`, `pro_accent`) so the modal can show the right copy.
+    /// Reason is optional for backwards compatibility — frontend defaults
+    /// to a generic "upgrade" string when absent.
     #[error("upgrade_required")]
-    PaymentRequired { required_tier: &'static str },
+    PaymentRequired {
+        required_tier: &'static str,
+        reason: Option<&'static str>,
+    },
 }
 
 impl ResponseError for Error {
     fn error_response(&self) -> actix_web::HttpResponse<actix_web::body::BoxBody> {
         // PaymentRequired carries an extra structured field. Other variants
         // keep the documented `{"error":"..."}` shape from CLAUDE.md.
-        if let Self::PaymentRequired { required_tier } = self {
-            return HttpResponse::build(self.status_code()).json(serde_json::json!({
+        if let Self::PaymentRequired {
+            required_tier,
+            reason,
+        } = self
+        {
+            let mut payload = serde_json::json!({
                 "error": "upgrade_required",
                 "required_tier": *required_tier,
-            }));
+            });
+            if let Some(reason) = reason {
+                payload["reason"] = serde_json::Value::String((*reason).to_owned());
+            }
+            return HttpResponse::build(self.status_code()).json(payload);
         }
         HttpResponse::build(self.status_code()).json(serde_json::json!({
             "error": self.to_string()
@@ -83,5 +95,38 @@ impl ResponseError for Error {
             | Self::StripeNotConfigured
             | Self::Stripe(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn payment_required_with_reason_includes_reason_field() {
+        let err = Error::PaymentRequired {
+            required_tier: "paid",
+            reason: Some("cap_shows"),
+        };
+        let resp = err.error_response();
+        let bytes = actix_web::body::to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"], "upgrade_required");
+        assert_eq!(json["required_tier"], "paid");
+        assert_eq!(json["reason"], "cap_shows");
+    }
+
+    #[tokio::test]
+    async fn payment_required_without_reason_omits_reason_field() {
+        let err = Error::PaymentRequired {
+            required_tier: "paid",
+            reason: None,
+        };
+        let resp = err.error_response();
+        let bytes = actix_web::body::to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"], "upgrade_required");
+        assert_eq!(json["required_tier"], "paid");
+        assert!(json.get("reason").is_none());
     }
 }

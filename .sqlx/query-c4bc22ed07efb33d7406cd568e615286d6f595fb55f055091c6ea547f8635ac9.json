@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 AND deleted_at IS NULL RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
+  "query": "SELECT\n                id,\n                language as \"language: Language\",\n                name,\n                subscription_token,\n                user_id,\n                created_at,\n                updated_at,\n                event_style,\n                frozen_subscribe_ics FROM calendars WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
   "describe": {
     "columns": [
       {
@@ -10,11 +10,6 @@
       },
       {
         "ordinal": 1,
-        "name": "name",
-        "type_info": "Varchar"
-      },
-      {
-        "ordinal": 2,
         "name": "language: Language",
         "type_info": {
           "Custom": {
@@ -28,6 +23,11 @@
             }
           }
         }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
       },
       {
         "ordinal": 3,
@@ -48,23 +48,20 @@
         "ordinal": 6,
         "name": "updated_at",
         "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 7,
+        "name": "event_style",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "frozen_subscribe_ics",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Varchar",
-        {
-          "Custom": {
-            "name": "language",
-            "kind": {
-              "Enum": [
-                "english",
-                "romaji",
-                "native"
-              ]
-            }
-          }
-        },
         "Int4",
         "Int4"
       ]
@@ -76,8 +73,10 @@
       false,
       false,
       false,
-      false
+      false,
+      false,
+      true
     ]
   },
-  "hash": "e417f09e171a0f4107dbe43bdb4326cfac8a5cf6e58c7be6587b1d48c1eb2ea2"
+  "hash": "c4bc22ed07efb33d7406cd568e615286d6f595fb55f055091c6ea547f8635ac9"
 }

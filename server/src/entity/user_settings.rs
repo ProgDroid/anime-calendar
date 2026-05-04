@@ -4,7 +4,7 @@ use crate::entity::calendar::Language;
 use chrono::NaiveDateTime;
 use serde::{Deserialize, Serialize};
 
-#[derive(Clone, Debug, Default, Deserialize, Serialize, sqlx::FromRow, utoipa::ToSchema)]
+#[derive(Clone, Debug, Deserialize, Serialize, sqlx::FromRow, utoipa::ToSchema)]
 #[serde(default)]
 pub struct UserSettings {
     pub user_id: i32,
@@ -15,6 +15,31 @@ pub struct UserSettings {
     pub timezone: String,
     pub created_at: NaiveDateTime,
     pub updated_at: NaiveDateTime,
+    /// Per-user reminder offsets (minutes before episode air time). Free
+    /// users have a single 30-minute heads-up; Pro users can store up to
+    /// `LimitsConfig::pro_max_reminders` entries.
+    #[serde(default = "default_reminder_offsets")]
+    pub reminder_offsets_minutes: Vec<i32>,
+}
+
+impl Default for UserSettings {
+    fn default() -> Self {
+        Self {
+            user_id: 0,
+            theme_preference: Theme::default(),
+            language_preference: SiteLanguage::default(),
+            title_language_preference: Language::default(),
+            accent_preference: Accent::default(),
+            timezone: String::new(),
+            created_at: NaiveDateTime::default(),
+            updated_at: NaiveDateTime::default(),
+            reminder_offsets_minutes: default_reminder_offsets(),
+        }
+    }
+}
+
+fn default_reminder_offsets() -> Vec<i32> {
+    vec![30]
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, Default, sqlx::Type, Copy, utoipa::ToSchema)]

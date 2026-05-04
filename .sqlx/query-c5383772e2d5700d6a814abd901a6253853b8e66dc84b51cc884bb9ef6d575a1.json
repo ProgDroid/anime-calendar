@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                id,\n                language as \"language: Language\",\n                name,\n                subscription_token,\n                user_id,\n                created_at,\n                updated_at FROM calendars WHERE subscription_token = $1 AND deleted_at IS NULL",
+  "query": "SELECT\n                id,\n                language as \"language: Language\",\n                name,\n                subscription_token,\n                user_id,\n                created_at,\n                updated_at,\n                event_style,\n                frozen_subscribe_ics FROM calendars WHERE subscription_token = $1 AND deleted_at IS NULL",
   "describe": {
     "columns": [
       {
@@ -48,6 +48,16 @@
         "ordinal": 6,
         "name": "updated_at",
         "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 7,
+        "name": "event_style",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "frozen_subscribe_ics",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -62,8 +72,10 @@
       false,
       false,
       false,
-      false
+      false,
+      false,
+      true
     ]
   },
-  "hash": "70261d68e0fa28359cf6459d07d6f9051a8fe460122c88ad0d1d47d4a4dbd3d5"
+  "hash": "c5383772e2d5700d6a814abd901a6253853b8e66dc84b51cc884bb9ef6d575a1"
 }

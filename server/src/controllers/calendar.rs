@@ -415,6 +415,8 @@ async fn put(
         user_id: user.id,
         created_at: NaiveDateTime::default(),
         updated_at: NaiveDateTime::default(),
+        event_style: "timed".to_owned(),
+        frozen_subscribe_ics: None,
     };
 
     // Create calendar with the authenticated user's ID

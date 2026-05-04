@@ -61,7 +61,9 @@ impl CalendarMapper {
                 subscription_token,
                 user_id,
                 created_at,
-                updated_at FROM calendars WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+                updated_at,
+                event_style,
+                frozen_subscribe_ics FROM calendars WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
             id,
             user_id
         )
@@ -88,6 +90,8 @@ impl CalendarMapper {
             user_id: calendar.user_id,
             created_at: calendar.created_at,
             updated_at: calendar.updated_at,
+            event_style: calendar.event_style,
+            frozen_subscribe_ics: calendar.frozen_subscribe_ics,
         })
     }
 
@@ -112,7 +116,9 @@ impl CalendarMapper {
                 subscription_token,
                 user_id,
                 created_at,
-                updated_at FROM calendars WHERE subscription_token = $1 AND deleted_at IS NULL",
+                updated_at,
+                event_style,
+                frozen_subscribe_ics FROM calendars WHERE subscription_token = $1 AND deleted_at IS NULL",
             token
         )
         .fetch_one(&mut *conn)
@@ -134,6 +140,8 @@ impl CalendarMapper {
             user_id: calendar.user_id,
             created_at: calendar.created_at,
             updated_at: calendar.updated_at,
+            event_style: calendar.event_style,
+            frozen_subscribe_ics: calendar.frozen_subscribe_ics,
         })
     }
 
@@ -193,6 +201,8 @@ impl CalendarMapper {
                 c.user_id,
                 c.created_at,
                 c.updated_at,
+                c.event_style,
+                c.frozen_subscribe_ics,
                 COALESCE(
                     ARRAY_AGG(ci.item_id) FILTER (WHERE ci.item_id IS NOT NULL),
                     '{}'::integer[]
@@ -210,7 +220,7 @@ impl CalendarMapper {
             FROM calendars c
             LEFT JOIN calendar_items ci ON ci.calendar_id = c.id
             WHERE c.user_id = $1 AND c.deleted_at IS NULL
-            GROUP BY c.id, c.language, c.name, c.subscription_token, c.user_id, c.created_at, c.updated_at
+            GROUP BY c.id, c.language, c.name, c.subscription_token, c.user_id, c.created_at, c.updated_at, c.event_style, c.frozen_subscribe_ics
             ORDER BY c.created_at DESC
             LIMIT $2
             OFFSET $3"#,
@@ -234,6 +244,8 @@ impl CalendarMapper {
                         created_at: r.created_at,
                         updated_at: r.updated_at,
                         item_ids: r.item_ids,
+                        event_style: r.event_style,
+                        frozen_subscribe_ics: r.frozen_subscribe_ics,
                     },
                     r.recent_item_ids,
                 )
@@ -258,11 +270,12 @@ impl CalendarMapper {
         crate::metrics::db::timed("calendar.insert", async {
             let token = Self::generate_subscription_token();
             let inserted_calendar = sqlx::query!(
-                "INSERT INTO calendars (name, language, user_id, subscription_token) VALUES ($1, $2, $3, $4) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
+                "INSERT INTO calendars (name, language, user_id, subscription_token, event_style) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics",
                 calendar.name,
                 calendar.language as Language,
                 calendar.user_id,
                 token,
+                calendar.event_style,
             )
             .fetch_one(&self.db.pool)
             .await?;
@@ -279,6 +292,8 @@ impl CalendarMapper {
                 user_id: inserted_calendar.user_id,
                 created_at: inserted_calendar.created_at,
                 updated_at: inserted_calendar.updated_at,
+                event_style: inserted_calendar.event_style,
+                frozen_subscribe_ics: inserted_calendar.frozen_subscribe_ics,
             })
         })
         .await
@@ -289,9 +304,10 @@ impl CalendarMapper {
     pub async fn update_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
         crate::metrics::db::timed("calendar.update", async {
             let updated_calendar = sqlx::query!(
-                "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 AND deleted_at IS NULL RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
+                "UPDATE calendars SET name = $1, language = $2, event_style = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 AND user_id = $5 AND deleted_at IS NULL RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics",
                 calendar.name,
                 calendar.language as Language,
+                calendar.event_style,
                 calendar.id,
                 calendar.user_id,
             )
@@ -310,6 +326,8 @@ impl CalendarMapper {
                 user_id: updated_calendar.user_id,
                 created_at: updated_calendar.created_at,
                 updated_at: updated_calendar.updated_at,
+                event_style: updated_calendar.event_style,
+                frozen_subscribe_ics: updated_calendar.frozen_subscribe_ics,
             })
         })
         .await
@@ -405,17 +423,18 @@ impl CalendarMapper {
         }
     }
 
-    async fn insert_calendar_with(
+    pub(crate) async fn insert_calendar_with(
         conn: &mut sqlx::PgConnection,
         calendar: Calendar,
     ) -> ServerResult<Calendar> {
         let token = Self::generate_subscription_token();
         let inserted_calendar = sqlx::query!(
-            "INSERT INTO calendars (name, language, user_id, subscription_token) VALUES ($1, $2, $3, $4) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
+            "INSERT INTO calendars (name, language, user_id, subscription_token, event_style) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics",
             calendar.name,
             calendar.language as Language,
             calendar.user_id,
             token,
+            calendar.event_style,
         )
         .fetch_one(&mut *conn)
         .await?;
@@ -432,6 +451,8 @@ impl CalendarMapper {
             user_id: inserted_calendar.user_id,
             created_at: inserted_calendar.created_at,
             updated_at: inserted_calendar.updated_at,
+            event_style: inserted_calendar.event_style,
+            frozen_subscribe_ics: inserted_calendar.frozen_subscribe_ics,
         })
     }
 
@@ -440,9 +461,10 @@ impl CalendarMapper {
         calendar: Calendar,
     ) -> ServerResult<Calendar> {
         let updated_calendar = sqlx::query!(
-            "UPDATE calendars SET name = $1, language = $2, updated_at = CURRENT_TIMESTAMP WHERE id = $3 AND user_id = $4 AND deleted_at IS NULL RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at",
+            "UPDATE calendars SET name = $1, language = $2, event_style = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 AND user_id = $5 AND deleted_at IS NULL RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics",
             calendar.name,
             calendar.language as Language,
+            calendar.event_style,
             calendar.id,
             calendar.user_id,
         )
@@ -461,6 +483,8 @@ impl CalendarMapper {
             user_id: updated_calendar.user_id,
             created_at: updated_calendar.created_at,
             updated_at: updated_calendar.updated_at,
+            event_style: updated_calendar.event_style,
+            frozen_subscribe_ics: updated_calendar.frozen_subscribe_ics,
         })
     }
 
@@ -522,6 +546,8 @@ mod tests {
             user_id,
             created_at: chrono::NaiveDateTime::default(),
             updated_at: chrono::NaiveDateTime::default(),
+            event_style: "timed".to_owned(),
+            frozen_subscribe_ics: None,
         }
     }
 

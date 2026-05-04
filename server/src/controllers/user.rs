@@ -316,6 +316,7 @@ pub async fn update_user_settings(
             Ok(crate::entity::subscription::Tier::Free) => {
                 return crate::error::Error::PaymentRequired {
                     required_tier: "paid",
+                    reason: Some("pro_accent"),
                 }
                 .error_response();
             }
@@ -802,6 +803,8 @@ mod integration_tests {
         let mapper = web::Data::new(UserSettingsMapper::from_pool(pool.clone()));
         let entitlement = web::Data::new(crate::services::entitlement::EntitlementService::new(
             crate::mappers::subscription::SubscriptionMapper::from_pool(pool.clone()),
+            crate::services::show_count::ShowCountService::new(pool.clone()),
+            &crate::config::server::LimitsConfig::default(),
         ));
         let app = test::init_service(
             App::new()
@@ -857,6 +860,8 @@ mod integration_tests {
         let mapper = web::Data::new(UserSettingsMapper::from_pool(pool.clone()));
         let entitlement = web::Data::new(crate::services::entitlement::EntitlementService::new(
             crate::mappers::subscription::SubscriptionMapper::from_pool(pool.clone()),
+            crate::services::show_count::ShowCountService::new(pool.clone()),
+            &crate::config::server::LimitsConfig::default(),
         ));
         let app = test::init_service(
             App::new()
@@ -918,6 +923,8 @@ mod integration_tests {
         let mapper = web::Data::new(UserSettingsMapper::from_pool(pool.clone()));
         let entitlement = web::Data::new(crate::services::entitlement::EntitlementService::new(
             crate::mappers::subscription::SubscriptionMapper::from_pool(pool.clone()),
+            crate::services::show_count::ShowCountService::new(pool.clone()),
+            &crate::config::server::LimitsConfig::default(),
         ));
         let app = test::init_service(
             App::new()
