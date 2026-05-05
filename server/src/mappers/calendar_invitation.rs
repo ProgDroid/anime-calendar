@@ -901,7 +901,12 @@ mod tests {
         let mut tx = crate::test_helpers::test_tx().await;
         let owner = create_test_user(&mut tx).await;
         let cal = create_test_calendar(&mut tx, owner).await;
-        let new_deadline = (Utc::now() + Duration::days(30)).naive_utc();
+        // Postgres TIMESTAMP truncates to microseconds; build an instant
+        // with zero sub-second to avoid round-trip mismatch.
+        let new_deadline = chrono::NaiveDate::from_ymd_opt(2099, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
 
         let inv = CalendarInvitationMapper::create_in_tx(
             &mut tx, cal, owner, "bump@example.com", "h", future_expiry(),
