@@ -15,7 +15,7 @@
 
 ---
 
-## Implementation status (last updated 2026-05-04 PM)
+## Implementation status (last updated 2026-05-05)
 
 | Phase | Status | Commits |
 |-------|--------|---------|
@@ -27,8 +27,8 @@
 | Phase 1.4 — Stripe webhook frozen-blob lifecycle hooks | ✅ Done | `e3a8e00` |
 | Phase 1.5 — Frontend counters + gates + 402 reason routing + /api/account/usage | ✅ Done | `07aa937..4c22f53` |
 | Phase 2a (backend) — ics_export VALARM/event_style + settings/event_style validation | ✅ Done | `5f48997..f6a21d5` |
-| Phase 2b (frontend) — Reminders chip-list + event_style toggle + locales | ⏳ Pending | — |
-| Phase 3 — Pricing reset + UpgradePage rewrite + locale cleanup | ⏳ Pending | — |
+| Phase 2b (frontend) — Reminders chip-list + event_style toggle + locales | ✅ Done | this session |
+| Phase 3 — Pricing reset + UpgradePage rewrite + locale cleanup | ✅ Done | this session |
 
 **Pick-up notes for the next session:**
 - Phase 2b entry points and Phase 3 entry points are catalogued in memory `project_monetisation_phase_2a_complete.md`.

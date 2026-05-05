@@ -33,6 +33,9 @@ publishable_key = ""
 secret_key = ""
 webhook_secret = ""
 # Recurring price IDs created in Stripe Dashboard for the Pro tier.
+# v1 pricing: $2.99/month, $24.99/year (≈30% annual savings, 14-day trial).
+# Create these in test mode first via the Stripe Dashboard, then paste the
+# `price_*` IDs here. See docs/checklists/2026-05-monetisation-stripe-price-update.md.
 price_id_monthly = ""
 price_id_annual = ""
 
