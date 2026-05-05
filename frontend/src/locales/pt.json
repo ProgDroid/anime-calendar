@@ -132,7 +132,20 @@
     "save": "Guardar Configurações",
     "updateSuccess": "Configurações atualizadas com sucesso!",
     "updateFailed": "Atualização de configurações falhou",
-    "fetchFailed": "Erro a carregar configurações"
+    "fetchFailed": "Erro a carregar configurações",
+    "reminders": {
+      "heading": "Lembretes",
+      "cap": "{active} de {max} ativos",
+      "capExplanation": "Apps de calendário podem agrupar ou ignorar notificações além de cinco por evento. Limitamos aqui para manter os alertas úteis.",
+      "proLockedMessage": "Personalize lembretes com o Anime Calendar Pro.",
+      "upgradeCta": "Fazer upgrade para Pro",
+      "offset": {
+        "minutes": "{n} min",
+        "hours": "{n} hora | {n} horas",
+        "days": "{n} dia | {n} dias",
+        "weeks": "{n} semana | {n} semanas"
+      }
+    }
   },
   "calendar": {
     "tabs": {
@@ -178,7 +191,18 @@
     "nameMaxLength": "Nome do calendário deve ser {max_length} caracteres ou menos",
     "noItemsSelected": "Por favor acrescente pelo menos um item no calendário",
     "updateSuccess": "Calendário {name} atualizado",
-    "updateFailed": "Falha ao atualizar calendário"
+    "updateFailed": "Falha ao atualizar calendário",
+    "settings": {
+      "eventStyle": {
+        "label": "Estilo do evento",
+        "ariaLabel": "Escolher entre eventos com horário ou de dia inteiro",
+        "timedLabel": "Com horário",
+        "timedDescription": "Mostrar horários de exibição precisos.",
+        "allDayLabel": "Diário",
+        "allDayDescription": "Eventos de dia inteiro para uma vista geral.",
+        "fallbackNote": "Episódios sem hora de exibição conhecida aparecem como eventos de dia inteiro mesmo no modo Com horário."
+      }
+    }
   },
   "calendars": {
     "title": "Meus Calendários",
@@ -368,15 +392,18 @@
       "free": {
         "name": "Free",
         "tagline": "Acompanhe o que estreia.",
-        "price": "R$ 0",
+        "price": "$0",
         "period": "para sempre",
         "cta": "Plano atual",
         "features": {
           "tracking": "Acompanhamento de animes e grade semanal",
-          "icsExport": "Exportação .ics e link de assinatura",
+          "limitedCalendars": "Até 3 calendários",
+          "limitedShows": "Até 25 séries acompanhadas",
+          "icsExport": "Exportação .ics para download",
           "freeAccents": "Acentos Coral e Iris",
           "noProAccents": "Acentos Pro (Matcha, Sakura, Citron)",
-          "noPrioritySupport": "Suporte prioritário por e-mail"
+          "noLiveSubscribe": "URL de assinatura ao vivo com atualização horária",
+          "noCustomReminders": "Lembretes personalizáveis"
         }
       },
       "pro": {
@@ -390,19 +417,20 @@
       "subtitle": "Tudo do Free, mais o kit Pro."
     },
     "price": {
-      "monthly": "R$ 24,90",
-      "annual": "R$ 249,00",
+      "monthly": "$2.99",
+      "annual": "$24.99",
       "perMonth": "por mês",
       "perYear": "por ano",
-      "savings": "2 meses grátis"
+      "savings": "Economize ~30%"
     },
     "features": {
       "ariaLabel": "Recursos do plano",
-      "proAccents": "Acentos Pro (Matcha, Sakura, Citron)",
       "unlimitedCalendars": "Calendários ilimitados",
-      "priorityRefresh": "Atualização prioritária da agenda",
-      "exportFlexibility": "Múltiplos perfis de exportação",
-      "support": "Suporte prioritário por e-mail"
+      "unlimitedShows": "Séries acompanhadas ilimitadas",
+      "liveSubscribeUrl": "URL de assinatura ao vivo com atualização horária",
+      "customisableReminders": "Lembretes personalizáveis (até 5)",
+      "allAccents": "Todos os temas de acento — Coral, Iris, Matcha, Sakura, Citron",
+      "earlyAccess": "Acesso antecipado a novos recursos"
     },
     "footer": "Cancele quando quiser · Pagamento seguro · 14 dias grátis."
   },

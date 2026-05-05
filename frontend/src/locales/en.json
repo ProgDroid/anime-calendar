@@ -132,7 +132,20 @@
     "save": "Save Settings",
     "updateSuccess": "Settings updated successfully!",
     "updateFailed": "Failed to update user settings",
-    "fetchFailed": "Failed to fetch user settings"
+    "fetchFailed": "Failed to fetch user settings",
+    "reminders": {
+      "heading": "Reminders",
+      "cap": "{active} of {max} active",
+      "capExplanation": "Calendar apps may batch or ignore notifications beyond five per event. We cap it here to keep alerts useful.",
+      "proLockedMessage": "Customise reminders with Anime Calendar Pro.",
+      "upgradeCta": "Upgrade to Pro",
+      "offset": {
+        "minutes": "{n} min",
+        "hours": "{n} hour | {n} hours",
+        "days": "{n} day | {n} days",
+        "weeks": "{n} week | {n} weeks"
+      }
+    }
   },
   "calendar": {
     "tabs": {
@@ -178,7 +191,18 @@
     "nameMaxLength": "Calendar name must be {max_length} characters or less",
     "noItemsSelected": "Please add at least one item to the calendar",
     "updateSuccess": "Calendar {name} updated",
-    "updateFailed": "Failed to update calendar"
+    "updateFailed": "Failed to update calendar",
+    "settings": {
+      "eventStyle": {
+        "label": "Event style",
+        "ariaLabel": "Choose between timed and all-day events",
+        "timedLabel": "Timed",
+        "timedDescription": "Show precise air times.",
+        "allDayLabel": "Daily",
+        "allDayDescription": "All-day events for a roundup view.",
+        "fallbackNote": "Episodes without a known air time will appear as all-day events even in Timed mode."
+      }
+    }
   },
   "calendars": {
     "title": "My Calendars",
@@ -372,11 +396,14 @@
         "period": "forever",
         "cta": "Current plan",
         "features": {
-          "tracking": "Anime tracking & weekly schedule",
-          "icsExport": ".ics export & subscribe link",
-          "freeAccents": "Coral and Iris accent themes",
+          "tracking": "Anime tracking and weekly schedule",
+          "limitedCalendars": "Up to 3 calendars",
+          "limitedShows": "Up to 25 tracked shows",
+          "icsExport": ".ics download export",
+          "freeAccents": "Coral and Iris accents",
           "noProAccents": "Pro accent themes (Matcha, Sakura, Citron)",
-          "noPrioritySupport": "Priority email support"
+          "noLiveSubscribe": "Live subscribe URL with hourly refresh",
+          "noCustomReminders": "Customisable reminders"
         }
       },
       "pro": {
@@ -390,19 +417,20 @@
       "subtitle": "Everything in Free, plus the Pro toolkit."
     },
     "price": {
-      "monthly": "$4.99",
-      "annual": "$49.90",
+      "monthly": "$2.99",
+      "annual": "$24.99",
       "perMonth": "per month",
       "perYear": "per year",
-      "savings": "2 months free"
+      "savings": "Save ~30%"
     },
     "features": {
       "ariaLabel": "Plan features",
-      "proAccents": "Pro accents (Matcha, Sakura, Citron)",
       "unlimitedCalendars": "Unlimited calendars",
-      "priorityRefresh": "Priority schedule refresh",
-      "exportFlexibility": "Multiple export profiles",
-      "support": "Priority email support"
+      "unlimitedShows": "Unlimited tracked shows",
+      "liveSubscribeUrl": "Live subscribe URL with hourly refresh",
+      "customisableReminders": "Customisable reminders (up to 5)",
+      "allAccents": "All accent themes — Coral, Iris, Matcha, Sakura, Citron",
+      "earlyAccess": "Early access to new features"
     },
     "footer": "Cancel anytime · Secure payment · 14-day free trial."
   },
