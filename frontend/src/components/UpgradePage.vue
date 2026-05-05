@@ -31,19 +31,23 @@ interface FeatureRow {
 // Free tier — mix of ✓ and ✗ to set up the comparison.
 const FREE_FEATURES: readonly FeatureRow[] = [
   { ok: true, textKey: 'pricing.tiers.free.features.tracking' },
+  { ok: true, textKey: 'pricing.tiers.free.features.limitedCalendars' },
+  { ok: true, textKey: 'pricing.tiers.free.features.limitedShows' },
   { ok: true, textKey: 'pricing.tiers.free.features.icsExport' },
   { ok: true, textKey: 'pricing.tiers.free.features.freeAccents' },
   { ok: false, textKey: 'pricing.tiers.free.features.noProAccents' },
-  { ok: false, textKey: 'pricing.tiers.free.features.noPrioritySupport' },
+  { ok: false, textKey: 'pricing.tiers.free.features.noLiveSubscribe' },
+  { ok: false, textKey: 'pricing.tiers.free.features.noCustomReminders' },
 ] as const
 
-// Pro tier — keep the existing 5 feature keys; they're already shipped + tested.
+// Pro tier — v1 enforced feature set. Only ships what's actually built.
 const PRO_FEATURE_KEYS = [
-  'pricing.features.proAccents',
   'pricing.features.unlimitedCalendars',
-  'pricing.features.priorityRefresh',
-  'pricing.features.exportFlexibility',
-  'pricing.features.support',
+  'pricing.features.unlimitedShows',
+  'pricing.features.liveSubscribeUrl',
+  'pricing.features.customisableReminders',
+  'pricing.features.allAccents',
+  'pricing.features.earlyAccess',
 ] as const
 
 async function startCheckout() {
@@ -211,7 +215,12 @@ async function startCheckout() {
         </UiButton>
 
         <ul class="mt-6 space-y-3" :aria-label="t('pricing.features.ariaLabel')">
-          <li v-for="key in PRO_FEATURE_KEYS" :key="key" class="flex items-start gap-3 text-sm text-fg-1">
+          <li
+            v-for="key in PRO_FEATURE_KEYS"
+            :key="key"
+            class="flex items-start gap-3 text-sm text-fg-1"
+            data-testid="pro-feature"
+          >
             <span
               class="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-sm bg-accent-1 [&_svg]:h-3 [&_svg]:w-3"
               :style="{ color: 'var(--accent-1-fg)' }"

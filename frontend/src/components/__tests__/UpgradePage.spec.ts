@@ -134,6 +134,33 @@ describe('UpgradePage', () => {
     expect(wrapper.text()).toContain(renderedHeading(ptMessages))
     expect(wrapper.text()).toContain(ptMessages.upgrade.cta.startTrial)
   })
+
+  it('renders the new pricing strings ($2.99 / $24.99)', async () => {
+    const wrapper = mountPage()
+    // Monthly price visible by default.
+    expect(wrapper.text()).toContain('$2.99')
+    // Switch to annual to expose the annual figure.
+    await wrapper
+      .findAll('button')
+      .find((b) => b.text() === enMessages.pricing.interval.annual)
+      ?.trigger('click')
+    expect(wrapper.text()).toContain('$24.99')
+  })
+
+  it('renders six pro features', () => {
+    const wrapper = mountPage()
+    const features = wrapper.findAll('[data-testid="pro-feature"]')
+    expect(features.length).toBe(6)
+  })
+
+  it('does not advertise unbuilt features', () => {
+    const wrapper = mountPage()
+    const text = wrapper.text()
+    expect(text).not.toContain('AniList sync')
+    expect(text).not.toContain('MyAnimeList')
+    expect(text).not.toContain('shared editors')
+    expect(text).not.toContain('Studio')
+  })
 })
 
 describe('UpgradePage — mobile layout', () => {
