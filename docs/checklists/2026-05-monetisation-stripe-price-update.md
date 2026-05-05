@@ -29,11 +29,11 @@ In **Stripe Dashboard → test mode → Products → Anime Calendar Pro** (the e
 
 - [ ] Click **Add another price**. Pricing model: **Standard pricing**. Price: **$2.99 USD**. Billing period: **Monthly**. Trial period: **14 days**. Save.
 - [ ] Click **Add another price** again. Pricing model: **Standard pricing**. Price: **$24.99 USD**. Billing period: **Yearly**. Trial period: **14 days**. Save.
-- [ ] Copy both new `price_*` IDs into `config.toml` under `[stripe.prices]`:
+- [ ] Copy both new `price_*` IDs into `config.toml` under `[stripe]` (the existing flat keys, not a nested `[stripe.prices]` section — see `server/src/config/server.rs`):
       ```toml
-      [stripe.prices]
-      monthly = "price_NEW_MONTHLY_ID"
-      annual  = "price_NEW_ANNUAL_ID"
+      [stripe]
+      price_id_monthly = "price_NEW_MONTHLY_ID"
+      price_id_annual  = "price_NEW_ANNUAL_ID"
       ```
 - [ ] Restart the server to pick up the config change.
 - [ ] **Do not archive the old prices yet** — they're still referenced by any in-flight test subscriptions. Archive after section 4.
