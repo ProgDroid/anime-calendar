@@ -51,4 +51,46 @@ describe('CalendarSettingsForm', () => {
     })
     expect(wrapper.find('[data-testid="submit-btn"]').attributes('disabled')).toBeDefined()
   })
+
+  it('event style segmented renders both options', () => {
+    const wrapper = mount(CalendarSettingsForm, {
+      props: { name: 'Test', language: 'english', loading: false, canSubmit: true, eventStyle: 'timed' },
+      ...mountOpts
+    })
+    const segmented = wrapper.get('[data-testid="event-style-segmented"]')
+    const labels = segmented.findAll('button').map(b => b.text())
+    expect(labels).toContain(en.calendar.settings.eventStyle.timedLabel)
+    expect(labels).toContain(en.calendar.settings.eventStyle.allDayLabel)
+  })
+
+  it('emits update:eventStyle when timed is selected', async () => {
+    const wrapper = mount(CalendarSettingsForm, {
+      props: { name: 'Test', language: 'english', loading: false, canSubmit: true, eventStyle: 'all_day' },
+      ...mountOpts
+    })
+    const segmented = wrapper.get('[data-testid="event-style-segmented"]')
+    const timedBtn = segmented.findAll('button').find(b => b.text() === en.calendar.settings.eventStyle.timedLabel)
+    await timedBtn!.trigger('click')
+    expect(wrapper.emitted('update:eventStyle')?.[0]?.[0]).toBe('timed')
+  })
+
+  it('emits update:eventStyle when all_day is selected', async () => {
+    const wrapper = mount(CalendarSettingsForm, {
+      props: { name: 'Test', language: 'english', loading: false, canSubmit: true, eventStyle: 'timed' },
+      ...mountOpts
+    })
+    const segmented = wrapper.get('[data-testid="event-style-segmented"]')
+    const allDayBtn = segmented.findAll('button').find(b => b.text() === en.calendar.settings.eventStyle.allDayLabel)
+    await allDayBtn!.trigger('click')
+    expect(wrapper.emitted('update:eventStyle')?.[0]?.[0]).toBe('all_day')
+  })
+
+  it('fallback note mentions all-day fallback', () => {
+    const wrapper = mount(CalendarSettingsForm, {
+      props: { name: 'Test', language: 'english', loading: false, canSubmit: true, eventStyle: 'timed' },
+      ...mountOpts
+    })
+    const note = wrapper.get('[data-testid="event-style-fallback-note"]')
+    expect(note.text()).toBe(en.calendar.settings.eventStyle.fallbackNote)
+  })
 })

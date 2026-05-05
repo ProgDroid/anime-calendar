@@ -1,23 +1,40 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
+import UiSegmented from '@/components/ui/UiSegmented.vue'
+import type { EventStyle } from '@/types/calendar'
 
 const { t } = useI18n()
 
-defineProps<{
+const props = withDefaults(defineProps<{
   name: string
   language: 'english' | 'romaji' | 'native'
   loading: boolean
   canSubmit: boolean
   error?: string | null
-}>()
+  eventStyle?: EventStyle
+}>(), {
+  eventStyle: 'timed',
+})
 
 const emit = defineEmits<{
   'update:name': [value: string]
   'update:language': [value: 'english' | 'romaji' | 'native']
+  'update:eventStyle': [value: EventStyle]
   submit: []
 }>()
+
+const eventStyleOptions = computed(() => [
+  { value: 'timed', label: t('calendar.settings.eventStyle.timedLabel') },
+  { value: 'all_day', label: t('calendar.settings.eventStyle.allDayLabel') },
+])
+
+const eventStyleModel = computed({
+  get: () => props.eventStyle ?? 'timed',
+  set: (value: string) => emit('update:eventStyle', value as EventStyle),
+})
 </script>
 
 <template>
@@ -69,6 +86,19 @@ const emit = defineEmits<{
           <span class="text-sm">{{ t('calendar.native') }}</span>
         </label>
       </div>
+    </div>
+
+    <div class="flex flex-col gap-2">
+      <label class="text-sm text-fg-2">{{ t('calendar.settings.eventStyle.label') }}</label>
+      <UiSegmented
+        v-model="eventStyleModel"
+        :options="eventStyleOptions"
+        :aria-label="t('calendar.settings.eventStyle.ariaLabel')"
+        data-testid="event-style-segmented"
+      />
+      <p data-testid="event-style-fallback-note" class="text-sm text-fg-2">
+        {{ t('calendar.settings.eventStyle.fallbackNote') }}
+      </p>
     </div>
 
     <div v-if="error" class="text-sm text-danger-text bg-danger/10 border border-danger/30 rounded-md px-3 py-2">{{ error }}</div>

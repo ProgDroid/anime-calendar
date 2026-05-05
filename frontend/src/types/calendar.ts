@@ -1,10 +1,13 @@
 import type { Item } from './item'
 
+export type EventStyle = 'timed' | 'all_day'
+
 export interface Calendar {
   id: number;
   items: Item[];
   language: 'english' | 'romaji' | 'native';
   name: string;
+  event_style?: EventStyle;
   created_at: string;
   updated_at: string;
 }

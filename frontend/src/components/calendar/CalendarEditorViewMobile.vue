@@ -5,7 +5,7 @@ import { useI18n } from 'vue-i18n'
 import api from '@/config/api'
 import { toastService } from '@/services/toastService'
 import type { Item } from '@/types/item'
-import type { Calendar } from '@/types/calendar'
+import type { Calendar, EventStyle } from '@/types/calendar'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { useEditorSelectionStore } from '@/stores/editorSelection'
 import { useUsageStore } from '@/stores/usageStore'
@@ -32,6 +32,7 @@ const { recommendations, calculateRecommendations } = useRecommendations()
 // Editor state — mirrors CalendarEditorViewDesktop
 const calendarName = ref('')
 const calendarLanguage = ref<'english' | 'romaji' | 'native'>('english')
+const calendarEventStyle = ref<EventStyle>('timed')
 const itemsInCalendar = ref<Item[]>([])
 const submitLoading = ref(false)
 const calendarError = ref<string | null>(null)
@@ -116,6 +117,7 @@ const submitCalendar = async () => {
         id: currentCalendar.value.id,
         name: calendarName.value,
         language: calendarLanguage.value,
+        event_style: calendarEventStyle.value,
         items: itemsInCalendar.value,
       }
       response = await api.put('/calendar', calendar)
@@ -123,6 +125,7 @@ const submitCalendar = async () => {
       const calendar: Omit<Calendar, 'id' | 'created_at' | 'updated_at'> = {
         name: calendarName.value,
         language: calendarLanguage.value,
+        event_style: calendarEventStyle.value,
         items: itemsInCalendar.value,
       }
       response = await api.put('/calendar', calendar)
@@ -176,6 +179,7 @@ if (calendarId && calendarId !== 'new') {
       const calendar: Calendar = response.data
       calendarName.value = calendar.name
       calendarLanguage.value = calendar.language
+      calendarEventStyle.value = calendar.event_style ?? 'timed'
       itemsInCalendar.value = calendar.items
       currentCalendar.value = calendar
       calculateRecommendations(itemsInCalendar.value)
@@ -220,11 +224,13 @@ if (calendarId && calendarId !== 'new') {
       <CalendarSettingsForm
         :name="calendarName"
         :language="calendarLanguage"
+        :event-style="calendarEventStyle"
         :loading="loading"
         :can-submit="itemsInCalendar.length > 0"
         :error="calendarError"
         @update:name="calendarName = $event"
         @update:language="calendarLanguage = $event"
+        @update:event-style="calendarEventStyle = $event"
         @submit="submitCalendar"
       />
     </div>

@@ -8,11 +8,13 @@
           <CalendarSettingsForm
             :name="calendarName"
             :language="calendarLanguage"
+            :event-style="calendarEventStyle"
             :loading="loading"
             :can-submit="itemsInCalendar.length > 0"
             :error="calendarError"
             @update:name="calendarName = $event"
             @update:language="calendarLanguage = $event"
+            @update:event-style="calendarEventStyle = $event"
             @submit="submitCalendar"
           />
           <CalendarItemsList
@@ -63,7 +65,7 @@ import { ref, computed, onMounted, watch, onBeforeMount, onBeforeUnmount } from 
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
-import type { Calendar } from '@/types/calendar'
+import type { Calendar, EventStyle } from '@/types/calendar'
 import api from '@/config/api'
 import { toastService } from '@/services/toastService'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
@@ -90,6 +92,7 @@ const { recommendations, calculateRecommendations } = useRecommendations()
 
 const calendarName = ref('')
 const calendarLanguage = ref<'english' | 'romaji' | 'native'>('english')
+const calendarEventStyle = ref<EventStyle>('timed')
 const itemsInCalendar = ref<Item[]>([])
 const submitLoading = ref(false)
 const calendarError = ref<string | null>(null)
@@ -154,6 +157,7 @@ const submitCalendar = async () => {
         id: currentCalendar.value.id,
         name: calendarName.value,
         language: calendarLanguage.value,
+        event_style: calendarEventStyle.value,
         items: itemsInCalendar.value
       }
       response = await api.put('/calendar', calendar)
@@ -161,6 +165,7 @@ const submitCalendar = async () => {
       const calendar: Omit<Calendar, 'id' | 'created_at' | 'updated_at'> = {
         name: calendarName.value,
         language: calendarLanguage.value,
+        event_style: calendarEventStyle.value,
         items: itemsInCalendar.value
       }
       response = await api.put('/calendar', calendar)
@@ -186,13 +191,14 @@ onMounted(() => {
       if (state.itemsInCalendar !== undefined) itemsInCalendar.value = state.itemsInCalendar
       if (state.calendarName !== undefined) calendarName.value = state.calendarName
       if (state.calendarLanguage !== undefined) calendarLanguage.value = state.calendarLanguage
+      if (state.calendarEventStyle !== undefined) calendarEventStyle.value = state.calendarEventStyle
     }
   } catch { /* ignore */ }
 })
 
 let sessionStorageTimer: ReturnType<typeof setTimeout> | null = null
 
-watch([fetchedItems, selectedItems, itemsInCalendar, calendarName, calendarLanguage], () => {
+watch([fetchedItems, selectedItems, itemsInCalendar, calendarName, calendarLanguage, calendarEventStyle], () => {
   if (sessionStorageTimer !== null) clearTimeout(sessionStorageTimer)
   sessionStorageTimer = setTimeout(() => {
     try {
@@ -201,7 +207,8 @@ watch([fetchedItems, selectedItems, itemsInCalendar, calendarName, calendarLangu
         selectedItems: selectedItems.value,
         itemsInCalendar: itemsInCalendar.value,
         calendarName: calendarName.value,
-        calendarLanguage: calendarLanguage.value
+        calendarLanguage: calendarLanguage.value,
+        calendarEventStyle: calendarEventStyle.value
       }))
     } catch { /* ignore */ }
     sessionStorageTimer = null
@@ -236,6 +243,7 @@ onBeforeMount(async () => {
       const calendar: Calendar = response.data
       calendarName.value = calendar.name
       calendarLanguage.value = calendar.language
+      calendarEventStyle.value = calendar.event_style ?? 'timed'
       itemsInCalendar.value = calendar.items
       currentCalendar.value = calendar
       calculateRecommendations(itemsInCalendar.value)
