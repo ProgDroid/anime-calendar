@@ -14,32 +14,63 @@
 
 ---
 
-## Implementation status (last updated 2026-05-05 PM)
+## Implementation status (last updated 2026-05-05)
 
-Phase 0: 7 of 12 tasks complete. 0.1–0.5 (migrations + entities), plus the
-0.5b corrective FK-width migration (BIGINT→INTEGER) + 0.6 (CalendarEditorMapper:
-8 methods + 7 tests, all green). Pick up at 0.7 (CalendarInvitationMapper).
+Phase 0: ✅ **DONE.** All 12 tasks shipped. 281 server / 412 frontend tests
+green. Pedantic+nursery clippy clean. Frontend lint + build clean. OpenAPI
+spec validates under redocly.
 
-Convention divergences from this plan that have been baked into the code:
+Convention divergences from this plan that were baked into the code (kept here
+as a reference for Phase 1+ briefs):
 - IDs are `i32` everywhere (not `i64`) — matches existing `Calendar.id`/`User.id`.
+- `Calendar` owner FK column is `user_id`, not `owner_id`.
 - Tx helpers named `_in_tx` (matches SubscriptionMapper / `feedback_in_tx_static_helper_pattern`).
-- Tests use `test_tx()` rollback, never `test_pool()`.
+- Tests use `test_tx()` rollback for static `_in_tx` helpers; controller tests use `test_pool()`.
 - Mappers wrap a `Database` struct, delegate instance methods to `_in_tx` helpers
   inside `crate::metrics::db::timed(...)`.
-
-## Implementation status (last updated 2026-05-05)
+- `users` schema today has only `username` + `email`; no `display_name`/`avatar_url`.
+  Owner projection maps `username → display`, hardcodes `avatar = null`. Forward-
+  compatible — when a profile column lands, only the SELECT changes.
+- `Claims` has only `sub: String`; use `claims.user_id() -> Result<i32, Error>`.
+- `Error::Forbidden` (HTTP 403) was added during Phase 0 (commit `ac7f12c`).
+- `EntitlementService::effective_tier` is the tier-resolution path (not a
+  `SubscriptionMapper::is_paid` helper, which doesn't exist).
+- For UPDATE statements with a conditional bump pattern (e.g. `meta_version`),
+  bind comparison values as **distinct parameters** ($6/$7/$8). Same `$N` in
+  both `SET col = $N` and `col <> $N` is rejected by Postgres PREPARE — see
+  `feedback_sqlx_param_assignment_vs_comparison`.
 
 | Phase | Status | Commits |
 |-------|--------|---------|
 | Pre-flight | 🟡 Partial — config block deferred to Phase 1 | — |
-| Phase 0 — Schema + authorization spine | 🟡 5/12 tasks (0.1–0.5 done) | `bb2d684..3a24ab4` |
+| Phase 0 — Schema + authorization spine | ✅ Done (12/12) | `bb2d684..974b12a` |
 | Phase 1 — Invitation lifecycle | ⬜ Pending | — |
 | Phase 2 — Editor mutations + Members tab | ⬜ Pending | — |
 | Phase 3 — Live sync (SSE + Pub/Sub) | ⬜ Pending | — |
 | Phase 4 — Tier transitions | ⬜ Pending | — |
 | Phase 5 — Public landing + E2E + ops | ⬜ Pending | — |
 
-**Pick-up at Task 0.6 (CalendarEditorMapper).** Plan-vs-reality drift catalogued in memory `project_co_editor_phase_0_in_progress.md` — read that before resuming. Key corrections: `i32` IDs (not i64), `Calendar.user_id` (not owner_id), flat module aggregator `entity.rs`, `EntitlementService::effective_tier` (not `SubscriptionMapper::is_paid`).
+**Phase 0 commit map:**
+
+| Task | Commit | Description |
+|---|---|---|
+| 0.1 | `bb2d684` | Migration: `calendars.meta_version INTEGER NOT NULL DEFAULT 1` |
+| 0.2 | `eb1701d` | Migration: `calendar_editors` table |
+| 0.3 | `45f94d4` | Migration: `calendar_invitations` table |
+| 0.4 | `6376dcc` | Entity: `CalendarEditor` |
+| 0.5 | `3a24ab4` | Entity: `CalendarInvitation` + `InvitationStatus` |
+| 0.5b | `462bab5` | FK width fix BIGINT→INTEGER |
+| 0.6 | `6216338` | Mapper: `CalendarEditorMapper` (8 methods + 7 tests) |
+| 0.7 | `cd90e08` | Mapper: `CalendarInvitationMapper` (11 methods + 10 tests) |
+| 0.8a | `bb9adab` | Test fix: `bump_expiry` TIMESTAMP precision |
+| 0.8 | `ac7f12c` | Service: `SharingAuthz::assert_can` + `Error::Forbidden` |
+| 0.9 | `3ce5973` | Wire `SharingAuthz` into PUT/DELETE handlers + DI |
+| 0.10 | `bcdc5e4` | meta_version conditional bump on PUT |
+| 0.11 (server) | `952c47e` | GET /calendars split shape: owned + shared_with_me |
+| 0.11 (frontend) | `974b12a` | MyCalendarsPage two-section layout + SharedCalendarTile |
+| 0.12 | _this commit_ | Verification gate: all suites green, mark Phase 0 done |
+
+**Next: Phase 1 — Invitation lifecycle.**
 
 ---
 
