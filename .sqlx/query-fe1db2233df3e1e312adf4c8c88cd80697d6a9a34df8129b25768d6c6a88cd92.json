@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_editors\n             SET active = true, suspended_at = NULL\n             WHERE calendar_id = $1 AND suspended_at IS NOT NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "fe1db2233df3e1e312adf4c8c88cd80697d6a9a34df8129b25768d6c6a88cd92"
+}

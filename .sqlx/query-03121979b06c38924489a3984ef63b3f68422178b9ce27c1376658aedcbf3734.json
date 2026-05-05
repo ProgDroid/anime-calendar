@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO calendar_editors (calendar_id, user_id, active, suspended_at)\n             VALUES ($1, $2, true, NULL)\n             ON CONFLICT (calendar_id, user_id) DO UPDATE\n                 SET active = true, suspended_at = NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "03121979b06c38924489a3984ef63b3f68422178b9ce27c1376658aedcbf3734"
+}
