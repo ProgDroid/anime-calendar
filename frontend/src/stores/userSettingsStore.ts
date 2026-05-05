@@ -17,7 +17,8 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
       language_preference: 'en',
       title_language_preference: 'English',
       accent_preference: 'coral',
-      timezone: 'UTC'
+      timezone: 'UTC',
+      reminder_offsets_minutes: [30],
     }
   }
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
@@ -7,10 +8,11 @@ import { applySettings } from '@/services/applySettings'
 import { useTheme } from '@/composables/useTheme'
 import { toastService } from '@/services/toastService'
 import { i18n } from '@/plugins/i18n'
-import type { UserSettings, Accent } from '@/types/userSettings'
+import { CANONICAL_REMINDER_OFFSETS, type UserSettings, type Accent } from '@/types/userSettings'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import IconGlobe from '@/components/ui/icons/IconGlobe.vue'
+import IconInfo from '@/components/ui/icons/IconInfo.vue'
 import AccentPicker from '@/components/account/AccentPicker.vue'
 import { useUpgradeInterrupt } from '@/composables/useUpgradeInterrupt'
 import { getMySubscription, type Tier } from '@/services/subscription'
@@ -18,9 +20,12 @@ import { getMySubscription, type Tier } from '@/services/subscription'
 defineOptions({ name: 'PreferencesTab' })
 
 const { t } = useI18n()
+const router = useRouter()
 const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
 const { setAccent, setIsPaid } = useTheme()
+
+const REMINDER_CAP = 5
 
 const loading = ref(true)
 const error = ref<string | null>(null)
@@ -67,6 +72,40 @@ const handleAccentChange = (accent: Accent) => {
 // just open the upgrade modal. The accent stays at its previous value.
 const handleAccentInterrupt = () => {
   openUpgradeModal('pro_accent')
+}
+
+// Reminders: chip toggles edit local state; the existing Save button
+// persists. Stored offsets are preserved across tier transitions but the
+// server enforces a single 30-min VALARM at .ics emission for Free users.
+const reminderOffsets = computed<number[]>(() => settings.value.reminder_offsets_minutes ?? [])
+const activeRemindersCount = computed(() => reminderOffsets.value.length)
+const remindersAtCap = computed(() => activeRemindersCount.value >= REMINDER_CAP)
+const isReminderActive = (offset: number) => reminderOffsets.value.includes(offset)
+
+const toggleReminderOffset = (offset: number) => {
+  if (!isPaid.value) return
+  const current = [...reminderOffsets.value]
+  const idx = current.indexOf(offset)
+  if (idx >= 0) {
+    current.splice(idx, 1)
+  } else if (current.length >= REMINDER_CAP) {
+    return
+  } else {
+    current.push(offset)
+    current.sort((a, b) => a - b)
+  }
+  settings.value.reminder_offsets_minutes = current
+}
+
+const formatReminderOffset = (minutes: number): string => {
+  if (minutes < 60) return t('userSettings.reminders.offset.minutes', { n: minutes })
+  if (minutes < 1440) return t('userSettings.reminders.offset.hours', { n: minutes / 60 }, minutes / 60)
+  if (minutes < 10080) return t('userSettings.reminders.offset.days', { n: minutes / 1440 }, minutes / 1440)
+  return t('userSettings.reminders.offset.weeks', { n: minutes / 10080 }, minutes / 10080)
+}
+
+const goToUpgrade = () => {
+  router.push('/upgrade')
 }
 
 onMounted(async () => {
@@ -170,6 +209,68 @@ onMounted(async () => {
         />
         <p class="text-sm text-fg-2">{{ t('account.preferences.proNote') }}</p>
       </div>
+
+      <!-- Reminders -->
+      <section class="flex flex-col gap-3" data-testid="reminders-section">
+        <header class="flex items-center gap-2">
+          <h3 class="font-display text-xl text-fg-1">{{ t('userSettings.reminders.heading') }}</h3>
+          <span class="text-sm text-fg-2">
+            {{ t('userSettings.reminders.cap', { active: activeRemindersCount, max: REMINDER_CAP }) }}
+          </span>
+          <button
+            type="button"
+            class="text-fg-2 [&_svg]:w-3.5 [&_svg]:h-3.5"
+            :title="t('userSettings.reminders.capExplanation')"
+            :aria-label="t('userSettings.reminders.capExplanation')"
+            data-testid="reminders-info-icon"
+            @click.prevent
+          >
+            <IconInfo />
+          </button>
+        </header>
+
+        <div
+          v-if="!isPaid"
+          class="rounded-md border border-line bg-bg-2 p-4"
+          data-testid="reminders-pro-locked"
+        >
+          <p class="text-sm text-fg-2">{{ t('userSettings.reminders.proLockedMessage') }}</p>
+          <UiButton
+            variant="primary"
+            size="sm"
+            class="mt-2"
+            data-testid="reminders-upgrade-cta"
+            @click="goToUpgrade"
+          >
+            {{ t('userSettings.reminders.upgradeCta') }}
+          </UiButton>
+        </div>
+
+        <ul
+          class="flex flex-wrap gap-2"
+          :aria-disabled="!isPaid"
+          data-testid="reminders-chip-list"
+        >
+          <li v-for="offset in CANONICAL_REMINDER_OFFSETS" :key="offset">
+            <button
+              type="button"
+              :class="[
+                'h-8 px-3 text-sm rounded-full border transition-colors',
+                isReminderActive(offset)
+                  ? 'bg-accent-1 text-[var(--accent-1-fg)] border-accent-1'
+                  : 'bg-bg-1 text-fg-2 border-line hover:text-fg-1',
+                (!isPaid || (remindersAtCap && !isReminderActive(offset))) && 'opacity-50 cursor-not-allowed',
+              ]"
+              :disabled="!isPaid || (remindersAtCap && !isReminderActive(offset))"
+              :aria-pressed="isReminderActive(offset)"
+              :data-testid="`reminder-chip-${offset}`"
+              @click="toggleReminderOffset(offset)"
+            >
+              {{ formatReminderOffset(offset) }}
+            </button>
+          </li>
+        </ul>
+      </section>
 
       <div class="flex justify-end pt-2">
         <UiButton variant="primary" @click="handleSave">
