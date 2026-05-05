@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT\n                id,\n                language as \"language: Language\",\n                name,\n                subscription_token,\n                user_id,\n                created_at,\n                updated_at,\n                event_style,\n                frozen_subscribe_ics FROM calendars WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+  "query": "SELECT id, name, language as \"language: LanguageEntity\",\n                      user_id, subscription_token, created_at, updated_at,\n                      event_style, frozen_subscribe_ics, meta_version\n               FROM calendars\n               WHERE id = $1 AND deleted_at IS NULL",
   "describe": {
     "columns": [
       {
@@ -10,7 +10,12 @@
       },
       {
         "ordinal": 1,
-        "name": "language: Language",
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "language: LanguageEntity",
         "type_info": {
           "Custom": {
             "name": "language",
@@ -25,19 +30,14 @@
         }
       },
       {
-        "ordinal": 2,
-        "name": "name",
-        "type_info": "Varchar"
-      },
-      {
         "ordinal": 3,
-        "name": "subscription_token",
-        "type_info": "Text"
+        "name": "user_id",
+        "type_info": "Int4"
       },
       {
         "ordinal": 4,
-        "name": "user_id",
-        "type_info": "Int4"
+        "name": "subscription_token",
+        "type_info": "Text"
       },
       {
         "ordinal": 5,
@@ -58,11 +58,15 @@
         "ordinal": 8,
         "name": "frozen_subscribe_ics",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "meta_version",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
-        "Int4",
         "Int4"
       ]
     },
@@ -75,8 +79,9 @@
       false,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "c4bc22ed07efb33d7406cd568e615286d6f595fb55f055091c6ea547f8635ac9"
+  "hash": "6e94f399e667da10c36267a8cb892579fb6f80dfe69f6f180cb87a4c09b6b6b9"
 }

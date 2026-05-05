@@ -49,6 +49,11 @@ pub struct Calendar {
     /// deserialised from request bodies.
     #[serde(skip_deserializing, default)]
     pub frozen_subscribe_ics: Option<String>,
+    /// Bumps when `name`, `language`, or `event_style` change on PUT.
+    /// Used by Phase 3 SSE fan-out as a per-calendar revision cursor.
+    /// Server-managed: never deserialised from request bodies.
+    #[serde(skip_deserializing, default = "default_meta_version")]
+    pub meta_version: i32,
 }
 
 impl Default for Calendar {
@@ -64,10 +69,15 @@ impl Default for Calendar {
             updated_at: chrono::NaiveDateTime::default(),
             event_style: default_event_style(),
             frozen_subscribe_ics: None,
+            meta_version: default_meta_version(),
         }
     }
 }
 
 fn default_event_style() -> String {
     "timed".to_owned()
+}
+
+const fn default_meta_version() -> i32 {
+    1
 }

@@ -129,7 +129,7 @@ impl IcsExportService {
         let row = sqlx::query!(
             r#"SELECT id, name, language as "language: LanguageEntity",
                       user_id, subscription_token, created_at, updated_at,
-                      event_style, frozen_subscribe_ics
+                      event_style, frozen_subscribe_ics, meta_version
                FROM calendars
                WHERE id = $1 AND deleted_at IS NULL"#,
             calendar_id,
@@ -159,6 +159,7 @@ impl IcsExportService {
             updated_at: r.updated_at,
             event_style: r.event_style,
             frozen_subscribe_ics: r.frozen_subscribe_ics,
+            meta_version: r.meta_version,
         })
     }
 }

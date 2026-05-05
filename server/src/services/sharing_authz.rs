@@ -194,6 +194,7 @@ mod tests {
                 updated_at: chrono::NaiveDateTime::default(),
                 event_style: "timed".to_owned(),
                 frozen_subscribe_ics: None,
+                meta_version: 1,
             },
         )
         .await

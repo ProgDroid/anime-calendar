@@ -430,6 +430,9 @@ async fn put(
         updated_at: NaiveDateTime::default(),
         event_style: body.event_style.clone(),
         frozen_subscribe_ics: None,
+        // Discarded by the UPDATE (meta_version column is computed server-side
+        // via CASE WHEN in the mapper); the request body never sets it.
+        meta_version: 0,
     };
 
     // Acquire transaction + per-user advisory lock. Anything inside the lock

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "INSERT INTO calendars (name, language, user_id, subscription_token, event_style) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics",
+  "query": "SELECT\n                id,\n                language as \"language: Language\",\n                name,\n                subscription_token,\n                user_id,\n                created_at,\n                updated_at,\n                event_style,\n                frozen_subscribe_ics,\n                meta_version FROM calendars WHERE subscription_token = $1 AND deleted_at IS NULL",
   "describe": {
     "columns": [
       {
@@ -10,11 +10,6 @@
       },
       {
         "ordinal": 1,
-        "name": "name",
-        "type_info": "Varchar"
-      },
-      {
-        "ordinal": 2,
         "name": "language: Language",
         "type_info": {
           "Custom": {
@@ -28,6 +23,11 @@
             }
           }
         }
+      },
+      {
+        "ordinal": 2,
+        "name": "name",
+        "type_info": "Varchar"
       },
       {
         "ordinal": 3,
@@ -58,25 +58,15 @@
         "ordinal": 8,
         "name": "frozen_subscribe_ics",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "meta_version",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
-        "Varchar",
-        {
-          "Custom": {
-            "name": "language",
-            "kind": {
-              "Enum": [
-                "english",
-                "romaji",
-                "native"
-              ]
-            }
-          }
-        },
-        "Int4",
-        "Text",
         "Text"
       ]
     },
@@ -89,8 +79,9 @@
       false,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "7e4defa6b1e5ce8089ce7edc1f965afe286e3e57d29f3adacf940e933376b08e"
+  "hash": "6c47f138a828afe798b2f39edc2131ebb12038499bd3b5cb578872af2de58adb"
 }

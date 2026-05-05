@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, name, language as \"language: LanguageEntity\",\n                      user_id, subscription_token, created_at, updated_at,\n                      event_style, frozen_subscribe_ics\n               FROM calendars\n               WHERE id = $1 AND deleted_at IS NULL",
+  "query": "INSERT INTO calendars (name, language, user_id, subscription_token, event_style) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics, meta_version",
   "describe": {
     "columns": [
       {
@@ -15,7 +15,7 @@
       },
       {
         "ordinal": 2,
-        "name": "language: LanguageEntity",
+        "name": "language: Language",
         "type_info": {
           "Custom": {
             "name": "language",
@@ -31,13 +31,13 @@
       },
       {
         "ordinal": 3,
-        "name": "user_id",
-        "type_info": "Int4"
+        "name": "subscription_token",
+        "type_info": "Text"
       },
       {
         "ordinal": 4,
-        "name": "subscription_token",
-        "type_info": "Text"
+        "name": "user_id",
+        "type_info": "Int4"
       },
       {
         "ordinal": 5,
@@ -58,11 +58,31 @@
         "ordinal": 8,
         "name": "frozen_subscribe_ics",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "meta_version",
+        "type_info": "Int4"
       }
     ],
     "parameters": {
       "Left": [
-        "Int4"
+        "Varchar",
+        {
+          "Custom": {
+            "name": "language",
+            "kind": {
+              "Enum": [
+                "english",
+                "romaji",
+                "native"
+              ]
+            }
+          }
+        },
+        "Int4",
+        "Text",
+        "Text"
       ]
     },
     "nullable": [
@@ -74,8 +94,9 @@
       false,
       false,
       false,
-      true
+      true,
+      false
     ]
   },
-  "hash": "09c021d5d79e99ebc23fab7e8f373056ae40199d9cb9478162e580fbdfedbeb5"
+  "hash": "aaa6b67f0a7a3fc355a78dbb48a6ec19b9da53b3e9728cdf91544cea86b3c6b8"
 }

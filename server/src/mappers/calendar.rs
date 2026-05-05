@@ -63,7 +63,8 @@ impl CalendarMapper {
                 created_at,
                 updated_at,
                 event_style,
-                frozen_subscribe_ics FROM calendars WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
+                frozen_subscribe_ics,
+                meta_version FROM calendars WHERE id = $1 AND user_id = $2 AND deleted_at IS NULL",
             id,
             user_id
         )
@@ -92,6 +93,7 @@ impl CalendarMapper {
             updated_at: calendar.updated_at,
             event_style: calendar.event_style,
             frozen_subscribe_ics: calendar.frozen_subscribe_ics,
+            meta_version: calendar.meta_version,
         })
     }
 
@@ -118,7 +120,8 @@ impl CalendarMapper {
                 created_at,
                 updated_at,
                 event_style,
-                frozen_subscribe_ics FROM calendars WHERE subscription_token = $1 AND deleted_at IS NULL",
+                frozen_subscribe_ics,
+                meta_version FROM calendars WHERE subscription_token = $1 AND deleted_at IS NULL",
             token
         )
         .fetch_one(&mut *conn)
@@ -142,6 +145,7 @@ impl CalendarMapper {
             updated_at: calendar.updated_at,
             event_style: calendar.event_style,
             frozen_subscribe_ics: calendar.frozen_subscribe_ics,
+            meta_version: calendar.meta_version,
         })
     }
 
@@ -203,6 +207,7 @@ impl CalendarMapper {
                 c.updated_at,
                 c.event_style,
                 c.frozen_subscribe_ics,
+                c.meta_version,
                 COALESCE(
                     ARRAY_AGG(ci.item_id) FILTER (WHERE ci.item_id IS NOT NULL),
                     '{}'::integer[]
@@ -220,7 +225,7 @@ impl CalendarMapper {
             FROM calendars c
             LEFT JOIN calendar_items ci ON ci.calendar_id = c.id
             WHERE c.user_id = $1 AND c.deleted_at IS NULL
-            GROUP BY c.id, c.language, c.name, c.subscription_token, c.user_id, c.created_at, c.updated_at, c.event_style, c.frozen_subscribe_ics
+            GROUP BY c.id, c.language, c.name, c.subscription_token, c.user_id, c.created_at, c.updated_at, c.event_style, c.frozen_subscribe_ics, c.meta_version
             ORDER BY c.created_at DESC
             LIMIT $2
             OFFSET $3"#,
@@ -246,6 +251,7 @@ impl CalendarMapper {
                         item_ids: r.item_ids,
                         event_style: r.event_style,
                         frozen_subscribe_ics: r.frozen_subscribe_ics,
+                        meta_version: r.meta_version,
                     },
                     r.recent_item_ids,
                 )
@@ -270,7 +276,7 @@ impl CalendarMapper {
         crate::metrics::db::timed("calendar.insert", async {
             let token = Self::generate_subscription_token();
             let inserted_calendar = sqlx::query!(
-                "INSERT INTO calendars (name, language, user_id, subscription_token, event_style) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics",
+                "INSERT INTO calendars (name, language, user_id, subscription_token, event_style) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics, meta_version",
                 calendar.name,
                 calendar.language as Language,
                 calendar.user_id,
@@ -294,6 +300,7 @@ impl CalendarMapper {
                 updated_at: inserted_calendar.updated_at,
                 event_style: inserted_calendar.event_style,
                 frozen_subscribe_ics: inserted_calendar.frozen_subscribe_ics,
+                meta_version: inserted_calendar.meta_version,
             })
         })
         .await
@@ -301,15 +308,32 @@ impl CalendarMapper {
 
     /// # Errors
     /// Returns an error if the query fails.
+    ///
+    /// Bumps `meta_version` only when `name`, `language`, or `event_style`
+    /// differ from the stored row. Used by Phase 3 SSE fan-out as a
+    /// per-calendar revision cursor; no-op writes do not invalidate caches.
     pub async fn update_calendar(&self, calendar: Calendar) -> ServerResult<Calendar> {
         crate::metrics::db::timed("calendar.update", async {
             let updated_calendar = sqlx::query!(
-                "UPDATE calendars SET name = $1, language = $2, event_style = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 AND user_id = $5 AND deleted_at IS NULL RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics",
+                "UPDATE calendars SET
+                    name = $1,
+                    language = $2,
+                    event_style = $3,
+                    updated_at = CURRENT_TIMESTAMP,
+                    meta_version = meta_version + (CASE
+                        WHEN name <> $6 OR language <> $7 OR event_style <> $8
+                        THEN 1 ELSE 0
+                    END)
+                WHERE id = $4 AND user_id = $5 AND deleted_at IS NULL
+                RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics, meta_version",
+                calendar.name.clone(),
+                calendar.language as Language,
+                calendar.event_style.clone(),
+                calendar.id,
+                calendar.user_id,
                 calendar.name,
                 calendar.language as Language,
                 calendar.event_style,
-                calendar.id,
-                calendar.user_id,
             )
             .fetch_one(&self.db.pool)
             .await?;
@@ -328,6 +352,7 @@ impl CalendarMapper {
                 updated_at: updated_calendar.updated_at,
                 event_style: updated_calendar.event_style,
                 frozen_subscribe_ics: updated_calendar.frozen_subscribe_ics,
+                meta_version: updated_calendar.meta_version,
             })
         })
         .await
@@ -429,7 +454,7 @@ impl CalendarMapper {
     ) -> ServerResult<Calendar> {
         let token = Self::generate_subscription_token();
         let inserted_calendar = sqlx::query!(
-            "INSERT INTO calendars (name, language, user_id, subscription_token, event_style) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics",
+            "INSERT INTO calendars (name, language, user_id, subscription_token, event_style) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics, meta_version",
             calendar.name,
             calendar.language as Language,
             calendar.user_id,
@@ -453,6 +478,7 @@ impl CalendarMapper {
             updated_at: inserted_calendar.updated_at,
             event_style: inserted_calendar.event_style,
             frozen_subscribe_ics: inserted_calendar.frozen_subscribe_ics,
+            meta_version: inserted_calendar.meta_version,
         })
     }
 
@@ -461,12 +487,25 @@ impl CalendarMapper {
         calendar: Calendar,
     ) -> ServerResult<Calendar> {
         let updated_calendar = sqlx::query!(
-            "UPDATE calendars SET name = $1, language = $2, event_style = $3, updated_at = CURRENT_TIMESTAMP WHERE id = $4 AND user_id = $5 AND deleted_at IS NULL RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics",
+            "UPDATE calendars SET
+                name = $1,
+                language = $2,
+                event_style = $3,
+                updated_at = CURRENT_TIMESTAMP,
+                meta_version = meta_version + (CASE
+                    WHEN name <> $6 OR language <> $7 OR event_style <> $8
+                    THEN 1 ELSE 0
+                END)
+            WHERE id = $4 AND user_id = $5 AND deleted_at IS NULL
+            RETURNING id, name, language as \"language: Language\", subscription_token, user_id, created_at, updated_at, event_style, frozen_subscribe_ics, meta_version",
+            calendar.name.clone(),
+            calendar.language as Language,
+            calendar.event_style.clone(),
+            calendar.id,
+            calendar.user_id,
             calendar.name,
             calendar.language as Language,
             calendar.event_style,
-            calendar.id,
-            calendar.user_id,
         )
         .fetch_one(&mut *conn)
         .await?;
@@ -485,6 +524,7 @@ impl CalendarMapper {
             updated_at: updated_calendar.updated_at,
             event_style: updated_calendar.event_style,
             frozen_subscribe_ics: updated_calendar.frozen_subscribe_ics,
+            meta_version: updated_calendar.meta_version,
         })
     }
 
@@ -548,6 +588,7 @@ mod tests {
             updated_at: chrono::NaiveDateTime::default(),
             event_style: "timed".to_owned(),
             frozen_subscribe_ics: None,
+            meta_version: 1,
         }
     }
 
@@ -629,6 +670,91 @@ mod tests {
             .unwrap();
         assert_eq!(updated.name, "Renamed");
         assert!(matches!(updated.language, Language::Native));
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn insert_calendar_starts_at_meta_version_one() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+            .await
+            .unwrap();
+        assert_eq!(inserted.meta_version, 1);
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn update_calendar_bumps_meta_version_when_name_changes() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+            .await
+            .unwrap();
+        assert_eq!(inserted.meta_version, 1);
+
+        let to_update = Calendar {
+            name: "Renamed".to_string(),
+            ..inserted.clone()
+        };
+        let updated = CalendarMapper::update_calendar_with(&mut tx, to_update)
+            .await
+            .unwrap();
+        assert_eq!(updated.meta_version, 2);
+        assert_eq!(updated.name, "Renamed");
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn update_calendar_bumps_meta_version_when_language_changes() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+            .await
+            .unwrap();
+
+        let to_update = Calendar {
+            language: Language::Native,
+            ..inserted.clone()
+        };
+        let updated = CalendarMapper::update_calendar_with(&mut tx, to_update)
+            .await
+            .unwrap();
+        assert_eq!(updated.meta_version, 2);
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn update_calendar_bumps_meta_version_when_event_style_changes() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+            .await
+            .unwrap();
+
+        let to_update = Calendar {
+            event_style: "all_day".to_owned(),
+            ..inserted.clone()
+        };
+        let updated = CalendarMapper::update_calendar_with(&mut tx, to_update)
+            .await
+            .unwrap();
+        assert_eq!(updated.meta_version, 2);
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn update_calendar_no_op_does_not_bump_meta_version() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut tx).await;
+        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+            .await
+            .unwrap();
+
+        let updated = CalendarMapper::update_calendar_with(&mut tx, inserted.clone())
+            .await
+            .unwrap();
+        assert_eq!(updated.meta_version, inserted.meta_version);
         tx.rollback().await.unwrap();
     }
 
