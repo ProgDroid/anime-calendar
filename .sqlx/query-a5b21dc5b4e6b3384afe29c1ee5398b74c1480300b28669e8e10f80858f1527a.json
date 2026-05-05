@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT COUNT(*) FROM calendar_invitations\n             WHERE inviter_id = $1\n               AND lower(invitee_email::text) = lower($2)\n               AND sent_at >= $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Timestamp"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "a5b21dc5b4e6b3384afe29c1ee5398b74c1480300b28669e8e10f80858f1527a"
+}

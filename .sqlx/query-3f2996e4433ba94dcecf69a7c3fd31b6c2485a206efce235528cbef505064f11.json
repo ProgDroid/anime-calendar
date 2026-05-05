@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_invitations\n             SET status = $2, resolved_at = NOW()\n             WHERE id = $1 AND status = 'pending'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3f2996e4433ba94dcecf69a7c3fd31b6c2485a206efce235528cbef505064f11"
+}

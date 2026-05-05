@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_invitations\n             SET status = 'pending'\n             WHERE calendar_id = $1\n               AND status = 'suspended'\n               AND expires_at > NOW()",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "74426d04058f0df33f31b2e735afa3d197927302cd6838ad97f9b219748a6f0a"
+}

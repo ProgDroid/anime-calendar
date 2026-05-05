@@ -1,6 +1,7 @@
 pub mod anilist;
 pub mod calendar;
 pub mod calendar_editor;
+pub mod calendar_invitation;
 pub mod database;
 pub mod email_verification;
 pub mod google_oauth;
