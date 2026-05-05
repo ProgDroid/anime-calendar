@@ -4,13 +4,15 @@ use server::{
     cache::Cache,
     config::{database::Database as DatabaseConfig, server::Server as ServerConfig},
     mappers::{
-        anilist::Anilist, calendar::CalendarMapper, email_verification::EmailVerificationMapper,
-        google_oauth::GoogleOauth, password_reset::PasswordResetMapper,
-        refresh_token::RefreshTokenMapper, stripe_event::StripeEventMapper,
-        subscription::SubscriptionMapper, user::UserMapper, user_settings::UserSettingsMapper,
+        anilist::Anilist, calendar::CalendarMapper, calendar_editor::CalendarEditorMapper,
+        email_verification::EmailVerificationMapper, google_oauth::GoogleOauth,
+        password_reset::PasswordResetMapper, refresh_token::RefreshTokenMapper,
+        stripe_event::StripeEventMapper, subscription::SubscriptionMapper, user::UserMapper,
+        user_settings::UserSettingsMapper,
     },
     services::{
         cached_anilist::CachedAnilist, email::EmailService, entitlement::EntitlementService,
+        sharing_authz::SharingAuthz,
     },
 };
 use stripe::Client as StripeClient;
@@ -46,6 +48,10 @@ async fn main() -> ServerResult<()> {
         show_count_service.clone(),
         &settings.limits,
     );
+
+    let calendar_editor_mapper = CalendarEditorMapper::new(db_config.clone()).await?;
+    let sharing_authz =
+        SharingAuthz::new(calendar_editor_mapper.clone(), entitlement_service.clone());
 
     // Stripe client uses an empty secret when not configured — this keeps
     // dev environments where Stripe isn't set up runnable. Handlers that need
@@ -128,6 +134,7 @@ async fn main() -> ServerResult<()> {
         stripe_client,
         stripe_config,
         controller_pool,
+        sharing_authz,
     )?
     .await?)
 }

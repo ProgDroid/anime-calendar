@@ -66,8 +66,6 @@ impl SharingAuthz {
     /// - `Error::PaymentRequired { reason: Some("share_calendar") }` for
     ///   `Invite` when the owner is on the Free tier.
     /// - Database error variants on infra failure.
-    // First production caller lands in Phase 1 (POST/DELETE invitation handlers).
-    #[allow(dead_code)]
     pub async fn assert_can(
         &self,
         actor_id: i32,
@@ -114,8 +112,6 @@ impl SharingAuthz {
     ///
     /// # Errors
     /// Same variants as `assert_can`.
-    // First production caller lands in Phase 1 (cap-enforced invite create).
-    #[allow(dead_code)]
     pub(crate) async fn assert_can_in_tx(
         conn: &mut sqlx::PgConnection,
         actor_id: i32,

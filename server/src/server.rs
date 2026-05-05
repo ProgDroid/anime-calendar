@@ -117,6 +117,7 @@ pub fn start(
     stripe_client: StripeClient,
     stripe_config: StripeConfig,
     pg_pool: sqlx::PgPool,
+    sharing_authz: crate::services::sharing_authz::SharingAuthz,
 ) -> ServerResult<Server> {
     let level_filter = match LevelFilter::from_str(&config.log_level) {
         Ok(filter) => filter,
@@ -230,6 +231,7 @@ pub fn start(
             .app_data(web::Data::new(app_base_url.clone()))
             .app_data(web::Data::new(public_config.clone()))
             .app_data(web::Data::new(pg_pool.clone()))
+            .app_data(web::Data::new(sharing_authz.clone()))
             .service(public_config::get)
             .service(item::get)
             .service(items::get)

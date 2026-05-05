@@ -12,6 +12,7 @@ use crate::{
     services::{
         cached_anilist::CachedAnilist, entitlement::EntitlementService,
         frozen_ics::FrozenIcsService, ics_export::IcsExportService,
+        sharing_authz::{Action, SharingAuthz},
     },
 };
 
@@ -463,6 +464,28 @@ async fn put(
         }
     }
 
+    // Update path: route through SharingAuthz so editor support drops in
+    // cleanly in Phase 2. Today the load itself filters by owner, so a
+    // non-owner gets NotFound from the load — assert_can_in_tx is the
+    // forward-compatible spine, not the gate.
+    if !is_create {
+        let existing = match CalendarMapper::get_calendar_by_id_with(
+            &mut tx,
+            calendar_entity.id,
+            user.id,
+        )
+        .await
+        {
+            Ok(c) => c,
+            Err(e) => return e.error_response(),
+        };
+        if let Err(e) =
+            SharingAuthz::assert_can_in_tx(&mut tx, user.id, &existing, Action::MetaMutate).await
+        {
+            return e.error_response();
+        }
+    }
+
     // Save calendar via _with helpers so the write participates in the
     // locked transaction.
     let calendar = match CalendarMapper::save_calendar_with(&mut tx, calendar_entity).await {
@@ -782,6 +805,7 @@ async fn delete_calendar(
     user_mapper: web::Data<UserMapper>,
     calendar_mapper: web::Data<CalendarMapper>,
     cache: web::Data<Cache>,
+    sharing_authz: web::Data<SharingAuthz>,
     id: web::Path<i64>,
     claims: Claims,
 ) -> HttpResponse {
@@ -791,6 +815,20 @@ async fn delete_calendar(
             return e.error_response();
         }
     };
+
+    // Route through SharingAuthz so editor support drops in cleanly in
+    // Phase 2. The lookup itself still filters by owner for now —
+    // assert_can is the spine, not the gate.
+    let existing = match calendar_mapper.get_calendar_by_id(*id as i32, user.id).await {
+        Ok(c) => c,
+        Err(e) => return e.error_response(),
+    };
+    if let Err(e) = sharing_authz
+        .assert_can(user.id, &existing, Action::ManageEditors)
+        .await
+    {
+        return e.error_response();
+    }
 
     match calendar_mapper.delete_calendar(*id as i32, user.id).await {
         Ok(subscription_token) => {
@@ -873,10 +911,12 @@ mod integration_tests {
     // ─── PUT /calendar (validation / auth) ───────────────────────────────────
 
     use crate::config::server::LimitsConfig;
+    use crate::mappers::calendar_editor::CalendarEditorMapper;
     use crate::mappers::subscription::SubscriptionMapper;
     use crate::services::entitlement::EntitlementService;
     use crate::services::frozen_ics::FrozenIcsService;
     use crate::services::ics_export::IcsExportService;
+    use crate::services::sharing_authz::SharingAuthz;
     use crate::services::show_count::ShowCountService;
 
     fn limits(free_calendar_limit: u32, free_show_cap: u32) -> LimitsConfig {
@@ -901,6 +941,7 @@ mod integration_tests {
         web::Data<EntitlementService>,
         web::Data<FrozenIcsService>,
         web::Data<sqlx::PgPool>,
+        web::Data<SharingAuthz>,
     ) {
         let cached = cached_anilist_data().await;
         let entitlement = EntitlementService::new(
@@ -915,6 +956,10 @@ mod integration_tests {
             entitlement.clone(),
         );
         let frozen_ics = FrozenIcsService::new(pool.clone(), ics_export);
+        let sharing_authz = SharingAuthz::new(
+            CalendarEditorMapper::from_pool(pool.clone()),
+            entitlement.clone(),
+        );
         (
             web::Data::new(UserMapper::from_pool(pool.clone())),
             web::Data::new(CalendarMapper::from_pool(pool.clone())),
@@ -923,6 +968,7 @@ mod integration_tests {
             web::Data::new(entitlement),
             web::Data::new(frozen_ics),
             web::Data::new(pool),
+            web::Data::new(sharing_authz),
         )
     }
 
@@ -951,8 +997,7 @@ mod integration_tests {
 
     macro_rules! put_app {
         ($pool:expr, $limits:expr) => {{
-            let (um, cm, ca, ch, ent, fi, pp) =
-                build_put_services($pool, $limits).await;
+            let (um, cm, ca, ch, ent, fi, pp, sa) = build_put_services($pool, $limits).await;
             test::init_service(
                 App::new()
                     .app_data(um)
@@ -962,6 +1007,7 @@ mod integration_tests {
                     .app_data(ent)
                     .app_data(fi)
                     .app_data(pp)
+                    .app_data(sa)
                     .app_data(jwt_data())
                     .service(put),
             )
@@ -1401,11 +1447,21 @@ mod integration_tests {
         let user = seed_user(&pool).await;
         let (cal_id, _) = seed_calendar(&pool, user.id, "To Delete").await;
 
+        let entitlement = EntitlementService::new(
+            SubscriptionMapper::from_pool(pool.clone()),
+            ShowCountService::new(pool.clone()),
+            &limits(3, 25),
+        );
+        let sharing_authz = SharingAuthz::new(
+            CalendarEditorMapper::from_pool(pool.clone()),
+            entitlement,
+        );
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
                 .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(web::Data::new(sharing_authz))
                 .app_data(jwt_data())
                 .service(delete_calendar),
         )
@@ -1421,11 +1477,21 @@ mod integration_tests {
     async fn delete_calendar_non_existent_returns_404() {
         let pool = crate::test_helpers::test_pool().await;
         let user = seed_user(&pool).await;
+        let entitlement = EntitlementService::new(
+            SubscriptionMapper::from_pool(pool.clone()),
+            ShowCountService::new(pool.clone()),
+            &limits(3, 25),
+        );
+        let sharing_authz = SharingAuthz::new(
+            CalendarEditorMapper::from_pool(pool.clone()),
+            entitlement,
+        );
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
                 .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(web::Data::new(sharing_authz))
                 .app_data(jwt_data())
                 .service(delete_calendar),
         )
@@ -1443,11 +1509,21 @@ mod integration_tests {
     #[tokio::test]
     async fn delete_calendar_without_token_returns_401() {
         let pool = crate::test_helpers::test_pool().await;
+        let entitlement = EntitlementService::new(
+            SubscriptionMapper::from_pool(pool.clone()),
+            ShowCountService::new(pool.clone()),
+            &limits(3, 25),
+        );
+        let sharing_authz = SharingAuthz::new(
+            CalendarEditorMapper::from_pool(pool.clone()),
+            entitlement,
+        );
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
                 .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(web::Data::new(sharing_authz))
                 .app_data(jwt_data())
                 .service(delete_calendar),
         )
