@@ -1,0 +1,2 @@
+ALTER TABLE calendars
+    ADD COLUMN meta_version INTEGER NOT NULL DEFAULT 1;
