@@ -12,6 +12,12 @@ pub enum Error {
     Server(#[from] std::io::Error),
     #[error("Unauthorized")]
     Unauthorised,
+    /// HTTP 403: caller is authenticated but lacks the role required for
+    /// this action. Used by `SharingAuthz` to distinguish "not logged in"
+    /// (Unauthorised, 401) from "logged in but wrong role" — e.g. an
+    /// editor trying to mutate calendar metadata.
+    #[error("Forbidden")]
+    Forbidden,
     #[error("Invalid request data")]
     InvalidRequest,
     #[error("User already exists")]
@@ -78,7 +84,7 @@ impl ResponseError for Error {
         match self {
             Self::NotFound => StatusCode::NOT_FOUND,
             Self::Unauthorised | Self::InvalidToken(_) => StatusCode::UNAUTHORIZED,
-            Self::EmailNotVerified => StatusCode::FORBIDDEN,
+            Self::Forbidden | Self::EmailNotVerified => StatusCode::FORBIDDEN,
             Self::PaymentRequired { .. } => StatusCode::PAYMENT_REQUIRED,
             Self::InvalidRequest
             | Self::UserAlreadyExists
