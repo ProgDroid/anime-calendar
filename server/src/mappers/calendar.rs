@@ -1,7 +1,7 @@
 use crate::{
     ServerResult,
     config::database::Database as DatabaseConfig,
-    entity::calendar::{Calendar, Language},
+    entity::calendar::{Calendar, CalendarOwnerInfo, Language},
     error::Error,
     mappers::database::Database,
 };
@@ -155,13 +155,16 @@ impl CalendarMapper {
         clippy::cast_sign_loss
     )]
     /// # Errors
-    /// Returns an error if the query fails
+    /// Returns an error if the query fails.
+    ///
+    /// Returns `(Vec<(Calendar, recent_item_ids, editor_count)>, total_count)`.
+    /// `editor_count` is the number of currently-active editors on each row.
     pub async fn get_calendars_by_user_paginated(
         &self,
         user_id: i32,
         page: usize,
         page_size: usize,
-    ) -> ServerResult<(Vec<(Calendar, Vec<i32>)>, usize)> {
+    ) -> ServerResult<(Vec<(Calendar, Vec<i32>, i64)>, usize)> {
         crate::metrics::db::timed("calendar.list_paginated", async {
             Self::get_calendars_by_user_paginated_with(
                 &mut *self.db.pool.acquire().await?,
@@ -184,7 +187,7 @@ impl CalendarMapper {
         user_id: i32,
         page: usize,
         page_size: usize,
-    ) -> ServerResult<(Vec<(Calendar, Vec<i32>)>, usize)> {
+    ) -> ServerResult<(Vec<(Calendar, Vec<i32>, i64)>, usize)> {
         let total_count: i64 = match sqlx::query_scalar!(
             "SELECT COUNT(*) FROM calendars WHERE user_id = $1 AND deleted_at IS NULL",
             user_id
@@ -221,7 +224,12 @@ impl CalendarMapper {
                         ORDER BY added_at DESC
                         LIMIT 4
                     ) recent_inner
-                ), '{}'::integer[]) as "recent_item_ids!: Vec<i32>"
+                ), '{}'::integer[]) as "recent_item_ids!: Vec<i32>",
+                COALESCE((
+                    SELECT COUNT(*)
+                    FROM calendar_editors
+                    WHERE calendar_id = c.id AND active = TRUE
+                ), 0) as "editor_count!: i64"
             FROM calendars c
             LEFT JOIN calendar_items ci ON ci.calendar_id = c.id
             WHERE c.user_id = $1 AND c.deleted_at IS NULL
@@ -236,7 +244,7 @@ impl CalendarMapper {
         .fetch_all(&mut *conn)
         .await?;
 
-        let calendars: Vec<(Calendar, Vec<i32>)> = rows
+        let calendars: Vec<(Calendar, Vec<i32>, i64)> = rows
             .into_iter()
             .map(|r| {
                 (
@@ -254,11 +262,110 @@ impl CalendarMapper {
                         meta_version: r.meta_version,
                     },
                     r.recent_item_ids,
+                    r.editor_count,
                 )
             })
             .collect();
 
         Ok((calendars, total_count as usize))
+    }
+
+
+    /// List calendars shared with `user_id` (i.e. where they are an active
+    /// editor). Returns each calendar with its owner projection and the four
+    /// most-recent item ids (mirrors the owned-list shape).
+    ///
+    /// # Errors
+    /// Returns an error if the query fails.
+    pub(crate) async fn list_shared_with_user_with(
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+    ) -> ServerResult<Vec<(Calendar, CalendarOwnerInfo, Vec<i32>)>> {
+        let rows = sqlx::query!(
+            r#"SELECT
+                c.id,
+                c.language as "language: Language",
+                c.name,
+                c.subscription_token,
+                c.user_id,
+                c.created_at,
+                c.updated_at,
+                c.event_style,
+                c.frozen_subscribe_ics,
+                c.meta_version,
+                u.id as "owner_id!",
+                u.username as "owner_username!",
+                COALESCE(
+                    ARRAY_AGG(ci.item_id) FILTER (WHERE ci.item_id IS NOT NULL),
+                    '{}'::integer[]
+                ) as "item_ids!: Vec<i32>",
+                COALESCE((
+                    SELECT ARRAY_AGG(item_id ORDER BY added_at DESC)
+                    FROM (
+                        SELECT item_id, added_at
+                        FROM calendar_items
+                        WHERE calendar_id = c.id
+                        ORDER BY added_at DESC
+                        LIMIT 4
+                    ) recent_inner
+                ), '{}'::integer[]) as "recent_item_ids!: Vec<i32>"
+            FROM calendars c
+            JOIN calendar_editors ce
+                ON ce.calendar_id = c.id AND ce.user_id = $1 AND ce.active = TRUE
+            JOIN users u ON u.id = c.user_id
+            LEFT JOIN calendar_items ci ON ci.calendar_id = c.id
+            WHERE c.deleted_at IS NULL
+            GROUP BY c.id, c.language, c.name, c.subscription_token, c.user_id, c.created_at, c.updated_at, c.event_style, c.frozen_subscribe_ics, c.meta_version, u.id, u.username
+            ORDER BY c.created_at DESC"#,
+            user_id,
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+
+        let calendars: Vec<(Calendar, CalendarOwnerInfo, Vec<i32>)> = rows
+            .into_iter()
+            .map(|r| {
+                (
+                    Calendar {
+                        id: r.id,
+                        language: r.language,
+                        name: r.name,
+                        subscription_token: r.subscription_token,
+                        user_id: r.user_id,
+                        created_at: r.created_at,
+                        updated_at: r.updated_at,
+                        item_ids: r.item_ids,
+                        event_style: r.event_style,
+                        frozen_subscribe_ics: r.frozen_subscribe_ics,
+                        meta_version: r.meta_version,
+                    },
+                    CalendarOwnerInfo {
+                        id: r.owner_id,
+                        display: r.owner_username,
+                        avatar: None,
+                    },
+                    r.recent_item_ids,
+                )
+            })
+            .collect();
+
+        Ok(calendars)
+    }
+
+    /// # Errors
+    /// Returns an error if the query fails.
+    pub async fn list_shared_with_user(
+        &self,
+        user_id: i32,
+    ) -> ServerResult<Vec<(Calendar, CalendarOwnerInfo, Vec<i32>)>> {
+        crate::metrics::db::timed("calendar.list_shared_with_user", async {
+            Self::list_shared_with_user_with(
+                &mut *self.db.pool.acquire().await?,
+                user_id,
+            )
+            .await
+        })
+        .await
     }
 
     /// # Errors
@@ -912,8 +1019,9 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(cals.len(), 1);
-        let (_cal, recent) = &cals[0];
+        let (_cal, recent, editor_count) = &cals[0];
         assert_eq!(recent, &vec![14, 13, 12, 11]);
+        assert_eq!(*editor_count, 0);
         tx.rollback().await.unwrap();
     }
 
@@ -935,8 +1043,9 @@ mod tests {
                 .await
                 .unwrap();
         assert_eq!(cals.len(), 1);
-        let (_cal, recent) = &cals[0];
+        let (_cal, recent, editor_count) = &cals[0];
         assert!(recent.is_empty());
+        assert_eq!(*editor_count, 0);
         tx.rollback().await.unwrap();
     }
 
@@ -956,6 +1065,116 @@ mod tests {
                 .unwrap();
         assert_eq!(total, 0);
         assert!(cals.is_empty());
+        tx.rollback().await.unwrap();
+    }
+
+
+    #[tokio::test]
+    async fn get_calendars_paginated_returns_editor_count() {
+        use crate::mappers::calendar_editor::CalendarEditorMapper;
+        let mut tx = crate::test_helpers::test_tx().await;
+        let owner_id = create_test_user(&mut tx).await;
+        let editor_a = create_test_user(&mut tx).await;
+        let editor_b = create_test_user(&mut tx).await;
+        let cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(owner_id))
+            .await
+            .unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut tx, cal.id, editor_a)
+            .await
+            .unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut tx, cal.id, editor_b)
+            .await
+            .unwrap();
+
+        let (cals, _) =
+            CalendarMapper::get_calendars_by_user_paginated_with(&mut tx, owner_id, 1, 10)
+                .await
+                .unwrap();
+        assert_eq!(cals.len(), 1);
+        assert_eq!(cals[0].2, 2, "two active editors should be counted");
+        tx.rollback().await.unwrap();
+    }
+
+
+    #[tokio::test]
+    async fn list_shared_with_user_returns_only_active_editor_calendars_with_owner() {
+        use crate::mappers::calendar_editor::CalendarEditorMapper;
+        let mut tx = crate::test_helpers::test_tx().await;
+        let owner_id = create_test_user(&mut tx).await;
+        let editor_id = create_test_user(&mut tx).await;
+        let other_id = create_test_user(&mut tx).await;
+
+        let owner_username: String = sqlx::query_scalar!(
+            "SELECT username FROM users WHERE id = $1",
+            owner_id,
+        )
+        .fetch_one(&mut *tx)
+        .await
+        .unwrap();
+
+        // Owner has 2 calendars; editor is active on cal_a only.
+        let cal_a = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(owner_id))
+            .await
+            .unwrap();
+        let _cal_b = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(owner_id))
+            .await
+            .unwrap();
+        // `other_id` also has a calendar — must NOT show up for the editor either.
+        let _cal_other = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(other_id))
+            .await
+            .unwrap();
+
+        CalendarEditorMapper::upsert_active_in_tx(&mut tx, cal_a.id, editor_id)
+            .await
+            .unwrap();
+
+        let shared = CalendarMapper::list_shared_with_user_with(&mut tx, editor_id)
+            .await
+            .unwrap();
+        assert_eq!(shared.len(), 1, "only cal_a (active editor) shows");
+        let (cal, owner, _recent) = &shared[0];
+        assert_eq!(cal.id, cal_a.id);
+        assert_eq!(owner.id, owner_id);
+        assert_eq!(owner.display, owner_username);
+        assert!(owner.avatar.is_none());
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_shared_with_user_excludes_suspended_editor_rows() {
+        use crate::mappers::calendar_editor::CalendarEditorMapper;
+        let mut tx = crate::test_helpers::test_tx().await;
+        let owner_id = create_test_user(&mut tx).await;
+        let editor_id = create_test_user(&mut tx).await;
+        let cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(owner_id))
+            .await
+            .unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut tx, cal.id, editor_id)
+            .await
+            .unwrap();
+        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut tx, cal.id)
+            .await
+            .unwrap();
+
+        let shared = CalendarMapper::list_shared_with_user_with(&mut tx, editor_id)
+            .await
+            .unwrap();
+        assert!(shared.is_empty(), "suspended editor row should not appear");
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn list_shared_with_user_excludes_owners_own_calendars() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let owner_id = create_test_user(&mut tx).await;
+        let _cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(owner_id))
+            .await
+            .unwrap();
+
+        let shared = CalendarMapper::list_shared_with_user_with(&mut tx, owner_id)
+            .await
+            .unwrap();
+        assert!(shared.is_empty(), "owners do not appear in their own shared list");
         tx.rollback().await.unwrap();
     }
 }

@@ -74,6 +74,20 @@ impl Default for Calendar {
     }
 }
 
+
+/// Owner-projection used by `GET /calendars` `shared_with_me` entries.
+/// Server-managed: never deserialised from request bodies.
+///
+/// `display` and `avatar` mirror the spec contract `{ id, display, avatar }`.
+/// `display` is currently sourced from `users.username`; `avatar` is `None`
+/// until a profile column lands. Frontend should treat both as opaque strings.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct CalendarOwnerInfo {
+    pub id: i32,
+    pub display: String,
+    pub avatar: Option<String>,
+}
+
 fn default_event_style() -> String {
     "timed".to_owned()
 }

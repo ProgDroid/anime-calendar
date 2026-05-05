@@ -48,6 +48,108 @@ fn count_airing(
         .count()
 }
 
+
+/// Dedup the union of item ids across owned + shared rows for a single
+/// batched Anilist fetch. Pure helper kept separate so `get_calendars` stays
+/// under the per-fn line limit.
+fn collect_unique_anilist_ids(
+    owned: &[(CalendarEntity, Vec<i32>, i64)],
+    shared: &[(CalendarEntity, crate::entity::calendar::CalendarOwnerInfo, Vec<i32>)],
+) -> Vec<Id> {
+    let mut unique_ids: Vec<Id> = Vec::new();
+    let mut seen: std::collections::HashSet<u64> = std::collections::HashSet::new();
+    for (calendar, _, _) in owned {
+        for raw_id in &calendar.item_ids {
+            if let Some(id) = Id::new(i64::from(*raw_id))
+                && seen.insert(id.to_int())
+            {
+                unique_ids.push(id);
+            }
+        }
+    }
+    for (calendar, _, _) in shared {
+        for raw_id in &calendar.item_ids {
+            if let Some(id) = Id::new(i64::from(*raw_id))
+                && seen.insert(id.to_int())
+            {
+                unique_ids.push(id);
+            }
+        }
+    }
+    unique_ids
+}
+
+/// Build the owned-list DTOs (with `airing_count` derived from the cached
+/// Anilist schedule map and `editor_count` carried straight through).
+fn build_owned_page(
+    rows: Vec<(CalendarEntity, Vec<i32>, i64)>,
+    schedules_by_id: &HashMap<u64, &[Schedule]>,
+    now_secs: u64,
+) -> Vec<PageCalendar> {
+    let mut out: Vec<PageCalendar> = Vec::new();
+    for (calendar, recent_item_ids, editor_count) in rows {
+        if let Some(id) = Id::new(calendar.id.into()) {
+            let calendar_item_ids: Vec<Id> = calendar
+                .item_ids
+                .iter()
+                .filter_map(|raw| Id::new(i64::from(*raw)))
+                .collect();
+            let airing_count = count_airing(&calendar_item_ids, schedules_by_id, now_secs);
+            out.push(PageCalendar {
+                id,
+                item_count: calendar.item_ids.len(),
+                airing_count,
+                editor_count,
+                name: calendar.name,
+                subscription_token: calendar.subscription_token,
+                created_at: calendar.created_at,
+                updated_at: calendar.updated_at,
+                recent_item_ids,
+            });
+        }
+    }
+    out
+}
+
+/// Build the shared-list DTOs. Same airing-count derivation as the owned
+/// path; carries the owner projection through verbatim.
+fn build_shared_page(
+    rows: Vec<(
+        CalendarEntity,
+        crate::entity::calendar::CalendarOwnerInfo,
+        Vec<i32>,
+    )>,
+    schedules_by_id: &HashMap<u64, &[Schedule]>,
+    now_secs: u64,
+) -> Vec<SharedPageCalendar> {
+    let mut out: Vec<SharedPageCalendar> = Vec::new();
+    for (calendar, owner_info, recent_item_ids) in rows {
+        if let Some(id) = Id::new(calendar.id.into()) {
+            let calendar_item_ids: Vec<Id> = calendar
+                .item_ids
+                .iter()
+                .filter_map(|raw| Id::new(i64::from(*raw)))
+                .collect();
+            let airing_count = count_airing(&calendar_item_ids, schedules_by_id, now_secs);
+            out.push(SharedPageCalendar {
+                id,
+                item_count: calendar.item_ids.len(),
+                airing_count,
+                name: calendar.name,
+                created_at: calendar.created_at,
+                updated_at: calendar.updated_at,
+                recent_item_ids,
+                owner: CalendarOwner {
+                    id: owner_info.id,
+                    display: owner_info.display,
+                    avatar: owner_info.avatar,
+                },
+            });
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod airing_count_tests {
     use super::*;
@@ -554,6 +656,10 @@ pub struct PageCalendar {
     pub id: Id,
     pub item_count: usize,
     pub airing_count: usize,
+    /// Number of currently-active editors on this calendar (always 0 today;
+    /// the count surfaces the `+N editors` chip on owned cards once Phase 2
+    /// editor mutations land).
+    pub editor_count: i64,
     pub name: String,
     pub subscription_token: String,
     pub created_at: NaiveDateTime,
@@ -575,13 +681,53 @@ pub struct PaginationInfo {
     total_pages: usize,
 }
 
+
+/// Owner projection on `shared_with_me` entries. `display` mirrors
+/// `users.username` today; a richer profile column may replace it later.
+/// `avatar` is always `null` until that column lands.
+#[derive(Serialize, Deserialize, Clone, utoipa::ToSchema)]
+pub struct CalendarOwner {
+    pub id: i32,
+    pub display: String,
+    pub avatar: Option<String>,
+}
+
+/// Listing entry on `shared_with_me`.
+///
+/// Mirrors `PageCalendar` minus `subscription_token` (editors don't get the
+/// share link) and minus `editor_count` (irrelevant from an editor's
+/// perspective), plus `owner`.
+#[derive(Serialize, Deserialize, Clone, utoipa::ToSchema)]
+pub struct SharedPageCalendar {
+    #[schema(value_type = i64)]
+    pub id: Id,
+    pub item_count: usize,
+    pub airing_count: usize,
+    pub name: String,
+    pub created_at: NaiveDateTime,
+    pub updated_at: NaiveDateTime,
+    pub recent_item_ids: Vec<i32>,
+    pub owner: CalendarOwner,
+}
+
+/// Combined response for `GET /calendars`.
+///
+/// `owned` keeps the existing pagination shape (data + pagination meta);
+/// `shared_with_me` is a flat list — bounded by per-calendar editor cap ×
+/// invitations the caller has accepted.
+#[derive(Serialize, Deserialize, Clone, utoipa::ToSchema)]
+pub struct CalendarsResponse {
+    pub owned: PaginatedResponse,
+    pub shared_with_me: Vec<SharedPageCalendar>,
+}
+
 #[utoipa::path(
     get,
     path = "/calendars",
     tag = "calendars",
     params(PaginationParams),
     responses(
-        (status = 200, body = PaginatedResponse),
+        (status = 200, body = CalendarsResponse),
         (status = 401, body = crate::controllers::auth::ErrorResponse),
     ),
     security(("bearer_auth" = []))
@@ -602,106 +748,75 @@ async fn get_calendars(
         }
     };
 
-    // Get calendars for the authenticated user with pagination
-    match calendar_mapper
+    // Owned (paginated) and shared (flat) are independent queries. Pagination
+    // on `owned` bounds the worst-case Anilist batch on Pro power users;
+    // `shared_with_me` is naturally bounded by per-calendar editor cap ×
+    // accepted invitations and stays flat.
+    let (owned_rows, total_count) = match calendar_mapper
         .get_calendars_by_user_paginated(user.id, params.page, params.page_size)
         .await
     {
-        Ok((calendars, total_count)) => {
-            // Collect a deduped list of item ids across all calendars so we can fetch
-            // their Anilist metadata in a single batched call. We then derive each
-            // calendar's `airing_count` from the cached metadata in-memory — see
-            // `count_airing` for the rule (any future-dated airing schedule entry).
-            let mut unique_ids: Vec<Id> = Vec::new();
-            let mut seen: std::collections::HashSet<u64> = std::collections::HashSet::new();
-            for (calendar, _) in &calendars {
-                for raw_id in &calendar.item_ids {
-                    if let Some(id) = Id::new(i64::from(*raw_id))
-                        && seen.insert(id.to_int())
-                    {
-                        unique_ids.push(id);
-                    }
-                }
-            }
+        Ok(pair) => pair,
+        Err(e) => return e.error_response(),
+    };
+    let shared_rows = match calendar_mapper.list_shared_with_user(user.id).await {
+        Ok(rows) => rows,
+        Err(e) => return e.error_response(),
+    };
 
-            let items: Vec<Item> = if unique_ids.is_empty() {
-                Vec::new()
-            } else {
-                anilist.get_items(unique_ids).await
-            };
-            let schedules_by_id: HashMap<u64, &[Schedule]> = items
-                .iter()
-                .map(|item| (item.id.to_int(), item.airing_schedule.as_slice()))
-                .collect();
+    let unique_ids = collect_unique_anilist_ids(&owned_rows, &shared_rows);
+    let items: Vec<Item> = if unique_ids.is_empty() {
+        Vec::new()
+    } else {
+        anilist.get_items(unique_ids).await
+    };
+    let schedules_by_id: HashMap<u64, &[Schedule]> = items
+        .iter()
+        .map(|item| (item.id.to_int(), item.airing_schedule.as_slice()))
+        .collect();
 
-            #[allow(clippy::cast_sign_loss)]
-            let now_secs = Utc::now().timestamp().max(0) as u64;
+    #[allow(clippy::cast_sign_loss)]
+    let now_secs = Utc::now().timestamp().max(0) as u64;
 
-            let mut results: Vec<PageCalendar> = Vec::new();
+    let owned_results = build_owned_page(owned_rows, &schedules_by_id, now_secs);
+    let shared_results = build_shared_page(shared_rows, &schedules_by_id, now_secs);
 
-            for (calendar, recent_item_ids) in calendars {
-                if let Some(id) = Id::new(calendar.id.into()) {
-                    let calendar_item_ids: Vec<Id> = calendar
-                        .item_ids
-                        .iter()
-                        .filter_map(|raw| Id::new(i64::from(*raw)))
-                        .collect();
-                    let airing_count = count_airing(&calendar_item_ids, &schedules_by_id, now_secs);
+    let total_pages = total_count.div_ceil(params.page_size);
+    let response = CalendarsResponse {
+        owned: PaginatedResponse {
+            data: owned_results,
+            pagination: PaginationInfo {
+                page: params.page,
+                page_size: params.page_size,
+                total: total_count,
+                total_pages,
+            },
+        },
+        shared_with_me: shared_results,
+    };
 
-                    results.push(PageCalendar {
-                        id,
-                        item_count: calendar.item_ids.len(),
-                        airing_count,
-                        name: calendar.name,
-                        subscription_token: calendar.subscription_token,
-                        created_at: calendar.created_at,
-                        updated_at: calendar.updated_at,
-                        recent_item_ids,
-                    });
-                }
-            }
+    // Cache the combined response under the existing per-page cache key.
+    // Owner-side mutations already invalidate via `invalidate_user_paged_calendars`.
+    // Editor-mutation endpoints land in Phase 2 and will need to additionally
+    // invalidate the affected user's key set (their `shared_with_me` view
+    // changes when they're added/removed/suspended on a calendar).
+    let cache_key = crate::cache::generate_paginated_key(
+        user.id,
+        "calendars",
+        params.page,
+        params.page_size,
+    );
+    let cache_ttl = CACHE_TTL_SEARCH;
 
-            // Return paginated response with metadata
-            let total_pages = total_count.div_ceil(params.page_size);
-            let paginated_response = PaginatedResponse {
-                data: results,
-                pagination: PaginationInfo {
-                    page: params.page,
-                    page_size: params.page_size,
-                    total: total_count,
-                    total_pages,
-                },
-            };
-
-            // Cache the response for 30 minutes (1800 seconds)
-            let cache_key = crate::cache::generate_paginated_key(
-                user.id,
-                "calendars",
-                params.page,
-                params.page_size,
-            );
-            let cache_ttl = CACHE_TTL_SEARCH;
-
-            // If cache is available, try to get from cache
-            match cache
-                .cached_response(&cache_key, cache_ttl, || async {
-                    Ok(paginated_response.clone())
-                })
-                .await
-            {
-                Ok(cached_response) => {
-                    return HttpResponse::Ok().json(cached_response);
-                }
-                Err(e) => {
-                    // Log error but continue with regular processing
-                    error!("Cache error: {e:?}");
-                }
-            }
-
-            // If no cache or cache error, return the response normally
-            HttpResponse::Ok().json(paginated_response)
+    match cache
+        .cached_response(&cache_key, cache_ttl, || async { Ok(response.clone()) })
+        .await
+    {
+        Ok(cached_response) => HttpResponse::Ok().json(cached_response),
+        Err(e) => {
+            error!("Cache error: {e:?}");
+            HttpResponse::Ok().json(response)
         }
-        Err(e) => e.error_response(),
     }
 }
 
@@ -1336,8 +1451,9 @@ mod integration_tests {
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::OK);
         let body: Value = test::read_body_json(resp).await;
-        assert_eq!(body["pagination"]["total"], 2);
-        assert_eq!(body["data"].as_array().unwrap().len(), 2);
+        assert_eq!(body["owned"]["pagination"]["total"], 2);
+        assert_eq!(body["owned"]["data"].as_array().unwrap().len(), 2);
+        assert_eq!(body["shared_with_me"].as_array().unwrap().len(), 0);
     }
 
     #[tokio::test]
@@ -1385,8 +1501,8 @@ mod integration_tests {
         let resp = test::call_service(&app, req).await;
         let body: Value = test::read_body_json(resp).await;
         // user_a should only see their own calendar
-        assert_eq!(body["pagination"]["total"], 1);
-        let names: Vec<&str> = body["data"]
+        assert_eq!(body["owned"]["pagination"]["total"], 1);
+        let names: Vec<&str> = body["owned"]["data"]
             .as_array()
             .unwrap()
             .iter()
@@ -1394,6 +1510,92 @@ mod integration_tests {
             .collect();
         assert!(names.contains(&"Dave's Cal"));
         assert!(!names.contains(&"Eve's Cal"));
+        assert_eq!(body["shared_with_me"].as_array().unwrap().len(), 0);
+    }
+
+    #[tokio::test]
+    async fn get_calendars_returns_shared_with_owner_info() {
+        use crate::mappers::calendar_editor::CalendarEditorMapper;
+        let pool = crate::test_helpers::test_pool().await;
+        let alice = seed_user(&pool).await;
+        let bob = seed_user(&pool).await;
+        let bob_username: String =
+            sqlx::query_scalar!("SELECT username FROM users WHERE id = $1", bob.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+
+        let (alice_cal_id, _) = seed_calendar(&pool, alice.id, "Alice's Cal").await;
+        let (bob_cal_id, _) = seed_calendar(&pool, bob.id, "Bob's Cal").await;
+        // alice is an active editor on bob's calendar
+        CalendarEditorMapper::from_pool(pool.clone())
+            .upsert_active(bob_cal_id, alice.id)
+            .await
+            .unwrap();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(cached_anilist_data().await)
+                .app_data(jwt_data())
+                .service(get_calendars),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri("/calendars")
+            .insert_header(("Cookie", format!("auth_token={}", alice.token)))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK);
+        let body: Value = test::read_body_json(resp).await;
+        // alice owns 1, has 1 shared
+        assert_eq!(body["owned"]["pagination"]["total"], 1);
+        assert_eq!(body["owned"]["data"][0]["id"], alice_cal_id);
+        let shared = body["shared_with_me"].as_array().unwrap();
+        assert_eq!(shared.len(), 1);
+        assert_eq!(shared[0]["id"], bob_cal_id);
+        assert_eq!(shared[0]["name"], "Bob's Cal");
+        assert_eq!(shared[0]["owner"]["id"], bob.id);
+        assert_eq!(shared[0]["owner"]["display"], bob_username);
+        assert!(shared[0]["owner"]["avatar"].is_null());
+        // editors don't get the share link in the listing
+        assert!(shared[0].get("subscription_token").is_none());
+    }
+
+    #[tokio::test]
+    async fn get_calendars_owner_does_not_see_own_calendars_in_shared() {
+        use crate::mappers::calendar_editor::CalendarEditorMapper;
+        let pool = crate::test_helpers::test_pool().await;
+        let owner = seed_user(&pool).await;
+        let editor = seed_user(&pool).await;
+        let (cal_id, _) = seed_calendar(&pool, owner.id, "Owned Cal").await;
+        CalendarEditorMapper::from_pool(pool.clone())
+            .upsert_active(cal_id, editor.id)
+            .await
+            .unwrap();
+
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
+                .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(cached_anilist_data().await)
+                .app_data(jwt_data())
+                .service(get_calendars),
+        )
+        .await;
+        let req = test::TestRequest::get()
+            .uri("/calendars")
+            .insert_header(("Cookie", format!("auth_token={}", owner.token)))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        let body: Value = test::read_body_json(resp).await;
+        // owner appears in their own owned list with editor_count=1, NOT in shared
+        assert_eq!(body["owned"]["pagination"]["total"], 1);
+        assert_eq!(body["owned"]["data"][0]["editor_count"], 1);
+        assert_eq!(body["shared_with_me"].as_array().unwrap().len(), 0);
     }
 
     // ─── GET /calendars/{id} ─────────────────────────────────────────────────

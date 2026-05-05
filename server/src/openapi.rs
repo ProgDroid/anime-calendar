@@ -9,7 +9,10 @@ use crate::{
     controllers::{
         account::UsageResponse,
         auth::{AuthResponse, ErrorResponse, LoginRequest, RegisterRequest},
-        calendar::{CalendarRequest, PageCalendar, PaginatedResponse, PaginationInfo},
+        calendar::{
+            CalendarOwner, CalendarRequest, CalendarsResponse, PageCalendar, PaginatedResponse,
+            PaginationInfo, SharedPageCalendar,
+        },
         oauth::{GoogleOAuthRequest, GoogleOAuthResponse},
         public_config::PublicConfig,
         stripe::{BillingInterval, CheckoutRequest, CheckoutResponse, PortalResponse},
@@ -126,6 +129,9 @@ impl Modify for BearerAuth {
         PageCalendar,
         PaginatedResponse,
         PaginationInfo,
+        CalendarOwner,
+        SharedPageCalendar,
+        CalendarsResponse,
         EntityLanguage,
         // account types
         UsageResponse,
