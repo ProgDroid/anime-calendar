@@ -27,7 +27,7 @@
     </header>
 
     <div
-      v-if="!loading && !error && calendars.length > 0"
+      v-if="!loading && !error && ownedCalendars.length > 0"
       data-testid="my-calendars-stats"
       class="flex flex-wrap items-center gap-3 mt-4 text-sm text-fg-2"
     >
@@ -64,7 +64,7 @@
     </div>
 
     <UiEmptyState
-      v-else-if="calendars.length === 0"
+      v-else-if="ownedCalendars.length === 0 && sharedCalendars.length === 0"
       data-testid="my-calendars-empty"
       class="mt-12"
       :title="$t('calendars.notFound')"
@@ -77,64 +77,107 @@
       </template>
     </UiEmptyState>
 
-    <div
-      v-else-if="isMobile"
-      data-testid="my-calendars-mobile-stack"
-      class="mt-6 flex flex-col gap-3"
-    >
-      <CalendarTile
-        v-for="calendar in calendars"
-        :key="calendar.id"
-        :calendar="calendar"
-        @open="editCalendar(calendar.id)"
-        @edit="editCalendar(calendar.id)"
-        @delete="confirmDelete(calendar.id)"
-        @export-ics="exportCalendar(calendar.id)"
-        @copy-link="copySubscriptionLink(calendar.subscription_token)"
-        @open-google="openInGoogleCalendar(calendar.subscription_token)"
-      />
-      <button
-        type="button"
-        data-testid="my-calendars-mobile-create"
-        :class="[
-          'rounded-xl border border-dashed border-line px-5 py-6 focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2 transition',
-          newCalendarDisabled
-            ? 'cursor-not-allowed opacity-60 text-fg-2'
-            : 'text-fg-2 hover:border-line-strong hover:bg-bg-1 hover:text-fg-1',
-        ]"
-        :aria-disabled="newCalendarDisabled"
-        @click="createNewCalendar"
+    <template v-else>
+      <!-- Owned section. Always rendered when there's at least one owned cal,
+           OR when there's no shared list to show alongside (otherwise the
+           "you own nothing yet" state would imply nothing on the page). -->
+      <section
+        v-if="ownedCalendars.length > 0"
+        data-testid="my-calendars-owned-section"
+        class="mt-6"
       >
-        + {{ $t('calendars.createNew') }}
-      </button>
-    </div>
+        <h2
+          v-if="sharedCalendars.length > 0"
+          data-testid="my-calendars-owned-heading"
+          class="text-sm font-medium uppercase tracking-wider text-fg-2 mb-3"
+        >
+          {{ $t('sharing.myCalendars') }}
+        </h2>
 
-    <div
-      v-else
-      data-testid="my-calendars"
-      class="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
-    >
-      <CalendarTile
-        v-for="calendar in calendars"
-        :key="calendar.id"
-        :calendar="calendar"
-        @open="editCalendar(calendar.id)"
-        @edit="editCalendar(calendar.id)"
-        @delete="confirmDelete(calendar.id)"
-        @export-ics="exportCalendar(calendar.id)"
-        @copy-link="copySubscriptionLink(calendar.subscription_token)"
-        @open-google="openInGoogleCalendar(calendar.subscription_token)"
-      />
-    </div>
+        <div
+          v-if="isMobile"
+          data-testid="my-calendars-mobile-stack"
+          class="flex flex-col gap-3"
+        >
+          <CalendarTile
+            v-for="calendar in ownedCalendars"
+            :key="calendar.id"
+            :calendar="calendar"
+            @open="editCalendar(calendar.id)"
+            @edit="editCalendar(calendar.id)"
+            @delete="confirmDelete(calendar.id)"
+            @export-ics="exportCalendar(calendar.id)"
+            @copy-link="copySubscriptionLink(calendar.subscription_token)"
+            @open-google="openInGoogleCalendar(calendar.subscription_token)"
+          />
+          <button
+            type="button"
+            data-testid="my-calendars-mobile-create"
+            :class="[
+              'rounded-xl border border-dashed border-line px-5 py-6 focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2 transition',
+              newCalendarDisabled
+                ? 'cursor-not-allowed opacity-60 text-fg-2'
+                : 'text-fg-2 hover:border-line-strong hover:bg-bg-1 hover:text-fg-1',
+            ]"
+            :aria-disabled="newCalendarDisabled"
+            @click="createNewCalendar"
+          >
+            + {{ $t('calendars.createNew') }}
+          </button>
+        </div>
 
-    <PaginationControls
-      v-if="!loading && !error && calendars.length > 0"
-      :page="pagination.page"
-      :page_size="pagination.page_size"
-      :total="pagination.total"
-      :total_pages="pagination.total_pages"
-      @page-change="loadCalendars"
-    />
+        <div
+          v-else
+          data-testid="my-calendars"
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
+        >
+          <CalendarTile
+            v-for="calendar in ownedCalendars"
+            :key="calendar.id"
+            :calendar="calendar"
+            @open="editCalendar(calendar.id)"
+            @edit="editCalendar(calendar.id)"
+            @delete="confirmDelete(calendar.id)"
+            @export-ics="exportCalendar(calendar.id)"
+            @copy-link="copySubscriptionLink(calendar.subscription_token)"
+            @open-google="openInGoogleCalendar(calendar.subscription_token)"
+          />
+        </div>
+
+        <PaginationControls
+          v-if="ownedCalendars.length > 0"
+          :page="pagination.page"
+          :page_size="pagination.page_size"
+          :total="pagination.total"
+          :total_pages="pagination.total_pages"
+          @page-change="loadCalendars"
+        />
+      </section>
+
+      <section
+        v-if="sharedCalendars.length > 0"
+        data-testid="my-calendars-shared-section"
+        class="mt-10"
+      >
+        <h2
+          data-testid="my-calendars-shared-heading"
+          class="text-sm font-medium uppercase tracking-wider text-fg-2 mb-3"
+        >
+          {{ $t('sharing.sharedWithYou') }}
+        </h2>
+        <div
+          data-testid="my-calendars-shared-list"
+          class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
+        >
+          <SharedCalendarTile
+            v-for="calendar in sharedCalendars"
+            :key="calendar.id"
+            :calendar="calendar"
+            @open="editCalendar(calendar.id)"
+          />
+        </div>
+      </section>
+    </template>
 
     <ConfirmModal
       :open="confirmModalOpen"
@@ -152,7 +195,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
-import type { PageCalendar } from '@/types/calendar'
+import type { PageCalendar, SharedPageCalendar } from '@/types/calendar'
 import api, { getApiUrl } from '@/config/api'
 import { toastService } from '@/services/toastService'
 import { useViewportLayout } from '@/composables/useViewportLayout'
@@ -162,6 +205,7 @@ import { getMySubscription } from '@/services/subscription'
 import PaginationControls from '@/components/shared/PaginationControls.vue'
 import ConfirmModal from '@/components/shared/ConfirmModal.vue'
 import CalendarTile from '@/components/shared/CalendarTile.vue'
+import SharedCalendarTile from '@/components/shared/SharedCalendarTile.vue'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiEmptyState from '@/components/ui/UiEmptyState.vue'
 import IconPlus from '@/components/ui/icons/IconPlus.vue'
@@ -174,7 +218,8 @@ const { isMobile } = useViewportLayout()
 const usage = useUsageStore()
 const { openUpgradeModal } = useUpgradeInterrupt()
 
-const calendars = ref<PageCalendar[]>([])
+const ownedCalendars = ref<PageCalendar[]>([])
+const sharedCalendars = ref<SharedPageCalendar[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 const pagination = ref({ page: 1, page_size: 6, total: 0, total_pages: 0 })
@@ -182,7 +227,9 @@ const confirmModalOpen = ref(false)
 const calendarToDelete = ref<number | null>(null)
 const isFreeTier = ref(true)
 
-// Free-tier counter chip + cap state. Pro users see no chip.
+// Free-tier counter chip + cap state. Shared-with-me does NOT count toward
+// the cap (per product decision — sharing is owner-funded). The counter
+// reads usage.calendarCount which is itself owned-only on the server side.
 const showCounter = computed(() => isFreeTier.value && usage.loaded)
 const calendarCapReached = computed(
   () => isFreeTier.value && usage.calendarCount >= FREE_CALENDAR_CAP,
@@ -190,11 +237,11 @@ const calendarCapReached = computed(
 const newCalendarDisabled = computed(() => calendarCapReached.value)
 
 const totalItems = computed(() =>
-  calendars.value.reduce((sum, c) => sum + c.item_count, 0),
+  ownedCalendars.value.reduce((sum, c) => sum + c.item_count, 0),
 )
 
 const totalAiring = computed(() =>
-  calendars.value.reduce((sum, c) => sum + (c.airing_count ?? 0), 0),
+  ownedCalendars.value.reduce((sum, c) => sum + (c.airing_count ?? 0), 0),
 )
 
 onMounted(async () => {
@@ -222,8 +269,9 @@ async function loadCalendars(page: number = 1) {
     const response = await api.get('/calendars', {
       params: { page, page_size: pagination.value.page_size },
     })
-    calendars.value = response.data.data
-    pagination.value = response.data.pagination
+    ownedCalendars.value = response.data.owned.data
+    pagination.value = response.data.owned.pagination
+    sharedCalendars.value = response.data.shared_with_me ?? []
   } catch {
     error.value = t('calendars.loadFailed')
   } finally {

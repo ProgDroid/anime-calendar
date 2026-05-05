@@ -218,18 +218,23 @@ describe('MyCalendarsPage — delete failure', () => {
       if (typeof url === 'string' && url.startsWith('/items')) return { data: [] }
       return {
         data: {
-          data: [
-            {
-              id: 1,
-              name: 'Cal 1',
-              item_count: 0,
-              subscription_token: 'tok',
-              created_at: '2026-01-01T00:00:00Z',
-              updated_at: '2026-01-01T00:00:00Z',
-              recent_item_ids: [],
-            },
-          ],
-          pagination: { page: 1, page_size: 10, total: 1, total_pages: 1 },
+          owned: {
+            data: [
+              {
+                id: 1,
+                name: 'Cal 1',
+                item_count: 0,
+                airing_count: 0,
+                editor_count: 0,
+                subscription_token: 'tok',
+                created_at: '2026-01-01T00:00:00Z',
+                updated_at: '2026-01-01T00:00:00Z',
+                recent_item_ids: [],
+              },
+            ],
+            pagination: { page: 1, page_size: 10, total: 1, total_pages: 1 },
+          },
+          shared_with_me: [],
         },
       }
     })

@@ -30,12 +30,13 @@ const router = createRouter({
   routes: [{ path: '/:p*', component: MyCalendarsPage }],
 })
 
-const mockCalendars = [
+const mockOwned = [
   {
     id: 1,
     name: 'My Anime Calendar',
     item_count: 5,
     airing_count: 0,
+    editor_count: 0,
     subscription_token: 'token123',
     created_at: '2026-01-01T00:00:00Z',
     updated_at: '2026-01-02T00:00:00Z',
@@ -46,6 +47,7 @@ const mockCalendars = [
     name: 'Second Calendar',
     item_count: 2,
     airing_count: 0,
+    editor_count: 0,
     subscription_token: 'token456',
     created_at: '2026-01-03T00:00:00Z',
     updated_at: '2026-01-03T00:00:00Z',
@@ -54,6 +56,14 @@ const mockCalendars = [
 ]
 
 const mockPagination = { page: 1, page_size: 6, total: 2, total_pages: 1 }
+
+function makeResponse(
+  owned: typeof mockOwned,
+  shared: Array<Record<string, unknown>> = [],
+  pagination = mockPagination,
+) {
+  return { data: { owned: { data: owned, pagination }, shared_with_me: shared } }
+}
 
 function mountPage() {
   return mount(MyCalendarsPage, {
@@ -75,7 +85,7 @@ describe('MyCalendarsPage', () => {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
       if (url.startsWith('/items')) return { data: [] }
       if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 2 } }
-      return { data: { data: mockCalendars, pagination: mockPagination } }
+      return makeResponse(mockOwned)
     })
     vi.mocked(getMySubscription).mockResolvedValue({
       tier: 'free',
@@ -94,7 +104,7 @@ describe('MyCalendarsPage', () => {
     wrapper.unmount()
   })
 
-  it('shows calendars after successful load', async () => {
+  it('shows owned calendars after successful load', async () => {
     const wrapper = mountPage()
     await flushPromises()
     expect(wrapper.text()).toContain('My Anime Calendar')
@@ -102,11 +112,11 @@ describe('MyCalendarsPage', () => {
     wrapper.unmount()
   })
 
-  it('shows empty state when no calendars returned', async () => {
+  it('shows empty state when both owned and shared lists are empty', async () => {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
       if (url.startsWith('/items')) return { data: [] }
       if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 0 } }
-      return { data: { data: [], pagination: { ...mockPagination, total: 0 } } }
+      return makeResponse([], [], { ...mockPagination, total: 0 })
     })
     const wrapper = mountPage()
     await flushPromises()
@@ -192,21 +202,166 @@ describe('MyCalendarsPage', () => {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
       if (url.startsWith('/items')) return { data: [] }
       if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 2 } }
-      return {
-        data: {
-          data: [
-            { ...mockCalendars[0]!, airing_count: 2 },
-            { ...mockCalendars[1]!, airing_count: 5 },
-          ],
-          pagination: mockPagination,
-        },
-      }
+      return makeResponse([
+        { ...mockOwned[0]!, airing_count: 2 },
+        { ...mockOwned[1]!, airing_count: 5 },
+      ])
     })
     const wrapper = mountPage()
     await flushPromises()
     const stat = wrapper.find('[data-testid="my-calendars-airing"]')
     expect(stat.exists()).toBe(true)
     expect(stat.text()).toContain('7')
+    wrapper.unmount()
+  })
+
+  it('renders the editor count chip on owned tiles when editor_count > 0', async () => {
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 1 } }
+      return makeResponse([{ ...mockOwned[0]!, editor_count: 2 }])
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    const chip = wrapper.find('[data-testid="calendar-tile-editor-count"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.text()).toContain('2')
+    wrapper.unmount()
+  })
+
+  it('does not render the editor count chip when editor_count is zero', async () => {
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="calendar-tile-editor-count"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+})
+
+describe('MyCalendarsPage shared-with-me section', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia())
+    vi.clearAllMocks()
+    vi.stubGlobal('localStorage', {
+      getItem: vi.fn().mockReturnValue(null),
+      setItem: vi.fn(),
+      removeItem: vi.fn(),
+      clear: vi.fn(),
+    })
+    vi.mocked(getMySubscription).mockResolvedValue({
+      tier: 'free',
+      status: null,
+      current_period_end: null,
+      cancel_at_period_end: false,
+      trial_end: null,
+    })
+    openUpgradeModalMock.mockClear()
+  })
+
+  it('does not render the shared section when shared_with_me is empty', async () => {
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 2 } }
+      return makeResponse(mockOwned, [])
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="my-calendars-shared-section"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="my-calendars-shared-list"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('renders the shared section with owner info when non-empty', async () => {
+    const sharedItem = {
+      id: 99,
+      name: "Bob's Cal",
+      item_count: 3,
+      airing_count: 0,
+      created_at: '2026-02-01T00:00:00Z',
+      updated_at: '2026-02-02T00:00:00Z',
+      recent_item_ids: [],
+      owner: { id: 42, display: 'bob', avatar: null },
+    }
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 2 } }
+      return makeResponse(mockOwned, [sharedItem])
+    })
+    const wrapper = mountPage()
+    await flushPromises()
+
+    const section = wrapper.find('[data-testid="my-calendars-shared-section"]')
+    expect(section.exists()).toBe(true)
+    expect(section.text()).toContain(en.sharing.sharedWithYou)
+
+    const tiles = wrapper.findAll('[data-testid="shared-calendar-tile"]')
+    expect(tiles).toHaveLength(1)
+    expect(tiles[0]!.text()).toContain("Bob's Cal")
+    // owner badge with bob's display name
+    const ownerBadge = wrapper.find('[data-testid="shared-calendar-tile-owner"]')
+    expect(ownerBadge.exists()).toBe(true)
+    expect(ownerBadge.text()).toContain('bob')
+    // initial fallback when avatar is null
+    expect(
+      wrapper.find('[data-testid="shared-calendar-tile-owner-initial"]').exists(),
+    ).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('renders the My calendars heading only when both sections are visible', async () => {
+    // Owned only: no heading (the title bar already labels the page)
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 2 } }
+      return makeResponse(mockOwned, [])
+    })
+    let wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="my-calendars-owned-heading"]').exists()).toBe(false)
+    wrapper.unmount()
+
+    // Owned + shared: heading appears so the two sections read as siblings
+    const sharedItem = {
+      id: 99,
+      name: "Bob's Cal",
+      item_count: 0,
+      airing_count: 0,
+      created_at: '2026-02-01T00:00:00Z',
+      updated_at: '2026-02-02T00:00:00Z',
+      recent_item_ids: [],
+      owner: { id: 42, display: 'bob', avatar: null },
+    }
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 2 } }
+      return makeResponse(mockOwned, [sharedItem])
+    })
+    wrapper = mountPage()
+    await flushPromises()
+    expect(wrapper.find('[data-testid="my-calendars-owned-heading"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('navigates to /calendar/:id when a shared tile body is clicked', async () => {
+    const sharedItem = {
+      id: 99,
+      name: "Bob's Cal",
+      item_count: 1,
+      airing_count: 0,
+      created_at: '2026-02-01T00:00:00Z',
+      updated_at: '2026-02-02T00:00:00Z',
+      recent_item_ids: [],
+      owner: { id: 42, display: 'bob', avatar: null },
+    }
+    vi.mocked(api.get).mockImplementation(async (url: string) => {
+      if (url.startsWith('/items')) return { data: [] }
+      if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 2 } }
+      return makeResponse([], [sharedItem])
+    })
+    const pushSpy = vi.spyOn(router, 'push')
+    const wrapper = mountPage()
+    await flushPromises()
+    await wrapper.find('[data-testid="shared-calendar-tile-body"]').trigger('click')
+    expect(pushSpy).toHaveBeenCalledWith('/calendar/99')
     wrapper.unmount()
   })
 })
@@ -224,7 +379,7 @@ describe('MyCalendarsPage mobile layout', () => {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
       if (url.startsWith('/items')) return { data: [] }
       if (url.startsWith('/account/usage')) return { data: { shows: 0, calendars: 2 } }
-      return { data: { data: mockCalendars, pagination: mockPagination } }
+      return makeResponse(mockOwned)
     })
     vi.mocked(getMySubscription).mockResolvedValue({
       tier: 'free',
@@ -260,14 +415,14 @@ describe('MyCalendarsPage mobile layout', () => {
     wrapper.unmount()
   })
 
-  it('mobile stack lists every calendar from the store', async () => {
+  it('mobile stack lists every owned calendar from the response', async () => {
     await mockViewport(390)
     const wrapper = mountPage()
     await flushPromises()
     const tiles = wrapper
       .find('[data-testid="my-calendars-mobile-stack"]')
       .findAll('[data-testid="calendar-tile"]')
-    expect(tiles).toHaveLength(mockCalendars.length)
+    expect(tiles).toHaveLength(mockOwned.length)
     wrapper.unmount()
   })
 
@@ -300,7 +455,7 @@ describe('MyCalendarsPage free-tier cap UX', () => {
       if (url.startsWith('/items')) return { data: [] }
       if (url.startsWith('/account/usage'))
         return { data: { shows: 0, calendars: calendarCount } }
-      return { data: { data: mockCalendars, pagination: mockPagination } }
+      return makeResponse(mockOwned)
     })
     vi.mocked(getMySubscription).mockResolvedValue({
       tier: 'free',
@@ -315,7 +470,7 @@ describe('MyCalendarsPage free-tier cap UX', () => {
     vi.mocked(api.get).mockImplementation(async (url: string) => {
       if (url.startsWith('/items')) return { data: [] }
       if (url.startsWith('/account/usage')) return { data: { shows: 99, calendars: 99 } }
-      return { data: { data: mockCalendars, pagination: mockPagination } }
+      return makeResponse(mockOwned)
     })
     vi.mocked(getMySubscription).mockResolvedValue({
       tier: 'paid',

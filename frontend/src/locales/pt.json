@@ -230,7 +230,8 @@
       "itemCount": "{count} itens",
       "airing": "{count} a transmitir",
       "updatedLabel": "Atualizado {date}",
-      "moreActions": "Mais ações"
+      "moreActions": "Mais ações",
+      "editorCount": "{count} editor | {count} editores"
     },
     "yourLibrary": "Sua biblioteca",
     "stats": {
@@ -517,5 +518,10 @@
         "resultsCount": "Resultados · {count}"
       }
     }
+  },
+  "sharing": {
+    "myCalendars": "Meus calendários",
+    "sharedWithYou": "Compartilhados com você",
+    "owner": "Dono: {name}"
   }
 }

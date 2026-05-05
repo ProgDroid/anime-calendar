@@ -132,6 +132,15 @@ const overflowCount = computed(() => {
             <span aria-hidden="true">·</span>
           </template>
           <span data-testid="calendar-tile-updated">{{ updatedLabel }}</span>
+          <template v-if="(calendar.editor_count ?? 0) > 0">
+            <span aria-hidden="true">·</span>
+            <span
+              data-testid="calendar-tile-editor-count"
+              class="inline-flex items-center text-fg-2"
+            >
+              {{ t('calendars.tile.editorCount', { count: calendar.editor_count }) }}
+            </span>
+          </template>
         </div>
       </div>
     </button>
