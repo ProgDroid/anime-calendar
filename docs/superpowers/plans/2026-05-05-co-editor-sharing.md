@@ -14,6 +14,19 @@
 
 ---
 
+## Implementation status (last updated 2026-05-05 PM)
+
+Phase 0: 7 of 12 tasks complete. 0.1–0.5 (migrations + entities), plus the
+0.5b corrective FK-width migration (BIGINT→INTEGER) + 0.6 (CalendarEditorMapper:
+8 methods + 7 tests, all green). Pick up at 0.7 (CalendarInvitationMapper).
+
+Convention divergences from this plan that have been baked into the code:
+- IDs are `i32` everywhere (not `i64`) — matches existing `Calendar.id`/`User.id`.
+- Tx helpers named `_in_tx` (matches SubscriptionMapper / `feedback_in_tx_static_helper_pattern`).
+- Tests use `test_tx()` rollback, never `test_pool()`.
+- Mappers wrap a `Database` struct, delegate instance methods to `_in_tx` helpers
+  inside `crate::metrics::db::timed(...)`.
+
 ## Implementation status (last updated 2026-05-05)
 
 | Phase | Status | Commits |
