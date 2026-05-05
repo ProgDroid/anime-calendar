@@ -14,17 +14,19 @@
 
 ---
 
-## Implementation status
+## Implementation status (last updated 2026-05-05)
 
-| Phase | Status |
-|-------|--------|
-| Pre-flight | ⬜ Pending |
-| Phase 0 — Schema + authorization spine | ⬜ Pending |
-| Phase 1 — Invitation lifecycle | ⬜ Pending |
-| Phase 2 — Editor mutations + Members tab | ⬜ Pending |
-| Phase 3 — Live sync (SSE + Pub/Sub) | ⬜ Pending |
-| Phase 4 — Tier transitions | ⬜ Pending |
-| Phase 5 — Public landing + E2E + ops | ⬜ Pending |
+| Phase | Status | Commits |
+|-------|--------|---------|
+| Pre-flight | 🟡 Partial — config block deferred to Phase 1 | — |
+| Phase 0 — Schema + authorization spine | 🟡 5/12 tasks (0.1–0.5 done) | `bb2d684..3a24ab4` |
+| Phase 1 — Invitation lifecycle | ⬜ Pending | — |
+| Phase 2 — Editor mutations + Members tab | ⬜ Pending | — |
+| Phase 3 — Live sync (SSE + Pub/Sub) | ⬜ Pending | — |
+| Phase 4 — Tier transitions | ⬜ Pending | — |
+| Phase 5 — Public landing + E2E + ops | ⬜ Pending | — |
+
+**Pick-up at Task 0.6 (CalendarEditorMapper).** Plan-vs-reality drift catalogued in memory `project_co_editor_phase_0_in_progress.md` — read that before resuming. Key corrections: `i32` IDs (not i64), `Calendar.user_id` (not owner_id), flat module aggregator `entity.rs`, `EntitlementService::effective_tier` (not `SubscriptionMapper::is_paid`).
 
 ---
 
