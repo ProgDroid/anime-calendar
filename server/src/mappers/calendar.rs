@@ -539,6 +539,19 @@ impl CalendarMapper {
         Ok(row.subscription_token)
     }
 
+    /// Load a calendar by id without filtering by owner.
+    /// Used when the caller needs to resolve the calendar first, then
+    /// perform an authz check (e.g. editors accessing shared calendars).
+    ///
+    /// # Errors
+    /// Returns `Error::NotFound` when no matching non-deleted calendar exists.
+    pub async fn get_by_id_any_owner(&self, calendar_id: i32) -> ServerResult<Calendar> {
+        crate::metrics::db::timed("calendar.get_by_id_any_owner", async {
+            Self::get_by_id_any_owner_with(&mut *self.db.pool.acquire().await?, calendar_id).await
+        })
+        .await
+    }
+
     /// # Errors
     /// Returns an error if the query fails.
     pub async fn add_item_idempotent(&self, calendar_id: i32, item_id: i32) -> ServerResult<bool> {
@@ -569,6 +582,47 @@ impl CalendarMapper {
 //   - PUT /calendar so the cap-check + INSERT/UPDATE happen inside one
 //     advisory-locked transaction (multi-tab race protection)
 impl CalendarMapper {
+    /// Load a calendar by id without requiring a specific owner.
+    ///
+    /// # Errors
+    /// Returns `Error::NotFound` when no matching non-deleted calendar exists.
+    pub(crate) async fn get_by_id_any_owner_with(
+        conn: &mut sqlx::PgConnection,
+        calendar_id: i32,
+    ) -> ServerResult<Calendar> {
+        let row = sqlx::query!(
+            "SELECT id, language as \"language: Language\", name, subscription_token, user_id,
+                    created_at, updated_at, event_style, frozen_subscribe_ics, meta_version
+             FROM calendars
+             WHERE id = $1 AND deleted_at IS NULL",
+            calendar_id,
+        )
+        .fetch_optional(&mut *conn)
+        .await?
+        .ok_or(Error::NotFound)?;
+
+        let item_ids: Vec<i32> = sqlx::query_scalar!(
+            "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
+            calendar_id,
+        )
+        .fetch_all(&mut *conn)
+        .await?;
+
+        Ok(Calendar {
+            id: row.id,
+            item_ids,
+            language: row.language,
+            name: row.name,
+            subscription_token: row.subscription_token,
+            user_id: row.user_id,
+            created_at: row.created_at,
+            updated_at: row.updated_at,
+            event_style: row.event_style,
+            frozen_subscribe_ics: row.frozen_subscribe_ics,
+            meta_version: row.meta_version,
+        })
+    }
+
     pub(crate) async fn save_calendar_with(
         conn: &mut sqlx::PgConnection,
         calendar: Calendar,

@@ -831,35 +831,33 @@ async fn get_calendars(
     responses(
         (status = 200, body = common::calendar::Calendar),
         (status = 401, body = crate::controllers::auth::ErrorResponse),
+        (status = 403, body = crate::controllers::auth::ErrorResponse),
         (status = 404, body = crate::controllers::auth::ErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
 #[get("/calendars/{id}")]
 async fn get_calendar(
-    user_mapper: web::Data<UserMapper>,
     anilist: web::Data<CachedAnilist>,
     cache: web::Data<Cache>,
     authz: web::Data<SharingAuthz>,
-    pool: web::Data<sqlx::PgPool>,
+    calendars: web::Data<CalendarMapper>,
     id: web::Path<i64>,
     claims: Claims,
 ) -> HttpResponse {
-    let user = match user_mapper.get_user_from_claims(&claims).await {
-        Ok(user) => user,
-        Err(e) => {
-            return e.error_response();
-        }
+    let actor_id = match claims.user_id() {
+        Ok(id) => id,
+        Err(e) => return e.error_response(),
     };
 
     // Load without owner filter so editors can access shared calendars.
-    let calendar = match load_calendar_any_owner(pool.get_ref(), *id as i32).await {
+    let calendar = match calendars.get_by_id_any_owner(*id as i32).await {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
 
     // Gate: owner or active editor passes; outsider gets Forbidden.
-    if let Err(e) = authz.assert_can(user.id, &calendar, Action::ItemMutate).await {
+    if let Err(e) = authz.assert_can(actor_id, &calendar, Action::ItemMutate).await {
         return e.error_response();
     }
 
@@ -959,47 +957,8 @@ async fn delete_calendar(
     }
 }
 
-/// Resolve a calendar by id without filtering by owner. Both owners and
-/// active editors need to load the calendar for authz checks.
-async fn load_calendar_any_owner(
-    pool: &sqlx::PgPool,
-    id: i32,
-) -> Result<CalendarEntity, Error> {
-    use crate::entity::calendar::Language;
-    let row = sqlx::query!(
-        "SELECT id, language as \"language: Language\", name, subscription_token, user_id,
-                created_at, updated_at, event_style, frozen_subscribe_ics, meta_version
-         FROM calendars
-         WHERE id = $1 AND deleted_at IS NULL",
-        id,
-    )
-    .fetch_optional(pool)
-    .await?
-    .ok_or(Error::NotFound)?;
 
-    let item_ids: Vec<i32> = sqlx::query_scalar!(
-        "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
-        id,
-    )
-    .fetch_all(pool)
-    .await?;
-
-    Ok(CalendarEntity {
-        id: row.id,
-        item_ids,
-        language: row.language,
-        name: row.name,
-        subscription_token: row.subscription_token,
-        user_id: row.user_id,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        event_style: row.event_style,
-        frozen_subscribe_ics: row.frozen_subscribe_ics,
-        meta_version: row.meta_version,
-    })
-}
-
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct AddItemRequest {
     pub item_id: i32,
 }
@@ -1008,22 +967,38 @@ pub struct AddItemRequest {
 /// The show-cap entitlement check applies only to the calendar owner
 /// (owner-funded model: the owner's quota gates additions regardless of who
 /// makes the request).
+#[utoipa::path(
+    post,
+    path = "/calendars/{id}/items",
+    operation_id = "add_item",
+    tag = "calendars",
+    params(("id" = i32, Path, description = "Calendar ID")),
+    request_body = AddItemRequest,
+    responses(
+        (status = 200, description = "Item added or already present"),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+        (status = 402, description = "Show cap reached"),
+        (status = 403, body = crate::controllers::auth::ErrorResponse),
+        (status = 404, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[post("/calendars/{id}/items")]
 pub async fn add_item(
     path: web::Path<i32>,
     body: web::Json<AddItemRequest>,
     claims: Claims,
-    pool: web::Data<sqlx::PgPool>,
     authz: web::Data<SharingAuthz>,
     calendars: web::Data<CalendarMapper>,
     entitlement: web::Data<EntitlementService>,
+    cache: web::Data<Cache>,
 ) -> HttpResponse {
     let calendar_id = path.into_inner();
     let actor_id = match claims.user_id() {
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match load_calendar_any_owner(pool.get_ref(), calendar_id).await {
+    let cal = match calendars.get_by_id_any_owner(calendar_id).await {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -1037,27 +1012,49 @@ pub async fn add_item(
         return e.error_response();
     }
     match calendars.add_item_idempotent(calendar_id, body.item_id).await {
-        Ok(affected) => HttpResponse::Ok().json(serde_json::json!({ "affected": affected })),
+        Ok(affected) => {
+            let _ = cache.invalidate_calendar(calendar_id).await;
+            let _ = cache.invalidate_user_paged_calendars(cal.user_id).await;
+            let _ = cache.invalidate_subscription(&cal.subscription_token).await;
+            HttpResponse::Ok().json(serde_json::json!({ "affected": affected }))
+        }
         Err(e) => e.error_response(),
     }
 }
 
 /// Remove a single item from a calendar. Owner and active editors may call this.
 /// No entitlement check needed for removal.
+#[utoipa::path(
+    delete,
+    path = "/calendars/{id}/items/{item_id}",
+    operation_id = "remove_item",
+    tag = "calendars",
+    params(
+        ("id" = i32, Path, description = "Calendar ID"),
+        ("item_id" = i32, Path, description = "Item ID to remove"),
+    ),
+    responses(
+        (status = 200, description = "Item removed or already absent"),
+        (status = 401, body = crate::controllers::auth::ErrorResponse),
+        (status = 403, body = crate::controllers::auth::ErrorResponse),
+        (status = 404, body = crate::controllers::auth::ErrorResponse),
+    ),
+    security(("bearer_auth" = []))
+)]
 #[delete("/calendars/{id}/items/{item_id}")]
 pub async fn remove_item(
     path: web::Path<(i32, i32)>,
     claims: Claims,
-    pool: web::Data<sqlx::PgPool>,
     authz: web::Data<SharingAuthz>,
     calendars: web::Data<CalendarMapper>,
+    cache: web::Data<Cache>,
 ) -> HttpResponse {
     let (calendar_id, item_id) = path.into_inner();
     let actor_id = match claims.user_id() {
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match load_calendar_any_owner(pool.get_ref(), calendar_id).await {
+    let cal = match calendars.get_by_id_any_owner(calendar_id).await {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -1065,7 +1062,12 @@ pub async fn remove_item(
         return e.error_response();
     }
     match calendars.remove_item_idempotent(calendar_id, item_id).await {
-        Ok(affected) => HttpResponse::Ok().json(serde_json::json!({ "affected": affected })),
+        Ok(affected) => {
+            let _ = cache.invalidate_calendar(calendar_id).await;
+            let _ = cache.invalidate_user_paged_calendars(cal.user_id).await;
+            let _ = cache.invalidate_subscription(&cal.subscription_token).await;
+            HttpResponse::Ok().json(serde_json::json!({ "affected": affected }))
+        }
         Err(e) => e.error_response(),
     }
 }
@@ -1725,11 +1727,10 @@ mod integration_tests {
         );
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool.clone())))
                 .app_data(cached_anilist_data().await)
                 .app_data(web::Data::new(Cache::for_tests().await))
                 .app_data(web::Data::new(sharing_authz))
-                .app_data(web::Data::new(pool.clone()))
                 .app_data(jwt_data())
                 .service(get_calendar),
         )
@@ -1756,11 +1757,10 @@ mod integration_tests {
         );
         let app = test::init_service(
             App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                .app_data(web::Data::new(CalendarMapper::from_pool(pool.clone())))
                 .app_data(cached_anilist_data().await)
                 .app_data(web::Data::new(Cache::for_tests().await))
                 .app_data(web::Data::new(sharing_authz))
-                .app_data(web::Data::new(pool.clone()))
                 .app_data(jwt_data())
                 .service(get_calendar),
         )
@@ -1773,6 +1773,7 @@ mod integration_tests {
             test::call_service(&app, req).await.status(),
             StatusCode::NOT_FOUND
         );
+        cleanup_user(&pool, user.id).await;
     }
 
     // ─── DELETE /calendars/{id} ───────────────────────────────────────────────
@@ -2053,15 +2054,14 @@ mod integration_tests {
     }
     // --- POST /calendars/{id}/items / DELETE /calendars/{id}/items/{item_id} --
 
-    fn build_item_app_services(
+    async fn build_item_app_services(
         pool: sqlx::PgPool,
         l: &LimitsConfig,
     ) -> (
-        web::Data<UserMapper>,
         web::Data<SharingAuthz>,
         web::Data<CalendarMapper>,
         web::Data<EntitlementService>,
-        web::Data<sqlx::PgPool>,
+        web::Data<Cache>,
     ) {
         let entitlement = EntitlementService::new(
             SubscriptionMapper::from_pool(pool.clone()),
@@ -2073,24 +2073,22 @@ mod integration_tests {
             entitlement.clone(),
         );
         (
-            web::Data::new(UserMapper::from_pool(pool.clone())),
             web::Data::new(sharing_authz),
             web::Data::new(CalendarMapper::from_pool(pool.clone())),
             web::Data::new(entitlement),
-            web::Data::new(pool),
+            web::Data::new(Cache::for_tests().await),
         )
     }
 
     macro_rules! item_app {
         ($pool:expr, $limits:expr) => {{
-            let (um, sa, cm, ent, pp) = build_item_app_services($pool, $limits);
+            let (sa, cm, ent, ch) = build_item_app_services($pool, $limits).await;
             test::init_service(
                 App::new()
-                    .app_data(um)
                     .app_data(sa)
                     .app_data(cm)
                     .app_data(ent)
-                    .app_data(pp)
+                    .app_data(ch)
                     .app_data(jwt_data())
                     .service(add_item)
                     .service(remove_item),
@@ -2140,6 +2138,31 @@ mod integration_tests {
             .to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), StatusCode::FORBIDDEN, "outsider should get 403");
+
+        cleanup_user(&pool, owner.id).await;
+        cleanup_user(&pool, outsider.id).await;
+    }
+
+    #[tokio::test]
+    async fn non_member_cannot_remove_item() {
+        let pool = crate::test_helpers::test_pool().await;
+        let owner = seed_user(&pool).await;
+        let outsider = seed_user(&pool).await;
+        let (cal_id, _) = seed_calendar(&pool, owner.id, "Private Cal").await;
+        // Pre-seed an item so the calendar is non-empty.
+        sqlx::query("INSERT INTO calendar_items (calendar_id, item_id) VALUES ($1, 42)")
+            .bind(cal_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+
+        let app = item_app!(pool.clone(), &limits(5, 50));
+        let req = test::TestRequest::delete()
+            .uri(&format!("/calendars/{cal_id}/items/42"))
+            .insert_header(("Cookie", format!("auth_token={}", outsider.token)))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN, "outsider should get 403 on DELETE");
 
         cleanup_user(&pool, owner.id).await;
         cleanup_user(&pool, outsider.id).await;

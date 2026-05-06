@@ -85,6 +85,8 @@ impl Modify for BearerAuth {
         crate::controllers::calendar::get_calendar,
         crate::controllers::calendar::put,
         crate::controllers::calendar::delete_calendar,
+        crate::controllers::calendar::add_item,
+        crate::controllers::calendar::remove_item,
         crate::controllers::calendar::export,
         crate::controllers::calendar::subscribe_feed,
         // items
@@ -142,6 +144,7 @@ impl Modify for BearerAuth {
         CalendarOwner,
         SharedPageCalendar,
         CalendarsResponse,
+        crate::controllers::calendar::AddItemRequest,
         EntityLanguage,
         // account types
         UsageResponse,
