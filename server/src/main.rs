@@ -94,17 +94,15 @@ async fn main() -> ServerResult<()> {
     .expect("Failed to initialize Redis cache");
 
     // Initialize Redis Pub/Sub (publisher + per-channel subscriber tasks).
-    let redis_pubsub_url = if settings.redis.password.is_empty() {
-        format!("redis://{}:{}", settings.redis.host, settings.redis.port)
-    } else {
-        format!(
-            "redis://:{}@{}:{}",
-            settings.redis.password, settings.redis.host, settings.redis.port
-        )
-    };
-    let redis_pubsub = server::redis_pubsub::RedisPubSub::new(&redis_pubsub_url)
-        .await
-        .expect("Failed to initialize Redis Pub/Sub");
+    // Credentials are passed as separate fields so RedisPubSub can protect
+    // the password with SecretString rather than embedding it in a plain URL.
+    let redis_pubsub = server::redis_pubsub::RedisPubSub::new(
+        &settings.redis.host,
+        settings.redis.port,
+        &settings.redis.password,
+    )
+    .await
+    .expect("Failed to initialize Redis Pub/Sub");
 
     let cached_anilist = CachedAnilist::new(anilist, cache.clone(), &settings.cache);
 

@@ -1,9 +1,8 @@
-use std::{
-    collections::HashMap,
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
 
+use futures_util::StreamExt as _;
 use redis::{Client, aio::MultiplexedConnection};
+use secrecy::{ExposeSecret as _, SecretString};
 use serde::Serialize;
 use tokio::sync::{
     RwLock,
@@ -19,27 +18,58 @@ use crate::error::Error;
 /// `RecvError::Lagged` on their next `recv()` call.
 const BROADCAST_CAPACITY: usize = 64;
 
+/// Initial back-off delay (seconds) after a subscriber task disconnect.
+const BACKOFF_START_SECS: u64 = 1;
+/// Maximum back-off delay (seconds) between reconnect attempts.
+const BACKOFF_MAX_SECS: u64 = 30;
+
+/// Build a Redis URL from its components.  The password is exposed only
+/// transiently inside this function and never written to a struct field or log.
+fn build_url(host: &str, port: u16, password: &SecretString) -> String {
+    let pw = password.expose_secret();
+    if pw.is_empty() {
+        format!("redis://{host}:{port}")
+    } else {
+        format!("redis://:{pw}@{host}:{port}")
+    }
+}
+
 /// Redis Pub/Sub wrapper.
 ///
 /// - The publisher side uses a `MultiplexedConnection` (matching [`crate::cache::Cache`]).
 /// - The subscriber side opens a dedicated async PubSub connection per unique
 ///   channel name and fans messages out to in-process `broadcast` channels so
 ///   multiple in-process consumers can share one Redis subscription.
+/// - Subscriber tasks reconnect automatically with exponential back-off after a
+///   Redis disconnect.
 ///
 /// `RedisPubSub` is [`Clone`]-able; all clones share the same subscriber map.
+/// The Redis password is stored as [`SecretString`] so it is zeroed on drop
+/// and never appears in `Debug` output.
 #[derive(Clone)]
 pub struct RedisPubSub {
     publisher: MultiplexedConnection,
     subscribers: Arc<RwLock<HashMap<String, Sender<String>>>>,
-    sub_conn_url: String,
+    /// Connection host — stored separately so subscriber tasks can rebuild the
+    /// URL without embedding credentials in a plain-text struct field.
+    host: String,
+    port: u16,
+    password: SecretString,
 }
 
 impl RedisPubSub {
-    /// Create a new `RedisPubSub` connected to `url`.
+    /// Create a new `RedisPubSub` that connects to `host:port`.
+    ///
+    /// The URL is assembled internally; the password is never stored as a plain
+    /// `String` field.
     ///
     /// # Errors
-    /// Returns [`Error::Redis`] if the Redis connection cannot be established.
-    pub async fn new(url: &str) -> ServerResult<Self> {
+    /// Returns [`Error::Redis`] if the publisher connection cannot be
+    /// established.
+    pub async fn new(host: &str, port: u16, password: &str) -> ServerResult<Self> {
+        let password = SecretString::from(password.to_owned());
+        let url = build_url(host, port, &password);
+
         let client = Client::open(url).map_err(|e| Error::Redis(e.to_string()))?;
         let publisher = client
             .get_multiplexed_async_connection()
@@ -49,7 +79,9 @@ impl RedisPubSub {
         Ok(Self {
             publisher,
             subscribers: Arc::new(RwLock::new(HashMap::new())),
-            sub_conn_url: url.to_owned(),
+            host: host.to_owned(),
+            port,
+            password,
         })
     }
 
@@ -80,14 +112,15 @@ impl RedisPubSub {
     /// strings for every message published to that channel.
     ///
     /// The first call for a given `channel` opens a dedicated Redis PubSub
-    /// connection and spawns a background task that drives message delivery.
-    /// The method waits until the Redis `SUBSCRIBE` handshake completes before
-    /// returning, so callers can immediately publish without a race.
+    /// connection and spawns a background task that drives message delivery
+    /// (with automatic exponential back-off reconnection).  The method blocks
+    /// until the Redis `SUBSCRIBE` handshake completes before returning, so
+    /// callers can immediately publish without a race.
     /// Subsequent calls reuse the existing `broadcast::Sender`.
     ///
     /// # Errors
-    /// Returns [`Error::Redis`] if the Redis PubSub connection cannot be
-    /// established.
+    /// Returns [`Error::Redis`] if the initial Redis PubSub connection cannot
+    /// be established (i.e. the ready signal never arrives).
     pub async fn subscribe(&self, channel: &str) -> ServerResult<Receiver<String>> {
         // Fast path: broadcast channel already exists.
         {
@@ -99,7 +132,7 @@ impl RedisPubSub {
 
         // Slow path: first subscriber for this channel — open a dedicated
         // PubSub connection and spawn the listener task.
-        let mut map = self.subscribers.write().await;
+        let map = self.subscribers.write().await;
 
         // Double-check after acquiring the write lock (another task may have
         // raced us to the slow path).
@@ -108,107 +141,161 @@ impl RedisPubSub {
         }
 
         let (tx, rx) = broadcast::channel::<String>(BROADCAST_CAPACITY);
-        map.insert(channel.to_owned(), tx.clone());
-        drop(map);
 
-        // `ready_tx` fires once the background task has called SUBSCRIBE on
-        // Redis, so the caller knows it is safe to publish immediately after
-        // `subscribe()` returns.
+        // `ready_tx` fires once the background task has issued SUBSCRIBE on
+        // Redis, confirming it is alive and safe to publish to immediately.
         let (ready_tx, ready_rx) = oneshot::channel::<()>();
 
-        let url = self.sub_conn_url.clone();
+        // Drop the write lock before we await the ready signal; otherwise the
+        // lock would be held across the network round-trip.
+        drop(map);
+
+        let host = self.host.clone();
+        let port = self.port;
+        let password = self.password.clone();
         let channel_owned = channel.to_owned();
         let subscribers = self.subscribers.clone();
+        let tx_for_task = tx.clone();
 
         tokio::spawn(async move {
-            match Self::run_subscriber_task(&url, &channel_owned, tx, subscribers, ready_tx).await {
-                Ok(()) => {}
-                Err(e) => log::error!(
-                    "redis_pubsub: subscriber task for channel '{}' exited with error: {}",
-                    channel_owned,
-                    e
-                ),
-            }
+            Self::run_subscriber_task(
+                host,
+                port,
+                password,
+                &channel_owned,
+                tx_for_task,
+                subscribers,
+                ready_tx,
+            )
+            .await;
         });
 
         // Wait for the background task to confirm the SUBSCRIBE handshake.
-        // If the task errors before sending ready the receiver will get an
-        // error — surface it as a Redis error.
+        // If the task fails before sending, surface as a Redis error.
         ready_rx
             .await
             .map_err(|_| Error::Redis("subscriber task exited before becoming ready".to_owned()))?;
 
+        // Only insert the Sender into the map AFTER we know the task is alive,
+        // so a concurrent fast-path caller never gets a dead Sender.
+        self.subscribers.write().await.insert(channel.to_owned(), tx);
+
         Ok(rx)
     }
 
-    /// Internal: drives a Redis PubSub connection for one channel until the
-    /// broadcast sender is closed (no receivers remain).
+    /// Internal: drives a Redis PubSub connection for one channel.  On any
+    /// disconnect or error the task waits with exponential back-off (1s → 2s →
+    /// … → 30s) and reconnects, unless all in-process receivers have been
+    /// dropped — in which case the task exits cleanly.
+    #[allow(clippy::too_many_arguments)]
     async fn run_subscriber_task(
-        url: &str,
+        host: String,
+        port: u16,
+        password: SecretString,
         channel: &str,
         tx: Sender<String>,
         subscribers: Arc<RwLock<HashMap<String, Sender<String>>>>,
         ready_tx: oneshot::Sender<()>,
-    ) -> ServerResult<()> {
-        let client = Client::open(url).map_err(|e| Error::Redis(e.to_string()))?;
-        let mut pubsub = client
-            .get_async_pubsub()
-            .await
-            .map_err(|e| Error::Redis(e.to_string()))?;
-
-        pubsub
-            .subscribe(channel)
-            .await
-            .map_err(|e| Error::Redis(e.to_string()))?;
-
-        // Signal the caller that the SUBSCRIBE handshake is complete.
-        // Ignore the error in case the caller dropped the receiver.
-        let _ = ready_tx.send(());
-
-        use futures_util::StreamExt as _;
-        let mut stream = pubsub.on_message();
+    ) {
+        let mut backoff_secs = BACKOFF_START_SECS;
+        let mut ready_tx = Some(ready_tx);
 
         loop {
-            match stream.next().await {
-                Some(msg) => {
-                    let payload: String = match msg.get_payload() {
-                        Ok(p) => p,
-                        Err(e) => {
-                            log::error!(
-                                "redis_pubsub: failed to decode payload on channel '{}': {e}",
-                                channel
-                            );
-                            continue;
-                        }
-                    };
+            // If all receivers dropped while we were waiting to reconnect,
+            // there is no point opening a new connection.
+            if tx.receiver_count() == 0 {
+                log::debug!(
+                    "redis_pubsub: no receivers for channel '{}', subscriber task exiting",
+                    channel
+                );
+                break;
+            }
 
-                    if tx.send(payload).is_err() {
-                        // All receivers dropped — no point keeping the
-                        // connection alive.
-                        log::info!(
-                            "redis_pubsub: no receivers for channel '{}', closing subscriber",
-                            channel
-                        );
-                        break;
-                    }
-                }
-                None => {
-                    // Stream ended (connection closed by server or dropped).
-                    log::info!(
-                        "redis_pubsub: message stream ended for channel '{}'",
+            let url = build_url(&host, port, &password);
+            let connect_result = async {
+                let client = Client::open(url).map_err(|e| e.to_string())?;
+                let mut pubsub = client
+                    .get_async_pubsub()
+                    .await
+                    .map_err(|e| e.to_string())?;
+                pubsub.subscribe(channel).await.map_err(|e| e.to_string())?;
+                Ok::<_, String>(pubsub)
+            }
+            .await;
+
+            let mut pubsub = match connect_result {
+                Ok(p) => p,
+                Err(e) => {
+                    log::error!(
+                        "redis_pubsub: failed to connect/subscribe on channel '{}': {e}; \
+                         retrying in {backoff_secs}s",
                         channel
                     );
-                    break;
+                    // Signal failure on the very first attempt so the caller
+                    // of subscribe() gets an error instead of hanging.
+                    if let Some(tx) = ready_tx.take() {
+                        drop(tx); // closes the oneshot → RecvError on caller side
+                    }
+                    tokio::time::sleep(tokio::time::Duration::from_secs(backoff_secs)).await;
+                    backoff_secs = (backoff_secs * 2).min(BACKOFF_MAX_SECS);
+                    continue;
+                }
+            };
+
+            // Connected — signal readiness on the first successful handshake.
+            if let Some(rtx) = ready_tx.take() {
+                let _ = rtx.send(());
+            }
+            // Reset back-off after a successful connect.
+            backoff_secs = BACKOFF_START_SECS;
+
+            let mut stream = pubsub.on_message();
+
+            loop {
+                match stream.next().await {
+                    Some(msg) => {
+                        let payload: String = match msg.get_payload() {
+                            Ok(p) => p,
+                            Err(e) => {
+                                log::error!(
+                                    "redis_pubsub: failed to decode payload on channel '{}': {e}",
+                                    channel
+                                );
+                                continue;
+                            }
+                        };
+
+                        if tx.send(payload).is_err() {
+                            // All receivers dropped — shut down cleanly.
+                            log::debug!(
+                                "redis_pubsub: no receivers for channel '{}', closing subscriber",
+                                channel
+                            );
+                            // Break out of both loops.
+                            let mut map = subscribers.write().await;
+                            map.remove(channel);
+                            return;
+                        }
+                    }
+                    None => {
+                        // Stream ended — Redis disconnected.
+                        log::error!(
+                            "redis_pubsub: connection lost on channel '{}'; \
+                             retrying in {backoff_secs}s",
+                            channel
+                        );
+                        break; // break inner loop → retry outer loop
+                    }
                 }
             }
+
+            tokio::time::sleep(tokio::time::Duration::from_secs(backoff_secs)).await;
+            backoff_secs = (backoff_secs * 2).min(BACKOFF_MAX_SECS);
         }
 
-        // Clean up the entry from the subscriber map so the next call to
-        // `subscribe()` will open a fresh connection.
+        // Clean up the map entry so a future subscribe() call starts fresh.
         let mut map = subscribers.write().await;
         map.remove(channel);
-
-        Ok(())
     }
 }
 
@@ -216,24 +303,24 @@ impl RedisPubSub {
 mod tests {
     use super::*;
 
-    fn test_redis_url() -> String {
+    fn test_redis_params() -> (String, u16) {
         let host =
             std::env::var("REDIS_HOST").unwrap_or_else(|_| "aegyptvault.local".to_owned());
         let port = std::env::var("REDIS_PORT")
             .ok()
             .and_then(|p| p.parse::<u16>().ok())
             .unwrap_or(2435_u16);
-        format!("redis://{host}:{port}")
+        (host, port)
     }
 
     #[tokio::test]
     async fn publish_subscribe_roundtrip() {
-        let url = test_redis_url();
-        let ps = RedisPubSub::new(&url).await.unwrap();
-        // subscribe() now blocks until the Redis SUBSCRIBE handshake completes,
+        let (host, port) = test_redis_params();
+        let ps = RedisPubSub::new(&host, port, "").await.unwrap();
+        // subscribe() blocks until the Redis SUBSCRIBE handshake completes,
         // so it is safe to publish immediately after it returns.
         let mut rx = ps.subscribe("test:chan").await.unwrap();
-        ps.publish("test:chan", &serde_json::json!({"hello":"world"}))
+        ps.publish("test:chan", &serde_json::json!({"hello": "world"}))
             .await
             .unwrap();
         let msg = tokio::time::timeout(
