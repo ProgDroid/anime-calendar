@@ -2,8 +2,10 @@
 import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter, RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import axios from 'axios'
 import api from '@/config/api'
 import { toastService } from '@/services/toastService'
+import { addItem, removeItem } from '@/services/calendars'
 import type { Item } from '@/types/item'
 import type { Calendar, EventStyle } from '@/types/calendar'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
@@ -37,6 +39,7 @@ const itemsInCalendar = ref<Item[]>([])
 const submitLoading = ref(false)
 const calendarError = ref<string | null>(null)
 const currentCalendar = ref<Calendar | null>(null)
+const originalItemIds = ref<Set<number>>(new Set())
 
 const loading = computed(() => submitLoading.value)
 const itemCount = computed(() => itemsInCalendar.value.length)
@@ -111,16 +114,54 @@ const submitCalendar = async () => {
   submitLoading.value = true
   calendarError.value = null
   try {
-    let response
     if (currentCalendar.value) {
-      const calendar: Omit<Calendar, 'created_at' | 'updated_at'> = {
-        id: currentCalendar.value.id,
-        name: calendarName.value,
-        language: calendarLanguage.value,
-        event_style: calendarEventStyle.value,
-        items: itemsInCalendar.value,
+      const calId = currentCalendar.value.id
+
+      // 1. Compute diff
+      const currentIds = new Set(itemsInCalendar.value.map(i => i.id))
+      const toAdd = [...currentIds].filter(id => !originalItemIds.value.has(id))
+      const toRemove = [...originalItemIds.value].filter(id => !currentIds.has(id))
+
+      // 2. Apply per-item changes (works for both owner and editor)
+      if (toAdd.length > 0 || toRemove.length > 0) {
+        try {
+          await Promise.all([
+            ...toAdd.map(id => addItem(calId, id)),
+            ...toRemove.map(id => removeItem(calId, id)),
+          ])
+          originalItemIds.value = new Set(currentIds)
+        } catch {
+          calendarError.value = t('calendar.updateFailed')
+          submitLoading.value = false
+          return
+        }
       }
-      response = await api.put('/calendar', calendar)
+
+      // 3. Save meta via PUT (owners only — editors get 403, handled silently)
+      try {
+        const calendar = {
+          id: calId,
+          name: calendarName.value,
+          language: calendarLanguage.value,
+          event_style: calendarEventStyle.value,
+          items: itemsInCalendar.value,
+        }
+        const response = await api.put('/calendar', calendar)
+        toastService.success(t('calendar.updateSuccess', { name: response.data.name }))
+        calendarName.value = ''
+        itemsInCalendar.value = []
+        router.push('/my-calendars')
+      } catch (err) {
+        if (axios.isAxiosError(err) && err.response?.status === 403) {
+          // Editor: meta save forbidden (expected). Item ops already succeeded.
+          toastService.success(t('calendar.updateSuccess', { name: calendarName.value }))
+          calendarName.value = ''
+          itemsInCalendar.value = []
+          router.push('/my-calendars')
+        } else {
+          calendarError.value = t('calendar.updateFailed')
+        }
+      }
     } else {
       const calendar: Omit<Calendar, 'id' | 'created_at' | 'updated_at'> = {
         name: calendarName.value,
@@ -128,12 +169,12 @@ const submitCalendar = async () => {
         event_style: calendarEventStyle.value,
         items: itemsInCalendar.value,
       }
-      response = await api.put('/calendar', calendar)
+      const response = await api.put('/calendar', calendar)
+      toastService.success(t('calendar.updateSuccess', { name: response.data.name }))
+      calendarName.value = ''
+      itemsInCalendar.value = []
+      router.push('/my-calendars')
     }
-    toastService.success(t('calendar.updateSuccess', { name: response.data.name }))
-    calendarName.value = ''
-    itemsInCalendar.value = []
-    router.push('/my-calendars')
   } catch {
     calendarError.value = t('calendar.updateFailed')
   } finally {
@@ -182,6 +223,7 @@ if (calendarId && calendarId !== 'new') {
       calendarEventStyle.value = calendar.event_style ?? 'timed'
       itemsInCalendar.value = calendar.items
       currentCalendar.value = calendar
+      originalItemIds.value = new Set(calendar.items.map(i => i.id))
       calculateRecommendations(itemsInCalendar.value)
     })
     .catch(() => {

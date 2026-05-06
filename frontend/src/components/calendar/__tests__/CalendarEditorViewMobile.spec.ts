@@ -18,7 +18,30 @@ vi.mock('@/config/api', () => ({
   default: {
     get: vi.fn().mockResolvedValue({ data: { items: [] } }),
     put: vi.fn().mockResolvedValue({ data: { name: 'Test' } }),
+    post: vi.fn().mockResolvedValue({ data: { affected: true } }),
+    delete: vi.fn().mockResolvedValue({}),
   },
+}))
+
+// Mock calendars service so per-item calls don't hit the network
+vi.mock('@/services/calendars', () => ({
+  addItem: vi.fn().mockResolvedValue({ affected: true }),
+  removeItem: vi.fn().mockResolvedValue(undefined),
+  fetchScheduleForCalendar: vi.fn().mockResolvedValue({}),
+}))
+
+// Mock subscription service so getMySubscription doesn't consume api.get slots
+vi.mock('@/services/subscription', () => ({
+  getMySubscription: vi.fn().mockResolvedValue({ tier: 'free' }),
+}))
+
+// Mock usageStore so refresh() doesn't consume api.get slots
+vi.mock('@/stores/usageStore', () => ({
+  useUsageStore: () => ({
+    loaded: true,
+    showCount: null,
+    refresh: vi.fn().mockResolvedValue(undefined),
+  }),
 }))
 
 // Mock toastService
@@ -160,6 +183,111 @@ describe('CalendarEditorViewMobile', () => {
     await searchBtn!.trigger('click')
     await flushPromises()
     expect(w.find('[data-testid="batch-add-bar"]').exists()).toBe(false)
+    w.unmount()
+  })
+
+  it('submit with no item diff calls only api.put (no addItem/removeItem)', async () => {
+    const { default: api } = await import('@/config/api')
+    const { addItem, removeItem } = await import('@/services/calendars')
+
+    const fakeItem = {
+      id: 5,
+      title: { english: 'Show A', romaji: '', native: '' },
+      cover_image: null,
+      airing_schedule: [],
+    }
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: {
+        id: 42,
+        name: 'My Cal',
+        language: 'english',
+        event_style: 'timed',
+        items: [fakeItem],
+      },
+    })
+
+    const w = await mountView('42')
+
+    // Fill required name field via the form input
+    const nameInput = w.find('[data-testid="calendar-name-input"] input')
+    if (nameInput.exists()) {
+      await nameInput.setValue('My Cal')
+    }
+    // Trigger submit
+    const submitBtn = w.find('[data-testid="submit-btn"]')
+    await submitBtn.trigger('click')
+    await flushPromises()
+
+    // No diff: item 5 loaded and still present → no per-item calls
+    expect(addItem).not.toHaveBeenCalled()
+    expect(removeItem).not.toHaveBeenCalled()
+    // Meta PUT should have been called once
+    expect(api.put).toHaveBeenCalledTimes(1)
+    w.unmount()
+  })
+
+  it('editor 403 on meta PUT after item ops shows success toast', async () => {
+    const { default: api } = await import('@/config/api')
+    const { addItem: mockAdd } = await import('@/services/calendars')
+    const { toastService } = await import('@/services/toastService')
+
+    // Load calendar with 1 item; load succeeds
+    const fakeItem = {
+      id: 5,
+      title: { english: 'Show A', romaji: '', native: '' },
+      cover_image: null,
+      airing_schedule: [],
+    }
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: {
+        id: 42,
+        name: 'My Cal',
+        language: 'english',
+        event_style: 'timed',
+        items: [fakeItem],
+      },
+    })
+
+    // PUT rejects with 403
+    const err403 = Object.assign(new Error('Forbidden'), {
+      isAxiosError: true,
+      response: { status: 403 },
+    })
+    vi.mocked(api.put).mockRejectedValueOnce(err403)
+
+    // addItem resolves (adding a new item id=7 to trigger the diff path)
+    vi.mocked(mockAdd).mockResolvedValue({ affected: true })
+
+    const w = await mountView('42')
+
+    // Programmatically add item 7 so there is a diff to trigger per-item call
+    // We do this by emitting add-selected on the search panel component
+    // Since it's on the items tab, emit via the internal component chain.
+    // Simpler: find the component instance and call its exposed handler.
+    // addItemFromSearch is not exposed — use the @add-selected emit pathway.
+    // Switch to search tab first to reach the panel
+    const tabBar = w.find('[data-testid="editor-tab-bar"]')
+    const searchBtn = tabBar.findAll('button').find((b) => b.text() === en.mobile.editor.searchTab)
+    await searchBtn!.trigger('click')
+    await flushPromises()
+
+    const searchPanel = w.findComponent({ name: 'EditorSearchPanelMobile' })
+    const newItem = {
+      id: 7,
+      title: { english: 'Show B', romaji: '', native: '' },
+      cover_image: null,
+      airing_schedule: [],
+    }
+    await searchPanel.vm.$emit('add-selected', [newItem])
+    await flushPromises()
+
+    // Now submit
+    const submitBtn = w.find('[data-testid="submit-btn"]')
+    await submitBtn.trigger('click')
+    await flushPromises()
+
+    // Toast success should be called despite 403 on PUT
+    expect(toastService.success).toHaveBeenCalled()
     w.unmount()
   })
 })

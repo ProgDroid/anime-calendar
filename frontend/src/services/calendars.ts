@@ -6,6 +6,15 @@ import { parseIsoWeek } from '@/composables/useWeekRange'
 
 export type { ScheduleEntry, ScheduleByDay } from '@/types/schedule'
 
+export async function addItem(calendarId: number, itemId: number): Promise<{ affected: boolean }> {
+  const { data } = await api.post(`/calendars/${calendarId}/items`, { item_id: itemId })
+  return data
+}
+
+export async function removeItem(calendarId: number, itemId: number): Promise<void> {
+  await api.delete(`/calendars/${calendarId}/items/${itemId}`)
+}
+
 function pickTitle(title: Title, lang: 'english' | 'romaji' | 'native'): string {
   return title[lang] || title.english || title.romaji || title.native || ''
 }
