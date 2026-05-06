@@ -45,7 +45,7 @@ as a reference for Phase 1+ briefs):
 | Pre-flight | ✅ Done (`[sharing]` config block landed in Phase 1) | _this commit_ |
 | Phase 0 — Schema + authorization spine | ✅ Done (12/12) | `bb2d684..974b12a` |
 | Phase 1 — Invitation lifecycle | ✅ Done | _this commit_ |
-| Phase 2 — Editor mutations + Members tab | ⬜ Pending | — |
+| Phase 2 — Editor mutations + Members tab | ✅ Done (5/5) | `7724e8b..82fe724` |
 | Phase 3 — Live sync (SSE + Pub/Sub) | ⬜ Pending | — |
 | Phase 4 — Tier transitions | ⬜ Pending | — |
 | Phase 5 — Public landing + E2E + ops | ⬜ Pending | — |
