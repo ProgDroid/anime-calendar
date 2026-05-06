@@ -121,6 +121,7 @@ pub fn start(
     calendar_editor_mapper: crate::mappers::calendar_editor::CalendarEditorMapper,
     calendar_invitation_mapper: crate::mappers::calendar_invitation::CalendarInvitationMapper,
     invitation_service: crate::services::invitation_service::InvitationService,
+    redis_pubsub: crate::redis_pubsub::RedisPubSub,
 ) -> ServerResult<Server> {
     let level_filter = match LevelFilter::from_str(&config.log_level) {
         Ok(filter) => filter,
@@ -240,6 +241,7 @@ pub fn start(
             .app_data(web::Data::new(calendar_invitation_mapper.clone()))
             .app_data(web::Data::new(invitation_service.clone()))
             .app_data(web::Data::new(sharing_config.clone()))
+            .app_data(web::Data::new(redis_pubsub.clone()))
             .service(public_config::get)
             .service(item::get)
             .service(items::get)

@@ -7,6 +7,7 @@ pub mod mappers;
 pub mod metrics;
 pub mod middleware;
 pub mod openapi;
+pub mod redis_pubsub;
 pub mod server;
 pub mod services;
 #[cfg(test)]

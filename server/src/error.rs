@@ -67,6 +67,9 @@ pub enum Error {
     /// path already has the user identity from `Claims`).
     #[error("rate_limited")]
     TooManyRequests,
+    /// Redis operation or connection error.
+    #[error("Redis error: {0}")]
+    Redis(String),
 }
 
 impl ResponseError for Error {
@@ -119,7 +122,8 @@ impl ResponseError for Error {
             | Self::GovernorConfig
             | Self::EmailError(_)
             | Self::StripeNotConfigured
-            | Self::Stripe(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            | Self::Stripe(_)
+            | Self::Redis(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
