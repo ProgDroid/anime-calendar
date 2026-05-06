@@ -483,6 +483,7 @@ pub async fn accept_invitation(
     claims: Claims,
     svc: web::Data<InvitationService>,
     publisher: web::Data<CalendarEventPublisher>,
+    users: web::Data<UserMapper>,
 ) -> HttpResponse {
     let actor_id = match claims.user_id() {
         Ok(id) => id,
@@ -490,12 +491,18 @@ pub async fn accept_invitation(
     };
     match svc.accept(actor_id, path.into_inner().as_str()).await {
         Ok(inv) => {
+            let display = users
+                .get_user_by_id(actor_id)
+                .await
+                .ok()
+                .map(|u| u.username)
+                .unwrap_or_else(|| actor_id.to_string());
             let _ = publisher
                 .publish_calendar(
                     inv.calendar_id,
                     &CalendarEvent::MemberJoined {
                         user_id: actor_id.to_string(),
-                        display: actor_id.to_string(),
+                        display,
                         actor: actor_id.to_string(),
                     },
                 )

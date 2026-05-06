@@ -99,10 +99,3 @@ impl CalendarEventPublisher {
             .await
     }
 }
-
-#[cfg(test)]
-impl CalendarEventPublisher {
-    pub async fn for_tests() -> Self {
-        Self::new(RedisPubSub::for_tests().await)
-    }
-}
