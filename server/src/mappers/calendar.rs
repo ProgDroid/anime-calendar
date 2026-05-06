@@ -538,6 +538,30 @@ impl CalendarMapper {
 
         Ok(row.subscription_token)
     }
+
+    /// # Errors
+    /// Returns an error if the query fails.
+    pub async fn add_item_idempotent(&self, calendar_id: i32, item_id: i32) -> ServerResult<bool> {
+        crate::metrics::db::timed("calendar.add_item_idempotent", async {
+            let mut conn = self.db.pool.acquire().await?;
+            Self::add_item_idempotent_with(&mut conn, calendar_id, item_id).await
+        })
+        .await
+    }
+
+    /// # Errors
+    /// Returns an error if the query fails.
+    pub async fn remove_item_idempotent(
+        &self,
+        calendar_id: i32,
+        item_id: i32,
+    ) -> ServerResult<bool> {
+        crate::metrics::db::timed("calendar.remove_item_idempotent", async {
+            let mut conn = self.db.pool.acquire().await?;
+            Self::remove_item_idempotent_with(&mut conn, calendar_id, item_id).await
+        })
+        .await
+    }
 }
 
 // Write variants that run on a caller-supplied connection. Used by:
@@ -633,6 +657,36 @@ impl CalendarMapper {
             frozen_subscribe_ics: updated_calendar.frozen_subscribe_ics,
             meta_version: updated_calendar.meta_version,
         })
+    }
+
+    pub(crate) async fn add_item_idempotent_with(
+        conn: &mut sqlx::PgConnection,
+        calendar_id: i32,
+        item_id: i32,
+    ) -> ServerResult<bool> {
+        let r = sqlx::query!(
+            "INSERT INTO calendar_items (calendar_id, item_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+            calendar_id,
+            item_id
+        )
+        .execute(&mut *conn)
+        .await?;
+        Ok(r.rows_affected() > 0)
+    }
+
+    pub(crate) async fn remove_item_idempotent_with(
+        conn: &mut sqlx::PgConnection,
+        calendar_id: i32,
+        item_id: i32,
+    ) -> ServerResult<bool> {
+        let r = sqlx::query!(
+            "DELETE FROM calendar_items WHERE calendar_id = $1 AND item_id = $2",
+            calendar_id,
+            item_id
+        )
+        .execute(&mut *conn)
+        .await?;
+        Ok(r.rows_affected() > 0)
     }
 
     async fn update_calendar_items_with(
@@ -1175,6 +1229,43 @@ mod tests {
             .await
             .unwrap();
         assert!(shared.is_empty(), "owners do not appear in their own shared list");
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn add_item_idempotent_second_call_returns_affected_false() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut tx).await;
+        let cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+            .await
+            .unwrap();
+
+        let first = CalendarMapper::add_item_idempotent_with(&mut tx, cal.id, 42)
+            .await
+            .unwrap();
+        assert!(first, "first insert should report affected=true");
+
+        let second = CalendarMapper::add_item_idempotent_with(&mut tx, cal.id, 42)
+            .await
+            .unwrap();
+        assert!(!second, "duplicate insert should report affected=false");
+
+        tx.rollback().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn remove_item_idempotent_missing_returns_affected_false() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let user_id = create_test_user(&mut tx).await;
+        let cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+            .await
+            .unwrap();
+
+        let result = CalendarMapper::remove_item_idempotent_with(&mut tx, cal.id, 9999)
+            .await
+            .unwrap();
+        assert!(!result, "removing a non-existent item should report affected=false");
+
         tx.rollback().await.unwrap();
     }
 }

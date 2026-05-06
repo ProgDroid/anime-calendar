@@ -250,6 +250,8 @@ pub fn start(
             .service(calendar::get_calendar)
             .service(calendar::get_calendars)
             .service(calendar::delete_calendar)
+            .service(calendar::add_item)
+            .service(calendar::remove_item)
             .service(auth::login)
             .service(auth::register)
             .service(auth::get_current_user)

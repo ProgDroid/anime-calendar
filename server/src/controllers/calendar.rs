@@ -7,7 +7,10 @@ use crate::{
         subscription::Tier,
     },
     error::Error,
-    mappers::{calendar::CalendarMapper, subscription::SubscriptionMapper, user::UserMapper},
+    mappers::{
+        calendar::CalendarMapper,
+        subscription::SubscriptionMapper, user::UserMapper,
+    },
     middleware::auth::Claims,
     services::{
         cached_anilist::CachedAnilist, entitlement::EntitlementService,
@@ -16,7 +19,7 @@ use crate::{
     },
 };
 
-use actix_web::{HttpResponse, ResponseError, delete, get, put, web};
+use actix_web::{HttpResponse, ResponseError, delete, get, post, put, web};
 use chrono::{NaiveDateTime, Utc};
 use common::{
     calendar::Calendar,
@@ -835,9 +838,10 @@ async fn get_calendars(
 #[get("/calendars/{id}")]
 async fn get_calendar(
     user_mapper: web::Data<UserMapper>,
-    calendar_mapper: web::Data<CalendarMapper>,
     anilist: web::Data<CachedAnilist>,
     cache: web::Data<Cache>,
+    authz: web::Data<SharingAuthz>,
+    pool: web::Data<sqlx::PgPool>,
     id: web::Path<i64>,
     claims: Claims,
 ) -> HttpResponse {
@@ -848,63 +852,59 @@ async fn get_calendar(
         }
     };
 
-    // Check if the calendar belongs to the authenticated user
-    match calendar_mapper
-        .get_calendar_by_id(*id as i32, user.id)
+    // Load without owner filter so editors can access shared calendars.
+    let calendar = match load_calendar_any_owner(pool.get_ref(), *id as i32).await {
+        Ok(c) => c,
+        Err(e) => return e.error_response(),
+    };
+
+    // Gate: owner or active editor passes; outsider gets Forbidden.
+    if let Err(e) = authz.assert_can(user.id, &calendar, Action::ItemMutate).await {
+        return e.error_response();
+    }
+
+    let item_ids: Vec<Id> = calendar
+        .item_ids
+        .iter()
+        .filter_map(|raw| Id::new(i64::from(*raw)))
+        .collect();
+
+    let items = anilist.get_items(item_ids).await;
+
+    if items.is_empty() {
+        return Error::NotFound.error_response();
+    }
+
+    let Some(cal_id) = Id::new(calendar.id.into()) else {
+        return Error::NotFound.error_response();
+    };
+
+    let calendar_response = Calendar {
+        id: cal_id.clone(),
+        items,
+        language: calendar.language.to_common_language(),
+        name: calendar.name,
+        created_at: calendar.created_at,
+        updated_at: calendar.updated_at,
+    };
+
+    let cache_key = crate::cache::generate_calendar_key(cal_id.to_int() as i32);
+    let cache_ttl = CACHE_TTL_ITEM;
+
+    match cache
+        .cached_response(&cache_key, cache_ttl, || async {
+            Ok(calendar_response.clone())
+        })
         .await
     {
-        Ok(calendar) => {
-            let item_ids: Vec<Id> = calendar
-                .item_ids
-                .iter()
-                .filter_map(|id| Id::new(i64::from(*id)))
-                .collect();
-
-            let items = anilist.get_items(item_ids).await;
-
-            if items.is_empty() {
-                return Error::NotFound.error_response();
-            }
-
-            if let Some(id) = Id::new(calendar.id.into()) {
-                let calendar_response = Calendar {
-                    id: id.clone(),
-                    items,
-                    language: calendar.language.to_common_language(),
-                    name: calendar.name,
-                    created_at: calendar.created_at,
-                    updated_at: calendar.updated_at,
-                };
-
-                // Cache the response for 1 hour (3600 seconds)
-                let cache_key = crate::cache::generate_calendar_key(id.to_int() as i32);
-                let cache_ttl = CACHE_TTL_ITEM;
-
-                // If cache is available, try to get from cache
-                match cache
-                    .cached_response(&cache_key, cache_ttl, || async {
-                        Ok(calendar_response.clone())
-                    })
-                    .await
-                {
-                    Ok(cached_response) => {
-                        return HttpResponse::Ok().json(cached_response);
-                    }
-                    Err(e) => {
-                        // Log error but continue with regular processing
-                        error!("Cache error: {e:?}");
-                    }
-                }
-
-                // If no cache or cache error, return the response normally
-                HttpResponse::Ok().json(calendar_response)
-            } else {
-                Error::NotFound.error_response()
-            }
+        Ok(cached_response) => HttpResponse::Ok().json(cached_response),
+        Err(e) => {
+            error!("Cache error: {e:?}");
+            HttpResponse::Ok().json(calendar_response)
         }
-        Err(e) => e.error_response(),
     }
 }
+
 
 #[utoipa::path(
     delete,
@@ -955,6 +955,117 @@ async fn delete_calendar(
             let _ = cache.invalidate_subscription(&subscription_token).await;
             HttpResponse::Ok().finish()
         }
+        Err(e) => e.error_response(),
+    }
+}
+
+/// Resolve a calendar by id without filtering by owner. Both owners and
+/// active editors need to load the calendar for authz checks.
+async fn load_calendar_any_owner(
+    pool: &sqlx::PgPool,
+    id: i32,
+) -> Result<CalendarEntity, Error> {
+    use crate::entity::calendar::Language;
+    let row = sqlx::query!(
+        "SELECT id, language as \"language: Language\", name, subscription_token, user_id,
+                created_at, updated_at, event_style, frozen_subscribe_ics, meta_version
+         FROM calendars
+         WHERE id = $1 AND deleted_at IS NULL",
+        id,
+    )
+    .fetch_optional(pool)
+    .await?
+    .ok_or(Error::NotFound)?;
+
+    let item_ids: Vec<i32> = sqlx::query_scalar!(
+        "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
+        id,
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(CalendarEntity {
+        id: row.id,
+        item_ids,
+        language: row.language,
+        name: row.name,
+        subscription_token: row.subscription_token,
+        user_id: row.user_id,
+        created_at: row.created_at,
+        updated_at: row.updated_at,
+        event_style: row.event_style,
+        frozen_subscribe_ics: row.frozen_subscribe_ics,
+        meta_version: row.meta_version,
+    })
+}
+
+#[derive(serde::Deserialize)]
+pub struct AddItemRequest {
+    pub item_id: i32,
+}
+
+/// Add a single item to a calendar. Owner and active editors may call this.
+/// The show-cap entitlement check applies only to the calendar owner
+/// (owner-funded model: the owner's quota gates additions regardless of who
+/// makes the request).
+#[post("/calendars/{id}/items")]
+pub async fn add_item(
+    path: web::Path<i32>,
+    body: web::Json<AddItemRequest>,
+    claims: Claims,
+    pool: web::Data<sqlx::PgPool>,
+    authz: web::Data<SharingAuthz>,
+    calendars: web::Data<CalendarMapper>,
+    entitlement: web::Data<EntitlementService>,
+) -> HttpResponse {
+    let calendar_id = path.into_inner();
+    let actor_id = match claims.user_id() {
+        Ok(id) => id,
+        Err(e) => return e.error_response(),
+    };
+    let cal = match load_calendar_any_owner(pool.get_ref(), calendar_id).await {
+        Ok(c) => c,
+        Err(e) => return e.error_response(),
+    };
+    if let Err(e) = authz.assert_can(actor_id, &cal, Action::ItemMutate).await {
+        return e.error_response();
+    }
+    // Show-cap only applies to the owner (owner-funded model).
+    if actor_id == cal.user_id
+        && let Err(e) = entitlement.assert_can_add_show(actor_id, body.item_id).await
+    {
+        return e.error_response();
+    }
+    match calendars.add_item_idempotent(calendar_id, body.item_id).await {
+        Ok(affected) => HttpResponse::Ok().json(serde_json::json!({ "affected": affected })),
+        Err(e) => e.error_response(),
+    }
+}
+
+/// Remove a single item from a calendar. Owner and active editors may call this.
+/// No entitlement check needed for removal.
+#[delete("/calendars/{id}/items/{item_id}")]
+pub async fn remove_item(
+    path: web::Path<(i32, i32)>,
+    claims: Claims,
+    pool: web::Data<sqlx::PgPool>,
+    authz: web::Data<SharingAuthz>,
+    calendars: web::Data<CalendarMapper>,
+) -> HttpResponse {
+    let (calendar_id, item_id) = path.into_inner();
+    let actor_id = match claims.user_id() {
+        Ok(id) => id,
+        Err(e) => return e.error_response(),
+    };
+    let cal = match load_calendar_any_owner(pool.get_ref(), calendar_id).await {
+        Ok(c) => c,
+        Err(e) => return e.error_response(),
+    };
+    if let Err(e) = authz.assert_can(actor_id, &cal, Action::ItemMutate).await {
+        return e.error_response();
+    }
+    match calendars.remove_item_idempotent(calendar_id, item_id).await {
+        Ok(affected) => HttpResponse::Ok().json(serde_json::json!({ "affected": affected })),
         Err(e) => e.error_response(),
     }
 }
@@ -1603,12 +1714,22 @@ mod integration_tests {
     #[tokio::test]
     async fn get_calendar_without_token_returns_401() {
         let pool = crate::test_helpers::test_pool().await;
+        let entitlement = EntitlementService::new(
+            SubscriptionMapper::from_pool(pool.clone()),
+            ShowCountService::new(pool.clone()),
+            &limits(3, 25),
+        );
+        let sharing_authz = SharingAuthz::new(
+            CalendarEditorMapper::from_pool(pool.clone()),
+            entitlement,
+        );
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
                 .app_data(cached_anilist_data().await)
                 .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(web::Data::new(sharing_authz))
+                .app_data(web::Data::new(pool.clone()))
                 .app_data(jwt_data())
                 .service(get_calendar),
         )
@@ -1624,12 +1745,22 @@ mod integration_tests {
     async fn get_calendar_not_found_returns_404() {
         let pool = crate::test_helpers::test_pool().await;
         let user = seed_user(&pool).await;
+        let entitlement = EntitlementService::new(
+            SubscriptionMapper::from_pool(pool.clone()),
+            ShowCountService::new(pool.clone()),
+            &limits(3, 25),
+        );
+        let sharing_authz = SharingAuthz::new(
+            CalendarEditorMapper::from_pool(pool.clone()),
+            entitlement,
+        );
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
-                .app_data(web::Data::new(CalendarMapper::from_pool(pool)))
                 .app_data(cached_anilist_data().await)
                 .app_data(web::Data::new(Cache::for_tests().await))
+                .app_data(web::Data::new(sharing_authz))
+                .app_data(web::Data::new(pool.clone()))
                 .app_data(jwt_data())
                 .service(get_calendar),
         )
@@ -1919,5 +2050,98 @@ mod integration_tests {
         assert!(post.is_some());
 
         cleanup_user(&pool, user.id).await;
+    }
+    // --- POST /calendars/{id}/items / DELETE /calendars/{id}/items/{item_id} --
+
+    fn build_item_app_services(
+        pool: sqlx::PgPool,
+        l: &LimitsConfig,
+    ) -> (
+        web::Data<UserMapper>,
+        web::Data<SharingAuthz>,
+        web::Data<CalendarMapper>,
+        web::Data<EntitlementService>,
+        web::Data<sqlx::PgPool>,
+    ) {
+        let entitlement = EntitlementService::new(
+            SubscriptionMapper::from_pool(pool.clone()),
+            ShowCountService::new(pool.clone()),
+            l,
+        );
+        let sharing_authz = SharingAuthz::new(
+            CalendarEditorMapper::from_pool(pool.clone()),
+            entitlement.clone(),
+        );
+        (
+            web::Data::new(UserMapper::from_pool(pool.clone())),
+            web::Data::new(sharing_authz),
+            web::Data::new(CalendarMapper::from_pool(pool.clone())),
+            web::Data::new(entitlement),
+            web::Data::new(pool),
+        )
+    }
+
+    macro_rules! item_app {
+        ($pool:expr, $limits:expr) => {{
+            let (um, sa, cm, ent, pp) = build_item_app_services($pool, $limits);
+            test::init_service(
+                App::new()
+                    .app_data(um)
+                    .app_data(sa)
+                    .app_data(cm)
+                    .app_data(ent)
+                    .app_data(pp)
+                    .app_data(jwt_data())
+                    .service(add_item)
+                    .service(remove_item),
+            )
+            .await
+        }};
+    }
+
+    #[tokio::test]
+    async fn editor_can_add_item() {
+        let pool = crate::test_helpers::test_pool().await;
+        let owner = seed_user(&pool).await;
+        let editor = seed_user(&pool).await;
+        let (cal_id, _) = seed_calendar(&pool, owner.id, "Shared Cal").await;
+        CalendarEditorMapper::from_pool(pool.clone())
+            .upsert_active(cal_id, editor.id)
+            .await
+            .unwrap();
+
+        let app = item_app!(pool.clone(), &limits(5, 50));
+        let req = test::TestRequest::post()
+            .uri(&format!("/calendars/{cal_id}/items"))
+            .insert_header(("Cookie", format!("auth_token={}", editor.token)))
+            .set_json(serde_json::json!({ "item_id": 42 }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::OK, "editor should be able to add item");
+        let body: serde_json::Value = test::read_body_json(resp).await;
+        assert_eq!(body["affected"], true);
+
+        cleanup_user(&pool, owner.id).await;
+        cleanup_user(&pool, editor.id).await;
+    }
+
+    #[tokio::test]
+    async fn non_member_cannot_add_item() {
+        let pool = crate::test_helpers::test_pool().await;
+        let owner = seed_user(&pool).await;
+        let outsider = seed_user(&pool).await;
+        let (cal_id, _) = seed_calendar(&pool, owner.id, "Private Cal").await;
+
+        let app = item_app!(pool.clone(), &limits(5, 50));
+        let req = test::TestRequest::post()
+            .uri(&format!("/calendars/{cal_id}/items"))
+            .insert_header(("Cookie", format!("auth_token={}", outsider.token)))
+            .set_json(serde_json::json!({ "item_id": 42 }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::FORBIDDEN, "outsider should get 403");
+
+        cleanup_user(&pool, owner.id).await;
+        cleanup_user(&pool, outsider.id).await;
     }
 }
