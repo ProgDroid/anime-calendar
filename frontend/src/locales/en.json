@@ -547,6 +547,11 @@
       "invite_already_pending": "There's already a pending invitation for that email address.",
       "self_invite": "You can't invite yourself.",
       "invalid_email": "Enter a valid email address."
-    }
+    },
+    "leave": "Leave calendar",
+    "leaveMenuLabel": "Calendar options",
+    "leaveConfirmTitle": "Leave calendar",
+    "leaveConfirmMessage": "You'll lose editor access to this calendar. The owner can re-invite you later.",
+    "leaveError": "Failed to leave calendar. Please try again."
   }
 }

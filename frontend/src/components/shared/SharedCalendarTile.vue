@@ -4,6 +4,8 @@ import { useI18n } from 'vue-i18n';
 import api from '@/config/api';
 import type { SharedPageCalendar } from '@/types/calendar';
 import type { Item } from '@/types/item';
+import UiMenu from '@/components/ui/UiMenu.vue';
+import IconMoreVertical from '@/components/ui/icons/IconMoreVertical.vue';
 
 defineOptions({ name: 'SharedCalendarTile' });
 
@@ -11,6 +13,7 @@ const props = defineProps<{ calendar: SharedPageCalendar }>();
 
 const emit = defineEmits<{
   open: [];
+  leave: [];
 }>();
 
 const { t } = useI18n();
@@ -153,5 +156,31 @@ const initial = computed(() =>
         </div>
       </div>
     </button>
+
+    <!-- Footer: menu button -->
+    <div class="flex items-center justify-end px-4 pb-4">
+      <UiMenu align="right" data-testid="shared-tile-menu">
+        <template #trigger="{ open: menuOpen, panelId }">
+          <button
+            data-testid="shared-tile-menu-btn"
+            class="inline-flex items-center justify-center w-7 h-7 rounded text-fg-2 hover:bg-bg-2 hover:text-fg-1 transition focus-visible:outline-2 focus-visible:outline-accent-1 focus-visible:outline-offset-2"
+            :aria-label="t('sharing.leaveMenuLabel')"
+            aria-haspopup="menu"
+            :aria-expanded="menuOpen"
+            :aria-controls="panelId"
+          >
+            <IconMoreVertical class="w-4 h-4" />
+          </button>
+        </template>
+        <button
+          data-testid="leave-calendar-btn"
+          role="menuitem"
+          class="flex items-center gap-2 px-3 py-2 text-sm text-danger-text hover:bg-bg-2 rounded text-left w-full"
+          @click="emit('leave')"
+        >
+          {{ t('sharing.leave') }}
+        </button>
+      </UiMenu>
+    </div>
   </div>
 </template>

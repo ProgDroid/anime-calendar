@@ -547,6 +547,11 @@
       "invite_already_pending": "Já existe um convite pendente para esse endereço de e-mail.",
       "self_invite": "Não pode convidar-se a si mesmo.",
       "invalid_email": "Introduza um endereço de e-mail válido."
-    }
+    },
+    "leave": "Sair do calendário",
+    "leaveMenuLabel": "Opções do calendário",
+    "leaveConfirmTitle": "Sair do calendário",
+    "leaveConfirmMessage": "Perderás o acesso de editor a este calendário. O proprietário pode convidar-te novamente.",
+    "leaveError": "Falha ao sair do calendário. Por favor tenta novamente."
   }
 }

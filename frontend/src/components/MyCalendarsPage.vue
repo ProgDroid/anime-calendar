@@ -174,6 +174,7 @@
             :key="calendar.id"
             :calendar="calendar"
             @open="editCalendar(calendar.id)"
+            @leave="handleLeaveRequest(calendar.id)"
           />
         </div>
       </section>
@@ -187,6 +188,17 @@
       :danger="true"
       @confirm="executeDelete"
       @cancel="confirmModalOpen = false"
+    />
+
+    <ConfirmModal
+      :open="leaveConfirmOpen"
+      :title="$t('sharing.leaveConfirmTitle')"
+      :message="$t('sharing.leaveConfirmMessage')"
+      :confirm-label="$t('sharing.leave')"
+      :danger="true"
+      data-testid="leave-confirm-modal"
+      @confirm="executeLeave"
+      @cancel="leaveConfirmOpen = false"
     />
   </div>
 </template>
@@ -225,6 +237,8 @@ const error = ref<string | null>(null)
 const pagination = ref({ page: 1, page_size: 6, total: 0, total_pages: 0 })
 const confirmModalOpen = ref(false)
 const calendarToDelete = ref<number | null>(null)
+const leaveConfirmOpen = ref(false)
+const leaveCalendarId = ref<number | null>(null)
 const isFreeTier = ref(true)
 
 // Free-tier counter chip + cap state. Shared-with-me does NOT count toward
@@ -308,6 +322,27 @@ async function executeDelete() {
     error.value = t('calendars.deleteFailed')
   } finally {
     calendarToDelete.value = null
+  }
+}
+
+function handleLeaveRequest(calendarId: number) {
+  leaveCalendarId.value = calendarId
+  leaveConfirmOpen.value = true
+}
+
+async function executeLeave() {
+  leaveConfirmOpen.value = false
+  if (leaveCalendarId.value === null) return
+  const id = leaveCalendarId.value
+  // Optimistically remove from list
+  sharedCalendars.value = sharedCalendars.value.filter((c) => c.id !== id)
+  try {
+    await api.delete(`/calendars/${id}/editors/me`)
+  } catch {
+    toastService.error(t('sharing.leaveError'))
+    await loadCalendars(pagination.value.page)
+  } finally {
+    leaveCalendarId.value = null
   }
 }
 
