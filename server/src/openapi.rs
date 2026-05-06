@@ -97,6 +97,16 @@ impl Modify for BearerAuth {
         crate::controllers::subscription::get_my_subscription,
         // public config
         crate::controllers::public_config::get,
+        // sharing (co-editor invitations + member management)
+        crate::controllers::sharing::create_invitation,
+        crate::controllers::sharing::revoke_invitation,
+        crate::controllers::sharing::resend_invitation,
+        crate::controllers::sharing::list_members,
+        crate::controllers::sharing::remove_editor,
+        crate::controllers::sharing::leave_calendar,
+        crate::controllers::sharing::preview_invitation,
+        crate::controllers::sharing::accept_invitation,
+        crate::controllers::sharing::decline_invitation,
     ),
     components(schemas(
         // auth types
@@ -143,6 +153,15 @@ impl Modify for BearerAuth {
         SubscriptionResponse,
         // public config types
         PublicConfig,
+        // sharing types
+        crate::entity::calendar_invitation::CalendarInvitation,
+        crate::entity::calendar_invitation::InvitationStatus,
+        crate::services::invitation_service::InvitationPreview,
+        crate::controllers::sharing::CreateInvitationRequest,
+        crate::controllers::sharing::MemberSummary,
+        crate::controllers::sharing::PendingInviteSummary,
+        crate::controllers::sharing::MembersResponse,
+        crate::controllers::sharing::EmptyOk,
         // common types
         common::calendar::Calendar,
         common::item::Item,
@@ -163,6 +182,7 @@ impl Modify for BearerAuth {
         (name = "stripe", description = "Stripe Checkout and billing integration"),
         (name = "subscription", description = "Effective tier / entitlement read endpoints"),
         (name = "config", description = "Public bootstrap configuration for the SPA"),
+        (name = "sharing", description = "Co-editor invitations + member management"),
     )
 )]
 pub struct ApiDoc;

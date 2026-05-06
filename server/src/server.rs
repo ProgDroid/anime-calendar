@@ -118,6 +118,9 @@ pub fn start(
     stripe_config: StripeConfig,
     pg_pool: sqlx::PgPool,
     sharing_authz: crate::services::sharing_authz::SharingAuthz,
+    calendar_editor_mapper: crate::mappers::calendar_editor::CalendarEditorMapper,
+    calendar_invitation_mapper: crate::mappers::calendar_invitation::CalendarInvitationMapper,
+    invitation_service: crate::services::invitation_service::InvitationService,
 ) -> ServerResult<Server> {
     let level_filter = match LevelFilter::from_str(&config.log_level) {
         Ok(filter) => filter,
@@ -149,6 +152,7 @@ pub fn start(
         secure: config.cookie_secure,
     };
     let app_base_url = AppBaseUrl::new(config.app_base_url);
+    let sharing_config = config.sharing.clone();
 
     // Snapshot the subset of config we expose to the SPA at bootstrap. Built
     // once here so the controller can't reach into other ServerConfig fields.
@@ -232,6 +236,10 @@ pub fn start(
             .app_data(web::Data::new(public_config.clone()))
             .app_data(web::Data::new(pg_pool.clone()))
             .app_data(web::Data::new(sharing_authz.clone()))
+            .app_data(web::Data::new(calendar_editor_mapper.clone()))
+            .app_data(web::Data::new(calendar_invitation_mapper.clone()))
+            .app_data(web::Data::new(invitation_service.clone()))
+            .app_data(web::Data::new(sharing_config.clone()))
             .service(public_config::get)
             .service(item::get)
             .service(items::get)
@@ -264,6 +272,15 @@ pub fn start(
             .service(stripe_webhook_controller::stripe_webhook)
             .service(subscription_controller::get_my_subscription)
             .service(account::get_usage)
+            .service(crate::controllers::sharing::create_invitation)
+            .service(crate::controllers::sharing::revoke_invitation)
+            .service(crate::controllers::sharing::resend_invitation)
+            .service(crate::controllers::sharing::list_members)
+            .service(crate::controllers::sharing::remove_editor)
+            .service(crate::controllers::sharing::leave_calendar)
+            .service(crate::controllers::sharing::preview_invitation)
+            .service(crate::controllers::sharing::accept_invitation)
+            .service(crate::controllers::sharing::decline_invitation)
     })
     .bind(format!("{host}:{port}"))?
     .run())

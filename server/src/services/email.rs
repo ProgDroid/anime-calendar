@@ -132,4 +132,131 @@ impl EmailService {
 
         Ok(())
     }
+
+
+    /// Send a co-editor invitation link.
+    ///
+    /// Plain-text body matches the existing password-reset / verify-email
+    /// convention — calendar names and owner usernames are user-supplied,
+    /// so plain text avoids HTML injection without an escape dependency.
+    /// If `smtp.host` is empty (e.g. local dev), logs the invite URL at WARN
+    /// level instead of attempting a connection.
+    ///
+    /// # Errors
+    /// Fails if SMTP connection fails or the email cannot be built/sent.
+    pub async fn send_invitation(
+        &self,
+        to_email: &str,
+        owner_display: &str,
+        calendar_name: &str,
+        invite_url: &str,
+    ) -> ServerResult<()> {
+        if self.config.host.is_empty() {
+            warn!(
+                "SMTP not configured — invitation URL for {to_email} to \"{calendar_name}\": {invite_url}"
+            );
+            return Ok(());
+        }
+
+        let from = self
+            .config
+            .from_address
+            .parse()
+            .map_err(|e: lettre::address::AddressError| Error::EmailError(e.to_string()))?;
+
+        let to = to_email
+            .parse()
+            .map_err(|e: lettre::address::AddressError| Error::EmailError(e.to_string()))?;
+
+        let email = Message::builder()
+            .from(from)
+            .to(to)
+            .subject(format!("Edit access invite: {calendar_name}"))
+            .header(ContentType::TEXT_PLAIN)
+            .body(format!(
+                "{owner_display} invited you to edit \"{calendar_name}\" on Anime Calendar.\n\n\
+                 Accept the invitation by clicking the link below \
+                 (the link expires in 7 days):\n\n\
+                 {invite_url}\n\n\
+                 If you don't recognize this invitation, you can safely ignore this email."
+            ))
+            .map_err(|e| Error::EmailError(e.to_string()))?;
+
+        let creds = Credentials::new(
+            self.config.username.clone(),
+            self.config.password.expose_secret().to_string(),
+        );
+
+        let mailer = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&self.config.host)
+            .map_err(|e| Error::EmailError(e.to_string()))?
+            .port(self.config.port)
+            .credentials(creds)
+            .build();
+
+        mailer
+            .send(email)
+            .await
+            .map_err(|e| Error::EmailError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Notify a previously-suspended editor that their access has been
+    /// restored (owner re-upgraded to Pro). Used by the suspend/restore flow
+    /// in Phase 4. Plain-text body, same logging fallback as the other
+    /// senders.
+    ///
+    /// # Errors
+    /// Fails if SMTP connection fails or the email cannot be built/sent.
+    pub async fn send_editor_restored(
+        &self,
+        to_email: &str,
+        calendar_name: &str,
+    ) -> ServerResult<()> {
+        if self.config.host.is_empty() {
+            warn!(
+                "SMTP not configured — editor restored notice for {to_email} on \"{calendar_name}\""
+            );
+            return Ok(());
+        }
+
+        let from = self
+            .config
+            .from_address
+            .parse()
+            .map_err(|e: lettre::address::AddressError| Error::EmailError(e.to_string()))?;
+
+        let to = to_email
+            .parse()
+            .map_err(|e: lettre::address::AddressError| Error::EmailError(e.to_string()))?;
+
+        let email = Message::builder()
+            .from(from)
+            .to(to)
+            .subject(format!("Your editor access on \"{calendar_name}\" is back"))
+            .header(ContentType::TEXT_PLAIN)
+            .body(format!(
+                "Good news — your editor access on \"{calendar_name}\" has been restored.\n\n\
+                 You can now add and remove items as before. No action is needed on your end."
+            ))
+            .map_err(|e| Error::EmailError(e.to_string()))?;
+
+        let creds = Credentials::new(
+            self.config.username.clone(),
+            self.config.password.expose_secret().to_string(),
+        );
+
+        let mailer = AsyncSmtpTransport::<Tokio1Executor>::starttls_relay(&self.config.host)
+            .map_err(|e| Error::EmailError(e.to_string()))?
+            .port(self.config.port)
+            .credentials(creds)
+            .build();
+
+        mailer
+            .send(email)
+            .await
+            .map_err(|e| Error::EmailError(e.to_string()))?;
+
+        Ok(())
+    }
 }

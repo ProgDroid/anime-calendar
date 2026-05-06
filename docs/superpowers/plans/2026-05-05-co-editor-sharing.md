@@ -42,9 +42,9 @@ as a reference for Phase 1+ briefs):
 
 | Phase | Status | Commits |
 |-------|--------|---------|
-| Pre-flight | 🟡 Partial — config block deferred to Phase 1 | — |
+| Pre-flight | ✅ Done (`[sharing]` config block landed in Phase 1) | _this commit_ |
 | Phase 0 — Schema + authorization spine | ✅ Done (12/12) | `bb2d684..974b12a` |
-| Phase 1 — Invitation lifecycle | ⬜ Pending | — |
+| Phase 1 — Invitation lifecycle | ✅ Done | _this commit_ |
 | Phase 2 — Editor mutations + Members tab | ⬜ Pending | — |
 | Phase 3 — Live sync (SSE + Pub/Sub) | ⬜ Pending | — |
 | Phase 4 — Tier transitions | ⬜ Pending | — |
@@ -70,7 +70,47 @@ as a reference for Phase 1+ briefs):
 | 0.11 (frontend) | `974b12a` | MyCalendarsPage two-section layout + SharedCalendarTile |
 | 0.12 | _this commit_ | Verification gate: all suites green, mark Phase 0 done |
 
-**Next: Phase 1 — Invitation lifecycle.**
+**Phase 1 convention divergences from this plan that were baked into the
+code (kept here as a reference for Phase 2+ briefs):**
+- Tokens use the existing **deterministic SHA-256** pattern from
+  `password_reset` / `email_verification` (`auth::generate_random_token` +
+  `auth::hash_token`), not argon2id + lookup-column. 256-bit token entropy
+  makes brute force infeasible regardless of hash speed; this matches the
+  rest of the codebase and dropped Task 1.5.5 entirely.
+- No standalone `InvitationToken` service struct. The two helpers in
+  `services/auth.rs` are reused inline by `InvitationService`.
+- `EmailService` got `send_invitation` + `send_editor_restored` methods
+  directly (TEXT_PLAIN body, same SMTP-host-empty WARN-log fallback).
+  No `SharingEmail<E: EmailSender>` wrapper / mock trait — matches the
+  password-reset / verify-email convention.
+- Per-user invite rate limit is **not** enforced via `actix-governor` — there
+  is no global auth middleware in this codebase, so a `KeyExtractor` can't
+  read `Claims` from request extensions. Instead, `InvitationService::send`
+  queries `CalendarInvitationMapper::count_for_inviter_since(inviter, NOW − 1h)`
+  and returns `Error::TooManyRequests` if over budget.
+- New error variants added: `Error::Conflict { reason: &'static str }`
+  (HTTP 409, body `{"error": reason}`) and `Error::TooManyRequests`
+  (HTTP 429, body `{"error": "rate_limited"}`).
+- Cap check uses Postgres advisory lock (`pg_advisory_xact_lock(hashtext("invite:{id}"))`)
+  inside the same transaction as the INSERT to prevent race-doubled inserts.
+- Resend mints a NEW token + revokes the old row (we only stored the hash).
+  Counted against the per-user rate limit.
+- Anti-enumeration: every token-failure path (missing / expired /
+  already-resolved / wrong-email-on-preview) returns `Error::InvalidRequest`
+  (HTTP 400) with the standard `{"error":"Invalid request data"}` body.
+- Plain `username` is used as `owner_display` in invitation emails and
+  invite previews. `users` does not currently store `display_name` /
+  `avatar_url`; the preview wire shape carries `owner_avatar: None` for
+  forward compatibility.
+- New routes: `POST /calendars/{id}/invitations`, `DELETE
+  /calendars/{id}/invitations/{iid}`, `POST
+  /calendars/{id}/invitations/{iid}/resend`, `GET
+  /calendars/{id}/editors`, `DELETE /calendars/{id}/editors/me`, `DELETE
+  /calendars/{id}/editors/{uid}`, `GET /invitations/{token}`, `POST
+  /invitations/{token}/accept`, `POST /invitations/{token}/decline`.
+  All registered in `ApiDoc` with the new `sharing` tag.
+
+**Next: Phase 2 — Editor mutations + Members tab.**
 
 ---
 

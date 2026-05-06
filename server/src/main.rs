@@ -50,6 +50,9 @@ async fn main() -> ServerResult<()> {
     );
 
     let calendar_editor_mapper = CalendarEditorMapper::new(db_config.clone()).await?;
+    let calendar_invitation_mapper =
+        server::mappers::calendar_invitation::CalendarInvitationMapper::new(db_config.clone())
+            .await?;
     let sharing_authz =
         SharingAuthz::new(calendar_editor_mapper.clone(), entitlement_service.clone());
 
@@ -113,6 +116,18 @@ async fn main() -> ServerResult<()> {
         .await?
         .pool;
 
+    // Dedicated pool for the InvitationService advisory-locked transactions.
+    let invitation_pool = server::mappers::database::Database::new(db_config.clone())
+        .await?
+        .pool;
+    let invitation_service = server::services::invitation_service::InvitationService::new(
+        calendar_invitation_mapper.clone(),
+        email_service.clone(),
+        invitation_pool,
+        settings.sharing.clone(),
+        settings.app_base_url.clone(),
+    );
+
     Ok(server::server::start(
         settings,
         cached_anilist,
@@ -135,6 +150,9 @@ async fn main() -> ServerResult<()> {
         stripe_config,
         controller_pool,
         sharing_authz,
+        calendar_editor_mapper,
+        calendar_invitation_mapper,
+        invitation_service,
     )?
     .await?)
 }

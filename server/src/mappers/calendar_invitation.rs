@@ -345,6 +345,49 @@ impl CalendarInvitationMapper {
         Ok(count.unwrap_or(0))
     }
 
+
+    /// Count invitations sent by `inviter_id` to **any** invitee since
+    /// `since`, regardless of status. Used by `InvitationService::send`
+    /// to enforce the per-inviter hourly rate limit (config
+    /// `[sharing] invite_rate_limit_per_hour`).
+    ///
+    /// # Errors
+    /// Returns the underlying sqlx error.
+    // First production caller lands in Phase 1 (per-user invite rate limit).
+    #[allow(dead_code)]
+    pub async fn count_for_inviter_since(
+        &self,
+        inviter_id: i32,
+        since: NaiveDateTime,
+    ) -> ServerResult<i64> {
+        crate::metrics::db::timed("calendar_invitation.count_for_inviter_since", async {
+            Self::count_for_inviter_since_in_tx(
+                &mut *self.db.pool.acquire().await?,
+                inviter_id,
+                since,
+            )
+            .await
+        })
+        .await
+    }
+
+    pub(crate) async fn count_for_inviter_since_in_tx(
+        conn: &mut sqlx::PgConnection,
+        inviter_id: i32,
+        since: NaiveDateTime,
+    ) -> ServerResult<i64> {
+        let count: Option<i64> = sqlx::query_scalar!(
+            "SELECT COUNT(*) FROM calendar_invitations
+             WHERE inviter_id = $1
+               AND sent_at >= $2",
+            inviter_id,
+            since,
+        )
+        .fetch_one(conn)
+        .await?;
+        Ok(count.unwrap_or(0))
+    }
+
     /// Transition a pending invitation to a terminal state, stamping
     /// `resolved_at = NOW()`. Returns 0 if the row was not pending (e.g.
     /// already accepted in a concurrent request) — callers must treat that
@@ -893,6 +936,50 @@ mod tests {
         .await
         .unwrap();
         assert_eq!(count, 2, "case-insensitive match across invites");
+
+        tx.rollback().await.unwrap();
+    }
+
+
+    #[tokio::test]
+    async fn count_for_inviter_since_aggregates_across_invitees() {
+        let mut tx = crate::test_helpers::test_tx().await;
+        let owner = create_test_user(&mut tx).await;
+        let cal = create_test_calendar(&mut tx, owner).await;
+        let an_hour_ago = (Utc::now() - Duration::hours(1)).naive_utc();
+
+        CalendarInvitationMapper::create_in_tx(
+            &mut tx, cal, owner, "alice@example.com", "h1", future_expiry(),
+        )
+        .await
+        .unwrap();
+        CalendarInvitationMapper::create_in_tx(
+            &mut tx, cal, owner, "bob@example.com", "h2", future_expiry(),
+        )
+        .await
+        .unwrap();
+        CalendarInvitationMapper::create_in_tx(
+            &mut tx, cal, owner, "carol@example.com", "h3", future_expiry(),
+        )
+        .await
+        .unwrap();
+
+        let count =
+            CalendarInvitationMapper::count_for_inviter_since_in_tx(&mut tx, owner, an_hour_ago)
+                .await
+                .unwrap();
+        assert_eq!(count, 3, "all three invites count toward inviter's window");
+
+        // Distant past: nothing in window.
+        let last_minute = (Utc::now() - Duration::seconds(0)).naive_utc();
+        let future_count =
+            CalendarInvitationMapper::count_for_inviter_since_in_tx(&mut tx, owner, last_minute)
+                .await
+                .unwrap();
+        assert!(
+            future_count <= 3,
+            "narrower window cannot include rows older than its bound"
+        );
 
         tx.rollback().await.unwrap();
     }

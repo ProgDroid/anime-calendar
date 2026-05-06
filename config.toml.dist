@@ -65,3 +65,13 @@ export_ttl_seconds         = 300
 free_calendar_limit = 3
 free_show_cap       = 25
 pro_max_reminders   = 5
+
+[sharing]
+# Co-editor sharing limits and timing. Read by the invitation service to
+# gate cap/expiry/rate-limit decisions.
+editor_cap                  = 5      # max active+pending editors per calendar
+invitation_expiry_days      = 7
+invite_rate_limit_per_hour  = 20
+presence_ttl_seconds        = 60
+presence_heartbeat_seconds  = 30
+sse_heartbeat_seconds       = 25

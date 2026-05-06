@@ -55,11 +55,24 @@ pub enum Error {
         required_tier: &'static str,
         reason: Option<&'static str>,
     },
+    /// HTTP 409: the requested operation conflicts with current state and
+    /// cannot be retried as-is. `reason` is a stable code the frontend
+    /// maps to copy (e.g. `editor_cap_reached`, `invite_already_pending`).
+    /// Used by the sharing layer to surface cap and uniqueness rejections.
+    #[error("conflict")]
+    Conflict { reason: &'static str },
+    /// HTTP 429: caller has exceeded a server-side rate budget. Used by
+    /// `InvitationService::send` to enforce per-inviter hourly invite
+    /// caps without standing up a separate middleware (the controller
+    /// path already has the user identity from `Claims`).
+    #[error("rate_limited")]
+    TooManyRequests,
 }
 
 impl ResponseError for Error {
     fn error_response(&self) -> actix_web::HttpResponse<actix_web::body::BoxBody> {
-        // PaymentRequired carries an extra structured field. Other variants
+        // PaymentRequired carries an extra structured field. Conflict surfaces
+        // a `reason` code so the frontend can map to copy. Other variants
         // keep the documented `{"error":"..."}` shape from CLAUDE.md.
         if let Self::PaymentRequired {
             required_tier,
@@ -75,6 +88,11 @@ impl ResponseError for Error {
             }
             return HttpResponse::build(self.status_code()).json(payload);
         }
+        if let Self::Conflict { reason } = self {
+            return HttpResponse::build(self.status_code()).json(serde_json::json!({
+                "error": *reason,
+            }));
+        }
         HttpResponse::build(self.status_code()).json(serde_json::json!({
             "error": self.to_string()
         }))
@@ -86,6 +104,8 @@ impl ResponseError for Error {
             Self::Unauthorised | Self::InvalidToken(_) => StatusCode::UNAUTHORIZED,
             Self::Forbidden | Self::EmailNotVerified => StatusCode::FORBIDDEN,
             Self::PaymentRequired { .. } => StatusCode::PAYMENT_REQUIRED,
+            Self::Conflict { .. } => StatusCode::CONFLICT,
+            Self::TooManyRequests => StatusCode::TOO_MANY_REQUESTS,
             Self::InvalidRequest
             | Self::UserAlreadyExists
             | Self::InvalidPassword
@@ -134,5 +154,28 @@ mod tests {
         assert_eq!(json["error"], "upgrade_required");
         assert_eq!(json["required_tier"], "paid");
         assert!(json.get("reason").is_none());
+    }
+
+
+    #[tokio::test]
+    async fn conflict_returns_409_with_reason_as_error() {
+        let err = Error::Conflict {
+            reason: "editor_cap_reached",
+        };
+        assert_eq!(err.status_code(), StatusCode::CONFLICT);
+        let resp = err.error_response();
+        let bytes = actix_web::body::to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"], "editor_cap_reached");
+    }
+
+    #[tokio::test]
+    async fn too_many_requests_returns_429() {
+        let err = Error::TooManyRequests;
+        assert_eq!(err.status_code(), StatusCode::TOO_MANY_REQUESTS);
+        let resp = err.error_response();
+        let bytes = actix_web::body::to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"], "rate_limited");
     }
 }

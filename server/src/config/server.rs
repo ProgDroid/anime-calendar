@@ -35,6 +35,8 @@ pub struct Server {
     pub cache: CacheConfig,
     #[serde(default)]
     pub limits: LimitsConfig,
+    #[serde(default)]
+    pub sharing: SharingConfig,
 }
 
 #[must_use]
@@ -75,6 +77,7 @@ impl Default for Server {
             reconcile: ReconcileConfig::default(),
             cache: CacheConfig::default(),
             limits: LimitsConfig::default(),
+            sharing: SharingConfig::default(),
         }
     }
 }
@@ -244,6 +247,62 @@ impl Default for LimitsConfig {
             free_calendar_limit: default_free_calendar_limit(),
             free_show_cap: default_free_show_cap(),
             pro_max_reminders: default_pro_max_reminders(),
+        }
+    }
+}
+
+
+/// Co-editor sharing limits and timing. Read by the invitation service to
+/// gate cap, expiry, rate-limit, and SSE heartbeat decisions.
+#[derive(Debug, Deserialize, Clone)]
+pub struct SharingConfig {
+    #[serde(default = "default_editor_cap")]
+    pub editor_cap: u32,
+    #[serde(default = "default_invitation_expiry_days")]
+    pub invitation_expiry_days: u32,
+    #[serde(default = "default_invite_rate_limit_per_hour")]
+    pub invite_rate_limit_per_hour: u32,
+    #[serde(default = "default_presence_ttl_seconds")]
+    pub presence_ttl_seconds: u32,
+    #[serde(default = "default_presence_heartbeat_seconds")]
+    pub presence_heartbeat_seconds: u32,
+    #[serde(default = "default_sse_heartbeat_seconds")]
+    pub sse_heartbeat_seconds: u32,
+}
+
+const fn default_editor_cap() -> u32 {
+    5
+}
+
+const fn default_invitation_expiry_days() -> u32 {
+    7
+}
+
+const fn default_invite_rate_limit_per_hour() -> u32 {
+    20
+}
+
+const fn default_presence_ttl_seconds() -> u32 {
+    60
+}
+
+const fn default_presence_heartbeat_seconds() -> u32 {
+    30
+}
+
+const fn default_sse_heartbeat_seconds() -> u32 {
+    25
+}
+
+impl Default for SharingConfig {
+    fn default() -> Self {
+        Self {
+            editor_cap: default_editor_cap(),
+            invitation_expiry_days: default_invitation_expiry_days(),
+            invite_rate_limit_per_hour: default_invite_rate_limit_per_hour(),
+            presence_ttl_seconds: default_presence_ttl_seconds(),
+            presence_heartbeat_seconds: default_presence_heartbeat_seconds(),
+            sse_heartbeat_seconds: default_sse_heartbeat_seconds(),
         }
     }
 }
