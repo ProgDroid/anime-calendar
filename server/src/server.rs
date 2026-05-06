@@ -34,8 +34,9 @@ use crate::{
     },
     openapi::ApiDoc,
     services::{
-        cached_anilist::CachedAnilist, email::EmailService, entitlement::EntitlementService,
-        frozen_ics::FrozenIcsService, ics_export::IcsExportService, show_count::ShowCountService,
+        cached_anilist::CachedAnilist, calendar_events::CalendarEventPublisher,
+        email::EmailService, entitlement::EntitlementService, frozen_ics::FrozenIcsService,
+        ics_export::IcsExportService, show_count::ShowCountService,
     },
     ServerResult,
 };
@@ -122,6 +123,7 @@ pub fn start(
     calendar_invitation_mapper: crate::mappers::calendar_invitation::CalendarInvitationMapper,
     invitation_service: crate::services::invitation_service::InvitationService,
     redis_pubsub: crate::redis_pubsub::RedisPubSub,
+    calendar_event_publisher: CalendarEventPublisher,
 ) -> ServerResult<Server> {
     let level_filter = match LevelFilter::from_str(&config.log_level) {
         Ok(filter) => filter,
@@ -242,6 +244,7 @@ pub fn start(
             .app_data(web::Data::new(invitation_service.clone()))
             .app_data(web::Data::new(sharing_config.clone()))
             .app_data(web::Data::new(redis_pubsub.clone()))
+            .app_data(web::Data::new(calendar_event_publisher.clone()))
             .service(public_config::get)
             .service(item::get)
             .service(items::get)

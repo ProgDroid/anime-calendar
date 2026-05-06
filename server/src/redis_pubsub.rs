@@ -300,6 +300,22 @@ impl RedisPubSub {
 }
 
 #[cfg(test)]
+impl RedisPubSub {
+    /// Construct a `RedisPubSub` connected to the test Redis instance.
+    pub async fn for_tests() -> Self {
+        let host =
+            std::env::var("REDIS_HOST").unwrap_or_else(|_| "aegyptvault.local".to_owned());
+        let port = std::env::var("REDIS_PORT")
+            .ok()
+            .and_then(|p| p.parse::<u16>().ok())
+            .unwrap_or(2435_u16);
+        Self::new(&host, port, "")
+            .await
+            .expect("test Redis must be reachable")
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::*;
 

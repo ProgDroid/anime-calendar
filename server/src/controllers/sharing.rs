@@ -22,6 +22,7 @@ use crate::mappers::calendar_editor::CalendarEditorMapper;
 use crate::mappers::calendar_invitation::CalendarInvitationMapper;
 use crate::mappers::user::UserMapper;
 use crate::middleware::auth::Claims;
+use crate::services::calendar_events::{CalendarEvent, CalendarEventPublisher};
 use crate::services::invitation_service::{InvitationPreview, InvitationService};
 use crate::services::sharing_authz::{Action, SharingAuthz};
 
@@ -355,6 +356,7 @@ pub async fn remove_editor(
     pool: web::Data<sqlx::PgPool>,
     authz: web::Data<SharingAuthz>,
     editors: web::Data<CalendarEditorMapper>,
+    publisher: web::Data<CalendarEventPublisher>,
 ) -> HttpResponse {
     let (calendar_id, target_user_id) = path.into_inner();
 
@@ -372,6 +374,21 @@ pub async fn remove_editor(
     if let Err(e) = editors.remove(calendar_id, target_user_id).await {
         return e.error_response();
     }
+    let _ = publisher
+        .publish_calendar(
+            calendar_id,
+            &CalendarEvent::MemberLeft {
+                user_id: target_user_id.to_string(),
+                actor: actor_id.to_string(),
+                reason: "removed".into(),
+            },
+        )
+        .await
+        .map_err(|e| log::error!("publish MemberLeft(removed): {e}"));
+    let _ = publisher
+        .publish_kick(target_user_id, "role_revoked")
+        .await
+        .map_err(|e| log::error!("publish kick: {e}"));
     HttpResponse::NoContent().finish()
 }
 
@@ -391,6 +408,7 @@ pub async fn leave_calendar(
     path: web::Path<i32>,
     claims: Claims,
     editors: web::Data<CalendarEditorMapper>,
+    publisher: web::Data<CalendarEventPublisher>,
 ) -> HttpResponse {
     let calendar_id = path.into_inner();
     let actor_id = match claims.user_id() {
@@ -400,6 +418,17 @@ pub async fn leave_calendar(
     if let Err(e) = editors.remove(calendar_id, actor_id).await {
         return e.error_response();
     }
+    let _ = publisher
+        .publish_calendar(
+            calendar_id,
+            &CalendarEvent::MemberLeft {
+                user_id: actor_id.to_string(),
+                actor: actor_id.to_string(),
+                reason: "left".into(),
+            },
+        )
+        .await
+        .map_err(|e| log::error!("publish MemberLeft(left): {e}"));
     HttpResponse::NoContent().finish()
 }
 
@@ -453,13 +482,27 @@ pub async fn accept_invitation(
     path: web::Path<String>,
     claims: Claims,
     svc: web::Data<InvitationService>,
+    publisher: web::Data<CalendarEventPublisher>,
 ) -> HttpResponse {
     let actor_id = match claims.user_id() {
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
     match svc.accept(actor_id, path.into_inner().as_str()).await {
-        Ok(inv) => HttpResponse::Ok().json(inv),
+        Ok(inv) => {
+            let _ = publisher
+                .publish_calendar(
+                    inv.calendar_id,
+                    &CalendarEvent::MemberJoined {
+                        user_id: actor_id.to_string(),
+                        display: actor_id.to_string(),
+                        actor: actor_id.to_string(),
+                    },
+                )
+                .await
+                .map_err(|e| log::error!("publish MemberJoined: {e}"));
+            HttpResponse::Ok().json(inv)
+        }
         Err(e) => e.error_response(),
     }
 }

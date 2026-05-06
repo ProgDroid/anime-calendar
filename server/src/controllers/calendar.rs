@@ -13,8 +13,11 @@ use crate::{
     },
     middleware::auth::Claims,
     services::{
-        cached_anilist::CachedAnilist, entitlement::EntitlementService,
-        frozen_ics::FrozenIcsService, ics_export::IcsExportService,
+        cached_anilist::CachedAnilist,
+        calendar_events::{CalendarEvent, CalendarEventPublisher},
+        entitlement::EntitlementService,
+        frozen_ics::FrozenIcsService,
+        ics_export::IcsExportService,
         sharing_authz::{Action, SharingAuthz},
     },
 };
@@ -476,6 +479,7 @@ async fn put(
     pool: web::Data<sqlx::PgPool>,
     body: web::Json<CalendarRequest>,
     claims: Claims,
+    publisher: web::Data<CalendarEventPublisher>,
 ) -> HttpResponse {
     const MAX_ITEMS: usize = 2000;
 
@@ -603,6 +607,23 @@ async fn put(
 
     if let Err(e) = tx.commit().await {
         return Error::Database(e).error_response();
+    }
+
+    // Publish MetaUpdated for update-path only — on create there are no
+    // subscribers yet, so publishing is a no-op and would be noisy.
+    if !is_create {
+        let _ = publisher
+            .publish_calendar(
+                calendar.id,
+                &CalendarEvent::MetaUpdated {
+                    fields: vec![], // field-level diffing is out of scope
+                    actor: user.username.clone(),
+                    v: calendar.meta_version,
+                    at: chrono::Utc::now().naive_utc(),
+                },
+            )
+            .await
+            .map_err(|e| log::error!("publish MetaUpdated: {e}"));
     }
 
     // Best-effort post-commit refresh of the frozen subscribe blob for Free
@@ -992,6 +1013,7 @@ pub async fn add_item(
     calendars: web::Data<CalendarMapper>,
     entitlement: web::Data<EntitlementService>,
     cache: web::Data<Cache>,
+    publisher: web::Data<CalendarEventPublisher>,
 ) -> HttpResponse {
     let calendar_id = path.into_inner();
     let actor_id = match claims.user_id() {
@@ -1016,6 +1038,18 @@ pub async fn add_item(
             let _ = cache.invalidate_calendar(calendar_id).await;
             let _ = cache.invalidate_user_paged_calendars(cal.user_id).await;
             let _ = cache.invalidate_subscription(&cal.subscription_token).await;
+            let _ = publisher
+                .publish_calendar(
+                    calendar_id,
+                    &CalendarEvent::ItemAdded {
+                        media_id: body.item_id,
+                        actor: actor_id.to_string(),
+                        v: cal.meta_version,
+                        at: chrono::Utc::now().naive_utc(),
+                    },
+                )
+                .await
+                .map_err(|e| log::error!("publish ItemAdded: {e}"));
             HttpResponse::Ok().json(serde_json::json!({ "affected": affected }))
         }
         Err(e) => e.error_response(),
@@ -1048,6 +1082,7 @@ pub async fn remove_item(
     authz: web::Data<SharingAuthz>,
     calendars: web::Data<CalendarMapper>,
     cache: web::Data<Cache>,
+    publisher: web::Data<CalendarEventPublisher>,
 ) -> HttpResponse {
     let (calendar_id, item_id) = path.into_inner();
     let actor_id = match claims.user_id() {
@@ -1066,6 +1101,18 @@ pub async fn remove_item(
             let _ = cache.invalidate_calendar(calendar_id).await;
             let _ = cache.invalidate_user_paged_calendars(cal.user_id).await;
             let _ = cache.invalidate_subscription(&cal.subscription_token).await;
+            let _ = publisher
+                .publish_calendar(
+                    calendar_id,
+                    &CalendarEvent::ItemRemoved {
+                        media_id: item_id,
+                        actor: actor_id.to_string(),
+                        v: cal.meta_version,
+                        at: chrono::Utc::now().naive_utc(),
+                    },
+                )
+                .await
+                .map_err(|e| log::error!("publish ItemRemoved: {e}"));
             HttpResponse::Ok().json(serde_json::json!({ "affected": affected }))
         }
         Err(e) => e.error_response(),
@@ -1144,6 +1191,8 @@ mod integration_tests {
     use crate::config::server::LimitsConfig;
     use crate::mappers::calendar_editor::CalendarEditorMapper;
     use crate::mappers::subscription::SubscriptionMapper;
+    use crate::redis_pubsub::RedisPubSub;
+    use crate::services::calendar_events::CalendarEventPublisher;
     use crate::services::entitlement::EntitlementService;
     use crate::services::frozen_ics::FrozenIcsService;
     use crate::services::ics_export::IcsExportService;
@@ -1173,6 +1222,7 @@ mod integration_tests {
         web::Data<FrozenIcsService>,
         web::Data<sqlx::PgPool>,
         web::Data<SharingAuthz>,
+        web::Data<CalendarEventPublisher>,
     ) {
         let cached = cached_anilist_data().await;
         let entitlement = EntitlementService::new(
@@ -1191,6 +1241,8 @@ mod integration_tests {
             CalendarEditorMapper::from_pool(pool.clone()),
             entitlement.clone(),
         );
+        let publisher =
+            web::Data::new(CalendarEventPublisher::new(RedisPubSub::for_tests().await));
         (
             web::Data::new(UserMapper::from_pool(pool.clone())),
             web::Data::new(CalendarMapper::from_pool(pool.clone())),
@@ -1200,6 +1252,7 @@ mod integration_tests {
             web::Data::new(frozen_ics),
             web::Data::new(pool),
             web::Data::new(sharing_authz),
+            publisher,
         )
     }
 
@@ -1228,7 +1281,8 @@ mod integration_tests {
 
     macro_rules! put_app {
         ($pool:expr, $limits:expr) => {{
-            let (um, cm, ca, ch, ent, fi, pp, sa) = build_put_services($pool, $limits).await;
+            let (um, cm, ca, ch, ent, fi, pp, sa, pub_) =
+                build_put_services($pool, $limits).await;
             test::init_service(
                 App::new()
                     .app_data(um)
@@ -1239,6 +1293,7 @@ mod integration_tests {
                     .app_data(fi)
                     .app_data(pp)
                     .app_data(sa)
+                    .app_data(pub_)
                     .app_data(jwt_data())
                     .service(put),
             )
@@ -2062,6 +2117,7 @@ mod integration_tests {
         web::Data<CalendarMapper>,
         web::Data<EntitlementService>,
         web::Data<Cache>,
+        web::Data<CalendarEventPublisher>,
     ) {
         let entitlement = EntitlementService::new(
             SubscriptionMapper::from_pool(pool.clone()),
@@ -2072,23 +2128,27 @@ mod integration_tests {
             CalendarEditorMapper::from_pool(pool.clone()),
             entitlement.clone(),
         );
+        let publisher =
+            web::Data::new(CalendarEventPublisher::new(RedisPubSub::for_tests().await));
         (
             web::Data::new(sharing_authz),
             web::Data::new(CalendarMapper::from_pool(pool.clone())),
             web::Data::new(entitlement),
             web::Data::new(Cache::for_tests().await),
+            publisher,
         )
     }
 
     macro_rules! item_app {
         ($pool:expr, $limits:expr) => {{
-            let (sa, cm, ent, ch) = build_item_app_services($pool, $limits).await;
+            let (sa, cm, ent, ch, pub_) = build_item_app_services($pool, $limits).await;
             test::init_service(
                 App::new()
                     .app_data(sa)
                     .app_data(cm)
                     .app_data(ent)
                     .app_data(ch)
+                    .app_data(pub_)
                     .app_data(jwt_data())
                     .service(add_item)
                     .service(remove_item),

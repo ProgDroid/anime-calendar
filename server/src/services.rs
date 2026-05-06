@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod cached_anilist;
+pub mod calendar_events;
 pub mod email;
 pub mod email_validation;
 pub mod entitlement;

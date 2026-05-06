@@ -11,7 +11,10 @@ use server::{
         user_settings::UserSettingsMapper,
     },
     services::{
-        cached_anilist::CachedAnilist, email::EmailService, entitlement::EntitlementService,
+        cached_anilist::CachedAnilist,
+        calendar_events::CalendarEventPublisher,
+        email::EmailService,
+        entitlement::EntitlementService,
         sharing_authz::SharingAuthz,
     },
 };
@@ -104,6 +107,8 @@ async fn main() -> ServerResult<()> {
     .await
     .expect("Failed to initialize Redis Pub/Sub");
 
+    let calendar_event_publisher = CalendarEventPublisher::new(redis_pubsub.clone());
+
     let cached_anilist = CachedAnilist::new(anilist, cache.clone(), &settings.cache);
 
     // Dedicated pool for ICS export + frozen blob services. Cheap (Arc-backed)
@@ -165,6 +170,7 @@ async fn main() -> ServerResult<()> {
         calendar_invitation_mapper,
         invitation_service,
         redis_pubsub,
+        calendar_event_publisher,
     )?
     .await?)
 }
