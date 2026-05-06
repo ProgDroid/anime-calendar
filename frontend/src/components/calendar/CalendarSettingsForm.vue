@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import UiButton from '@/components/ui/UiButton.vue'
 import UiInput from '@/components/ui/UiInput.vue'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
+import MembersTab from '@/components/calendar/MembersTab.vue'
 import type { EventStyle } from '@/types/calendar'
+
+defineOptions({ name: 'CalendarSettingsForm' })
 
 const { t } = useI18n()
 
@@ -15,8 +18,14 @@ const props = withDefaults(defineProps<{
   canSubmit: boolean
   error?: string | null
   eventStyle?: EventStyle
+  isOwner?: boolean
+  calendarId?: number
+  isPaid?: boolean
 }>(), {
   eventStyle: 'timed',
+  isOwner: false,
+  calendarId: undefined,
+  isPaid: false,
 })
 
 const emit = defineEmits<{
@@ -25,6 +34,13 @@ const emit = defineEmits<{
   'update:eventStyle': [value: EventStyle]
   submit: []
 }>()
+
+const activeTab = ref<'settings' | 'members'>('settings')
+
+const tabOptions = computed(() => [
+  { value: 'settings', label: t('calendar.settings.tab') },
+  { value: 'members', label: t('sharing.tabTitle') },
+])
 
 const eventStyleOptions = computed(() => [
   { value: 'timed', label: t('calendar.settings.eventStyle.timedLabel') },
@@ -39,6 +55,21 @@ const eventStyleModel = computed({
 
 <template>
   <div class="flex flex-col gap-4">
+    <!-- Tab bar — only shown for owners of an existing calendar -->
+    <div v-if="isOwner" class="mb-0" data-testid="settings-tab-bar">
+      <UiSegmented v-model="activeTab" :options="tabOptions" />
+    </div>
+
+    <!-- Members tab -->
+    <MembersTab
+      v-if="isOwner && activeTab === 'members' && calendarId != null"
+      :calendar-id="calendarId"
+      :is-owner="isOwner"
+      :is-paid="isPaid ?? false"
+    />
+
+    <!-- Settings form (existing content) -->
+    <template v-if="!isOwner || activeTab === 'settings'">
     <div class="relative">
       <UiInput
         :model-value="name"
@@ -111,5 +142,6 @@ const eventStyleModel = computed({
     >
       {{ loading ? t('calendar.submitting') : t('calendar.submit') }}
     </UiButton>
+    </template>
   </div>
 </template>

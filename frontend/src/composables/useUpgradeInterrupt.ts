@@ -8,8 +8,9 @@ import { ref, readonly } from 'vue'
  * - `cap_shows` — Free user attempting to add a 26th distinct show.
  * - `pro_accent` — Free user attempting to apply a Pro-tier accent. Default
  *   fallback when the backend omits a reason on a 402.
+ * - `share_calendar` — Free owner attempting to invite a co-editor.
  */
-export type UpgradeReason = 'cap_calendars' | 'cap_shows' | 'pro_accent'
+export type UpgradeReason = 'cap_calendars' | 'cap_shows' | 'pro_accent' | 'share_calendar'
 
 // Module-level singleton refs so every consumer of the composable shares one
 // modal mount + state. Mounted once globally in App.vue.

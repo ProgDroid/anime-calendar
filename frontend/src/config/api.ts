@@ -27,6 +27,7 @@ const VALID_REASONS: ReadonlySet<UpgradeReason> = new Set([
   'cap_calendars',
   'cap_shows',
   'pro_accent',
+  'share_calendar',
 ])
 
 function coerceReason(raw: unknown): UpgradeReason {

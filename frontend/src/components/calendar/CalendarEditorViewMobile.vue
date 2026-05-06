@@ -40,6 +40,12 @@ const submitLoading = ref(false)
 const calendarError = ref<string | null>(null)
 const currentCalendar = ref<Calendar | null>(null)
 const originalItemIds = ref<Set<number>>(new Set())
+const currentUserId = ref<number | null>(null)
+const isOwner = computed(() =>
+  currentCalendar.value != null &&
+  currentUserId.value != null &&
+  currentCalendar.value.user_id === currentUserId.value,
+)
 
 const loading = computed(() => submitLoading.value)
 const itemCount = computed(() => itemsInCalendar.value.length)
@@ -232,8 +238,12 @@ if (calendarId && calendarId !== 'new') {
     .finally(() => {
       submitLoading.value = false
     })
+  userSettingsStore.fetchSettings().then((settings) => {
+    currentUserId.value = settings.user_id ?? null
+  }).catch(() => { /* non-critical */ })
 } else {
   userSettingsStore.fetchSettings().then((settings) => {
+    currentUserId.value = settings.user_id ?? null
     calendarLanguage.value =
       settings.title_language_preference === 'Romaji' ? 'romaji' :
       settings.title_language_preference === 'Native' ? 'native' : 'english'
@@ -270,6 +280,9 @@ if (calendarId && calendarId !== 'new') {
         :loading="loading"
         :can-submit="itemsInCalendar.length > 0"
         :error="calendarError"
+        :is-owner="isOwner"
+        :calendar-id="currentCalendar?.id"
+        :is-paid="!isFreeTier"
         @update:name="calendarName = $event"
         @update:language="calendarLanguage = $event"
         @update:event-style="calendarEventStyle = $event"

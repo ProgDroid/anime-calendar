@@ -193,6 +193,7 @@
     "updateSuccess": "Calendário {name} atualizado",
     "updateFailed": "Falha ao atualizar calendário",
     "settings": {
+      "tab": "Definições",
       "eventStyle": {
         "label": "Estilo do evento",
         "ariaLabel": "Escolher entre eventos com horário ou de dia inteiro",
@@ -465,12 +466,14 @@
     "heading": {
       "cap_calendars": "Atingiste o limite de calendários",
       "cap_shows": "Atingiste o limite de séries",
-      "pro_accent": "Este acento faz parte do Pro"
+      "pro_accent": "Este acento faz parte do Pro",
+      "share_calendar": "Co-edição é uma funcionalidade Pro"
     },
     "description": {
       "cap_calendars": "Contas grátis incluem 3 calendários. Faz upgrade para Pro para calendários ilimitados e o resto do conjunto de funcionalidades.",
       "cap_shows": "Contas grátis incluem 25 séries acompanhadas em simultâneo. Faz upgrade para Pro para séries ilimitadas e o resto do conjunto de funcionalidades.",
-      "pro_accent": "O Pro desbloqueia acentos premium e o resto do conjunto de funcionalidades."
+      "pro_accent": "O Pro desbloqueia acentos premium e o resto do conjunto de funcionalidades.",
+      "share_calendar": "Faz upgrade para Pro para convidar co-editores para os teus calendários."
     },
     "features": {
       "accents": "Acentos premium (Matcha, Sakura, Citron)",
@@ -522,6 +525,28 @@
   "sharing": {
     "myCalendars": "Meus calendários",
     "sharedWithYou": "Compartilhados com você",
-    "owner": "Dono: {name}"
+    "owner": "Dono: {name}",
+    "tabTitle": "Membros",
+    "activeEditors": "Editores ativos",
+    "pendingInvites": "Convites pendentes",
+    "inviteButton": "+ Convidar editor",
+    "upgradePrompt": "Faça upgrade para Pro para partilhar o seu calendário com co-editores.",
+    "upgradeCta": "Fazer upgrade para Pro",
+    "remove": "Remover",
+    "resend": "Reenviar",
+    "revoke": "Revogar",
+    "inviteModal": {
+      "title": "Convidar editor",
+      "emailLabel": "Endereço de e-mail",
+      "submit": "Enviar convite",
+      "cancel": "Cancelar",
+      "sending": "A enviar..."
+    },
+    "errors": {
+      "editor_cap_reached": "Este calendário já tem o número máximo de editores. Remova alguém primeiro.",
+      "invite_already_pending": "Já existe um convite pendente para esse endereço de e-mail.",
+      "self_invite": "Não pode convidar-se a si mesmo.",
+      "invalid_email": "Introduza um endereço de e-mail válido."
+    }
   }
 }

@@ -193,6 +193,7 @@
     "updateSuccess": "Calendar {name} updated",
     "updateFailed": "Failed to update calendar",
     "settings": {
+      "tab": "Settings",
       "eventStyle": {
         "label": "Event style",
         "ariaLabel": "Choose between timed and all-day events",
@@ -465,12 +466,14 @@
     "heading": {
       "cap_calendars": "You've reached the calendar limit",
       "cap_shows": "You've reached the show limit",
-      "pro_accent": "This accent is part of Pro"
+      "pro_accent": "This accent is part of Pro",
+      "share_calendar": "Co-editing is a Pro feature"
     },
     "description": {
       "cap_calendars": "Free accounts include 3 calendars. Upgrade to Pro for unlimited calendars and the rest of the polished feature set.",
       "cap_shows": "Free accounts include 25 shows tracked at once. Upgrade to Pro for unlimited shows and the rest of the polished feature set.",
-      "pro_accent": "Pro unlocks premium accents and the rest of the polished feature set."
+      "pro_accent": "Pro unlocks premium accents and the rest of the polished feature set.",
+      "share_calendar": "Upgrade to Pro to invite co-editors to your calendars."
     },
     "features": {
       "accents": "Premium accents (Matcha, Sakura, Citron)",
@@ -522,6 +525,28 @@
   "sharing": {
     "myCalendars": "My calendars",
     "sharedWithYou": "Shared with you",
-    "owner": "Owner: {name}"
+    "owner": "Owner: {name}",
+    "tabTitle": "Members",
+    "activeEditors": "Active editors",
+    "pendingInvites": "Pending invites",
+    "inviteButton": "+ Invite editor",
+    "upgradePrompt": "Upgrade to Pro to share your calendar with co-editors.",
+    "upgradeCta": "Upgrade to Pro",
+    "remove": "Remove",
+    "resend": "Resend",
+    "revoke": "Revoke",
+    "inviteModal": {
+      "title": "Invite editor",
+      "emailLabel": "Email address",
+      "submit": "Send invitation",
+      "cancel": "Cancel",
+      "sending": "Sending..."
+    },
+    "errors": {
+      "editor_cap_reached": "This calendar already has the maximum number of editors. Remove someone first.",
+      "invite_already_pending": "There's already a pending invitation for that email address.",
+      "self_invite": "You can't invite yourself.",
+      "invalid_email": "Enter a valid email address."
+    }
   }
 }

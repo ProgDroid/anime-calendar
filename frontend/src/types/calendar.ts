@@ -4,6 +4,7 @@ export type EventStyle = 'timed' | 'all_day'
 
 export interface Calendar {
   id: number;
+  user_id?: number;
   items: Item[];
   language: 'english' | 'romaji' | 'native';
   name: string;

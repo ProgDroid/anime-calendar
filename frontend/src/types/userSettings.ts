@@ -9,6 +9,7 @@ export const CANONICAL_REMINDER_OFFSETS = [
 ] as const
 
 export interface UserSettings {
+  user_id?: number
   theme_preference: 'light' | 'dark'
   language_preference: 'en' | 'pt'
   title_language_preference: 'English' | 'Romaji' | 'Native'
