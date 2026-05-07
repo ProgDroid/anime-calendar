@@ -20,6 +20,8 @@ pub const PASSWORD_RESETS_REQUESTED_TOTAL: &str = "password_resets_requested_tot
 pub const PASSWORD_RESETS_COMPLETED_TOTAL: &str = "password_resets_completed_total";
 pub const ENTITLEMENT_RECONCILE_DRIFT_TOTAL: &str = "entitlement_reconcile_drift_total";
 pub const ENTITLEMENT_RECONCILE_ERRORS_TOTAL: &str = "entitlement_reconcile_errors_total";
+pub const STRIPE_WEBHOOK_PAYMENT_ACTION_REQUIRED_TOTAL: &str =
+    "stripe_webhook_payment_action_required_total";
 
 // Label keys
 pub const LABEL_OP: &str = "op";

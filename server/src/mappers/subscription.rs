@@ -291,6 +291,31 @@ impl SubscriptionMapper {
         Ok(result.rows_affected())
     }
 
+    /// Cancel every subscription row for a given Stripe customer id, in one
+    /// statement. Used by `customer.deleted` so the local rows don't go stale
+    /// once Stripe forgets about the customer (the reconcile loop would
+    /// otherwise hit 404 on every pass).
+    ///
+    /// Returns the number of rows affected — caller logs if zero.
+    ///
+    /// # Errors
+    /// Returns an error if the database query fails.
+    pub async fn update_all_status_by_customer_in_tx(
+        conn: &mut sqlx::PgConnection,
+        stripe_customer_id: &str,
+        status: &str,
+    ) -> ServerResult<u64> {
+        let result = sqlx::query!(
+            "UPDATE subscriptions SET status = $1, updated_at = NOW() \
+             WHERE stripe_customer_id = $2",
+            status,
+            stripe_customer_id,
+        )
+        .execute(conn)
+        .await?;
+        Ok(result.rows_affected())
+    }
+
     /// Update `current_period_end` on a successful renewal invoice. Also
     /// flips `status` to `active` if the subscription was previously in
     /// `past_due` — a successful charge clears the dunning state. Returns
@@ -531,10 +556,10 @@ mod tests {
 
     // ---- apply_reconcile_update guard tests --------------------------------
 
-    /// Insert a subscription row and return its (id, stripe_subscription_id).
-    /// Uses `pool.acquire()`-bound queries because `apply_reconcile_update` is
-    /// an instance method on `SubscriptionMapper` that only takes `&self` and
-    /// reaches the pool itself, so we can't share a `tx` here.
+    /// Insert a subscription row and return its `id`. Uses `pool`-bound
+    /// queries because `apply_reconcile_update` is an instance method on
+    /// `SubscriptionMapper` that only takes `&self` and reaches the pool
+    /// itself, so we can't share a `tx` here.
     async fn seed_reconcile_row(
         pool: &sqlx::PgPool,
         user_id: i32,

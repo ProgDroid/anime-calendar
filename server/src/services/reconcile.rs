@@ -651,7 +651,10 @@ mod tests {
     async fn apply_reconcile_update_no_drift_when_period_unchanged() {
         // No-drift case is hard to assert on a shared pool because the
         // global pass touches every row. Test the mapper helper directly
-        // instead — the row's status/etc. should match what we passed in.
+        // instead — calling with values that match the local row should be
+        // a no-op now (the H-7 guard tightened from `<=` to a strict-newer
+        // OR equal-period-different-status check, so equal-everything is
+        // skipped rather than re-touching `updated_at`).
         let pool = crate::test_helpers::test_pool().await;
         let mapper = SubscriptionMapper::from_pool(pool.clone());
         let user_id = seed_user(&pool).await;
@@ -659,8 +662,6 @@ mod tests {
         let period_end = (Utc::now() + ChronoDuration::days(14)).naive_utc();
         seed_subscription(&pool, user_id, &sub_id, "active", period_end, false, None).await;
 
-        // Insert the same values via the reconcile update — should be a no-op
-        // visible only as updated_at moving.
         let row_id: i32 = sqlx::query_scalar!(
             "SELECT id FROM subscriptions WHERE stripe_subscription_id = $1",
             sub_id,
@@ -673,8 +674,8 @@ mod tests {
             .apply_reconcile_update(row_id, "active", period_end, false, None)
             .await
             .unwrap();
-        // local <= stripe (equal), so the guard allows the write.
-        assert_eq!(affected, 1);
+        // Equal period + equal status => no-op under the H-7 guard.
+        assert_eq!(affected, 0);
     }
 
     #[tokio::test]

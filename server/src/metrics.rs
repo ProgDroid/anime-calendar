@@ -29,6 +29,7 @@ fn describe() {
         DB_QUERY_DURATION_SECONDS, EMAIL_VERIFICATIONS_CONFIRMED_TOTAL,
         EMAIL_VERIFICATIONS_SENT_TOTAL, HTTP_REQUEST_DURATION_SECONDS, HTTP_REQUESTS_TOTAL,
         PASSWORD_RESETS_COMPLETED_TOTAL, PASSWORD_RESETS_REQUESTED_TOTAL,
+        STRIPE_WEBHOOK_PAYMENT_ACTION_REQUIRED_TOTAL,
     };
 
     describe_counter!(
@@ -92,5 +93,10 @@ fn describe() {
         PASSWORD_RESETS_COMPLETED_TOTAL,
         Unit::Count,
         "Password resets completed"
+    );
+    describe_counter!(
+        STRIPE_WEBHOOK_PAYMENT_ACTION_REQUIRED_TOTAL,
+        Unit::Count,
+        "Stripe invoice.payment_action_required webhooks (SCA / 3DS prompts)"
     );
 }
