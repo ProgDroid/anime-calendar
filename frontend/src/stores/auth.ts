@@ -105,7 +105,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  const logout = async () => {
+  const logout = async (push?: (path: string) => unknown) => {
     try {
       await api.post('/auth/logout')
     } catch {
@@ -119,11 +119,13 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem('name')
     localStorage.removeItem('avatar')
     invalidateSettingsCache()
-    // Resolve the router lazily inside the action. Top-level useRouter() in a
-    // setup-store body warns when the store is touched before the Vue app
-    // installs the router plugin (notably in tests that seed store state
-    // before mount).
-    useRouter().push('/login')
+    // Optional `push` injection lets tests pass a spy without mocking
+    // vue-router (which leaks across vitest workers — see memory
+    // feedback_vue_router_mock_leaks_across_workers). Production callers
+    // pass no argument and fall through to useRouter().push exactly as
+    // before. Resolved lazily so seed-then-mount test flows don't warn.
+    const navigate = push ?? useRouter().push
+    navigate('/login')
   }
 
   return {

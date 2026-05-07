@@ -10,18 +10,10 @@ vi.mock('../config/api', () => ({
   }
 }))
 
-// Preserve all real vue-router exports (createRouter, createMemoryHistory, etc.)
-// but stub useRouter so the auth store's logout() action doesn't throw when
-// called outside a component tree. This scopes to this file's worker only —
-// no cross-file pollution because importActual re-exports everything else intact.
-const pushMock = vi.fn().mockResolvedValue(undefined)
-vi.mock('vue-router', async (importActual) => {
-  const actual = await importActual<typeof import('vue-router')>()
-  return {
-    ...actual,
-    useRouter: () => ({ push: pushMock }),
-  }
-})
+// NOTE: Do NOT vi.mock('vue-router') here. The store's logout() action accepts
+// an optional `push` callback so tests can inject a spy without mocking
+// vue-router (which leaks across vitest workers — see project memory
+// `feedback_vue_router_mock_leaks_across_workers`).
 
 describe('Auth Store', () => {
   beforeEach(() => {
@@ -108,15 +100,17 @@ describe('Auth Store', () => {
 
   it('should logout correctly', async () => {
     vi.mocked(api.post).mockResolvedValue({})
+    const pushMock = vi.fn()
     const store = useAuthStore()
     store.user = 'username'
     store.userId = 7
 
-    await store.logout()
+    await store.logout(pushMock)
 
     expect(store.user).toBe('')
     expect(store.userId).toBeNull()
     expect(store.isAuthenticated()).toBe(false)
+    expect(pushMock).toHaveBeenCalledWith('/login')
   })
 
   it('should initAuth — populates user on success', async () => {
