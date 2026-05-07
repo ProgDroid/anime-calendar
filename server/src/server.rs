@@ -132,17 +132,8 @@ pub fn start(
             .wrap(Condition::new(compress, Compress::default()))
             .wrap(crate::metrics::http::HttpMetrics)
             .wrap(
-                Logger::new("%a \"%m %{safe_url}xi %H\" %s %b %T").custom_request_replace(
-                    "safe_url",
-                    |req| {
-                        let path = req.path();
-                        if path.starts_with("/calendars/subscribe/") {
-                            "/calendars/subscribe/[redacted]".to_owned()
-                        } else {
-                            path.to_owned()
-                        }
-                    },
-                ),
+                Logger::new("%a \"%m %{safe_url}xi %H\" %s %b %T")
+                    .custom_request_replace("safe_url", |req| redact_path(req.path())),
             )
             .wrap(rate_limit.clone())
             .wrap(cors)
@@ -236,4 +227,79 @@ pub fn start(
     })
     .bind(format!("{host}:{port}"))?
     .run())
+}
+
+/// Scrub high-entropy URL-segment secrets from a request path before it
+/// reaches access logs. Both the iCal subscribe URL and the co-editor
+/// invitation token grant access on possession alone (no auth header), so
+/// leaking the raw path into stdout is equivalent to leaking the secret.
+///
+/// Matches the prefix and replaces the next path segment with `[redacted]`;
+/// anything after the secret segment (e.g. `/accept`, `/decline` for
+/// invitations) is preserved so log readers can still distinguish the
+/// action.
+fn redact_path(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix("/calendars/subscribe/") {
+        let tail = rest.find('/').map_or("", |i| &rest[i..]);
+        format!("/calendars/subscribe/[redacted]{tail}")
+    } else if let Some(rest) = path.strip_prefix("/invitations/") {
+        let tail = rest.find('/').map_or("", |i| &rest[i..]);
+        format!("/invitations/[redacted]{tail}")
+    } else {
+        path.to_owned()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::redact_path;
+
+    #[test]
+    fn passes_through_paths_without_secrets() {
+        assert_eq!(redact_path("/api/v1/users"), "/api/v1/users");
+        assert_eq!(redact_path("/calendars/42"), "/calendars/42");
+        assert_eq!(
+            redact_path("/invite/some-frontend-route"),
+            "/invite/some-frontend-route"
+        );
+        assert_eq!(redact_path("/"), "/");
+    }
+
+    #[test]
+    fn redacts_subscribe_token() {
+        assert_eq!(
+            redact_path("/calendars/subscribe/aBc123-very-secret-token"),
+            "/calendars/subscribe/[redacted]",
+        );
+    }
+
+    #[test]
+    fn redacts_invitation_token_preview() {
+        assert_eq!(
+            redact_path("/invitations/64-byte-hex-token-deadbeef"),
+            "/invitations/[redacted]",
+        );
+    }
+
+    #[test]
+    fn preserves_action_segment_after_invitation_token() {
+        assert_eq!(
+            redact_path("/invitations/64-byte-hex-token-deadbeef/accept"),
+            "/invitations/[redacted]/accept",
+        );
+        assert_eq!(
+            redact_path("/invitations/64-byte-hex-token-deadbeef/decline"),
+            "/invitations/[redacted]/decline",
+        );
+    }
+
+    #[test]
+    fn does_not_match_partial_prefix() {
+        // `/invitationsX` must not be treated as `/invitations/`.
+        assert_eq!(redact_path("/invitationsfoo"), "/invitationsfoo");
+        assert_eq!(
+            redact_path("/calendars/subscribefoo"),
+            "/calendars/subscribefoo"
+        );
+    }
 }
