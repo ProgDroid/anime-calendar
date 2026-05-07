@@ -273,3 +273,28 @@ B-scale upgrade adds ~$45–50/mo (Cloud SQL g1-small + Memorystore).
 - [ ] Create Neon account + project
 - [ ] Create Upstash account + two Redis databases (staging + prod)
 - [ ] Create Grafana Cloud account (optional, for Phase 2 monitoring)
+
+---
+
+## Token scrubbing (added 2026-05-07 for spec 2)
+
+Co-editor sharing introduces invitation tokens in URL query strings (`/invitations/:token`). Before launch, configure the following:
+
+### Cloudflare
+Add a Transform Rule on the `/invitations/` path family:
+- Match: URI path contains `/invitations/`
+- Action: Rewrite → regex replace `(\?|&)token=[^&]+` → `$1token=REDACTED` in the Request URI field of the access log.
+
+### Cloud Run
+Add a Cloud Logging exclusion filter:
+```
+resource.type=cloud_run_revision
+httpRequest.requestUrl=~"\\?token="
+```
+Severity: DEFAULT exclusion. Alternative: configure sink-side regex redaction.
+
+### App-side (Actix Logger)
+Verify that the Actix `Logger::default()` format string does not log the query string for `/invitations/` routes. The default format `%a "%r" %s %b "%{Referer}i" "%{User-Agent}i" %T` includes path-and-query in `%r`. If tokens appear in logs, override to `%a "%m %P" %s %b ...` (method + path only) for sharing routes.
+
+### Verification
+Post-deploy verification: see UAT §10 (token scrubbing in logs check).
