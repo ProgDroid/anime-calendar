@@ -26,6 +26,7 @@ use crate::{
         calendar_events::{CalendarEvent, Viewer},
         presence::PresenceService,
         sharing_authz::{Action, SharingAuthz},
+        sse_connection_tracker::SseConnectionTracker,
     },
 };
 
@@ -39,8 +40,10 @@ use crate::{
 /// - `401 Unauthorized` — no valid Bearer token.
 /// - `403 Forbidden` — caller is neither owner nor active editor.
 /// - `404 Not Found` — calendar does not exist or is soft-deleted.
+/// - `429 Too Many Requests` — caller already has the per-user SSE cap of
+///   open connections to this server.
 /// - `500 Internal Server Error` — Redis subscription failure.
-#[allow(clippy::future_not_send)]
+#[allow(clippy::future_not_send, clippy::too_many_arguments)]
 pub async fn calendar_events(
     path: web::Path<i32>,
     claims: Claims,
@@ -49,6 +52,7 @@ pub async fn calendar_events(
     pubsub: web::Data<RedisPubSub>,
     presence: web::Data<PresenceService>,
     sharing_cfg: web::Data<SharingConfig>,
+    tracker: web::Data<SseConnectionTracker>,
 ) -> Result<impl Responder, Error> {
     let calendar_id = path.into_inner();
     let actor_id = claims.user_id()?;
@@ -56,6 +60,13 @@ pub async fn calendar_events(
     // Load calendar and authorize.
     let cal = load_calendar_any_owner(pool.get_ref(), calendar_id).await?;
     authz.assert_can(actor_id, &cal, Action::ItemMutate).await?;
+
+    // Acquire a per-user SSE connection slot before subscribing to broadcast
+    // channels. The guard decrements the counter on drop; we move it into the
+    // stream closure below so it lives for the entire connection lifetime.
+    let Some(connection_guard) = tracker.try_acquire(actor_id) else {
+        return Err(Error::TooManyRequests);
+    };
 
     // Subscribe to the three channels before building initial frames.
     let mut cal_rx = pubsub.subscribe(&format!("cal:{calendar_id}")).await?;
@@ -79,6 +90,9 @@ pub async fn calendar_events(
     };
 
     let stream = async_stream::stream! {
+        // Hold the guard for the lifetime of the stream so the per-user
+        // connection counter only decrements when the SSE connection closes.
+        let _connection_guard = connection_guard;
         yield Ok::<sse::Event, Infallible>(sse::Event::Data(sse::Data::new(initial_meta)));
         yield Ok(sse::Event::Data(sse::Data::new(initial_presence)));
 
@@ -123,6 +137,7 @@ mod tests {
     use actix_web::{App, test, web};
 
     use crate::config::server::SharingConfig;
+    use crate::services::sse_connection_tracker::SseConnectionTracker;
 
     /// Unauthenticated requests must be rejected with 401 without touching
     /// Redis or the database.
@@ -151,12 +166,20 @@ mod tests {
             App::new()
                 .app_data(web::Data::new(pool))
                 .app_data(web::Data::new(SharingConfig::default()))
+                .app_data(web::Data::new(SseConnectionTracker::new(8)))
                 .service(
                     web::resource("/calendars/{id}/events")
                         .route(web::get().to(super::calendar_events)),
                 ),
         )
         .await;
+
+        // The 429 cap-reached path is exercised by the SseConnectionTracker
+        // unit tests in services/sse_connection_tracker.rs::tests. A full
+        // integration test would require Redis + a seeded calendar + valid
+        // Claims, which adds infrastructure that the deliberately-cheap
+        // `unauthenticated_request_returns_401` test avoids. The cap logic
+        // itself is fully unit-tested.
 
         let req = test::TestRequest::get()
             .uri("/calendars/1/events")

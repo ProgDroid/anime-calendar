@@ -267,6 +267,8 @@ pub struct SharingConfig {
     pub presence_heartbeat_seconds: u32,
     #[serde(default = "default_sse_heartbeat_seconds")]
     pub sse_heartbeat_seconds: u32,
+    #[serde(default = "default_sse_max_connections_per_user")]
+    pub sse_max_connections_per_user: u32,
 }
 
 const fn default_editor_cap() -> u32 {
@@ -293,6 +295,10 @@ const fn default_sse_heartbeat_seconds() -> u32 {
     25
 }
 
+const fn default_sse_max_connections_per_user() -> u32 {
+    8
+}
+
 impl Default for SharingConfig {
     fn default() -> Self {
         Self {
@@ -302,6 +308,7 @@ impl Default for SharingConfig {
             presence_ttl_seconds: default_presence_ttl_seconds(),
             presence_heartbeat_seconds: default_presence_heartbeat_seconds(),
             sse_heartbeat_seconds: default_sse_heartbeat_seconds(),
+            sse_max_connections_per_user: default_sse_max_connections_per_user(),
         }
     }
 }

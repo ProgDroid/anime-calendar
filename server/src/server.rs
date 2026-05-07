@@ -109,6 +109,10 @@ pub fn start(
 
     let rate_limit = crate::middleware::rate_limit::RateLimit::new(60, Duration::from_secs(1));
 
+    let sse_connection_tracker = crate::services::sse_connection_tracker::SseConnectionTracker::new(
+        sharing_config.sse_max_connections_per_user as usize,
+    );
+
     Ok(HttpServer::new(move || {
         let cors = {
             let mut cors = Cors::default();
@@ -176,6 +180,7 @@ pub fn start(
             .app_data(web::Data::new(redis_pubsub.clone()))
             .app_data(web::Data::new(calendar_event_publisher.clone()))
             .app_data(web::Data::new(presence_service.clone()))
+            .app_data(web::Data::new(sse_connection_tracker.clone()))
             .service(public_config::get)
             .service(item::get)
             .service(items::get)

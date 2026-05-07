@@ -75,3 +75,4 @@ invite_rate_limit_per_hour  = 20
 presence_ttl_seconds        = 60
 presence_heartbeat_seconds  = 30
 sse_heartbeat_seconds       = 25
+sse_max_connections_per_user = 8
