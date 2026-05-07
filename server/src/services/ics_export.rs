@@ -164,9 +164,49 @@ impl IcsExportService {
     }
 }
 
+/// Strip CR and LF characters from a calendar name so it cannot inject
+/// arbitrary lines into a line-oriented output (ICS body,
+/// `Content-Disposition` header, etc.). Each CR or LF is replaced with a
+/// single ASCII space; consecutive whitespace is then collapsed.
+///
+/// Callers are responsible for downstream value-level escaping (commas,
+/// semicolons, backslashes per RFC 5545) — that is handled by the
+/// `icalendar` crate's typed builders, not this helper.
+#[must_use]
+pub(crate) fn sanitize_name_for_line_protocol(name: &str) -> String {
+    name.chars()
+        .map(|c| if c == '\r' || c == '\n' { ' ' } else { c })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Build a safe filename for `Content-Disposition: attachment; filename="…"`.
+///
+/// Strips CR/LF (replaces with space), replaces double-quotes and
+/// backslashes (the only characters that break out of the RFC 7230
+/// quoted-string production), collapses runs of whitespace into underscores,
+/// and lowercases. Non-ASCII characters are kept as-is; most modern user
+/// agents accept UTF-8 in the legacy quoted form.
+#[must_use]
+pub(crate) fn build_attachment_filename(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| match c {
+            '\r' | '\n' => ' ',
+            '"' | '\\' => '_',
+            _ => c,
+        })
+        .collect();
+    let collapsed = cleaned.split_whitespace().collect::<Vec<_>>().join("_");
+    format!("{}.ics", collapsed.to_lowercase())
+}
+
 fn empty_calendar_ics(name: &str) -> String {
+    let safe_name = sanitize_name_for_line_protocol(name);
     format!(
-        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//anime-calendar//EN\r\nNAME:{name}\r\nEND:VCALENDAR\r\n",
+        "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//anime-calendar//EN\r\nNAME:{safe_name}\r\nEND:VCALENDAR\r\n",
     )
 }
 
@@ -626,5 +666,109 @@ mod tests {
         assert_eq!(offsets.len(), MAX_VALARMS_PER_EVENT);
 
         cleanup_user(&pool, user_id).await;
+    }
+
+    // ─── sanitize_name_for_line_protocol ────────────────────────────────────
+
+    #[test]
+    fn sanitize_strips_cr() {
+        assert_eq!(sanitize_name_for_line_protocol("a\rb"), "a b");
+    }
+
+    #[test]
+    fn sanitize_strips_lf() {
+        assert_eq!(sanitize_name_for_line_protocol("a\nb"), "a b");
+    }
+
+    #[test]
+    fn sanitize_strips_crlf() {
+        assert_eq!(sanitize_name_for_line_protocol("a\r\nb"), "a b");
+    }
+
+    #[test]
+    fn sanitize_collapses_multiple_newlines() {
+        assert_eq!(sanitize_name_for_line_protocol("a\nb\nc"), "a b c");
+    }
+
+    #[test]
+    fn sanitize_passthrough_clean_name() {
+        assert_eq!(sanitize_name_for_line_protocol("My Calendar"), "My Calendar");
+    }
+
+    #[test]
+    fn sanitize_collapses_internal_whitespace() {
+        // Multiple spaces that result from stripping are collapsed.
+        assert_eq!(sanitize_name_for_line_protocol("a\r\n\r\nb"), "a b");
+    }
+
+    // ─── build_attachment_filename ───────────────────────────────────────────
+
+    #[test]
+    fn filename_no_special_chars() {
+        assert_eq!(build_attachment_filename("My Calendar"), "my_calendar.ics");
+    }
+
+    #[test]
+    #[allow(clippy::case_sensitive_file_extension_comparisons)]
+    fn filename_strips_double_quote() {
+        let out = build_attachment_filename("My \"Calendar\"");
+        assert!(!out.contains('"'), "output must not contain double-quote: {out}");
+        assert!(out.ends_with(".ics"), "output must end with .ics: {out}");
+    }
+
+    #[test]
+    #[allow(clippy::case_sensitive_file_extension_comparisons)]
+    fn filename_strips_backslash() {
+        let out = build_attachment_filename("My\\Cal");
+        assert!(!out.contains('\\'), "output must not contain backslash: {out}");
+        assert!(out.ends_with(".ics"), "output must end with .ics: {out}");
+    }
+
+    #[test]
+    #[allow(clippy::case_sensitive_file_extension_comparisons)]
+    fn filename_strips_crlf() {
+        let out = build_attachment_filename("My\r\nCalendar");
+        assert!(!out.contains('\r'), "CR must be stripped: {out}");
+        assert!(!out.contains('\n'), "LF must be stripped: {out}");
+        assert!(out.ends_with(".ics"), "output must end with .ics: {out}");
+    }
+
+    #[test]
+    fn filename_lowercased() {
+        assert_eq!(build_attachment_filename("ABC"), "abc.ics");
+    }
+
+    // ─── empty_calendar_ics CRLF-injection guard ─────────────────────────────
+
+    #[test]
+    fn empty_calendar_ics_injection_does_not_add_second_vevent() {
+        // Simulate a name whose raw value contains CRLF-injected ICS lines.
+        // After sanitization the CR/LF are replaced with spaces so the injected
+        // keywords are part of the NAME value on a single line — not a
+        // standalone `BEGIN:VEVENT` line that calendar parsers would treat as a
+        // real event block.
+        let malicious_name = "Evil\r\nBEGIN:VEVENT\r\nSUMMARY:Injected\r\nEND:VEVENT\r\n";
+        let out = empty_calendar_ics(malicious_name);
+
+        // The critical invariant: no standalone `BEGIN:VEVENT` line exists.
+        // A real injection would appear as a CRLF-terminated line starting
+        // with "BEGIN:VEVENT". After sanitization the output has exactly one
+        // line per `\r\n`, none of which is a bare `BEGIN:VEVENT`.
+        let line_starts_vevent = out
+            .split("\r\n")
+            .any(|line| line.trim() == "BEGIN:VEVENT");
+        assert!(
+            !line_starts_vevent,
+            "ICS output must not contain a standalone BEGIN:VEVENT line:\n{out}"
+        );
+
+        // The sanitized name should still be present in the output.
+        assert!(
+            out.contains("Evil"),
+            "Sanitized calendar name prefix should appear:\n{out}"
+        );
+        // The whole output is a valid minimal calendar (starts and ends correctly).
+        assert!(out.starts_with("BEGIN:VCALENDAR\r\n"));
+        assert!(out.ends_with("END:VCALENDAR\r\n"));
     }
 }

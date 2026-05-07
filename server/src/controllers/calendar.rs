@@ -221,6 +221,65 @@ mod airing_count_tests {
     }
 }
 
+#[cfg(test)]
+mod validate_name_tests {
+    use super::*;
+    use common::id::Id;
+
+    fn req(name: &str) -> CalendarRequest {
+        CalendarRequest {
+            id: Id::new(1).unwrap(),
+            items: vec![],
+            language: Language::English,
+            name: name.to_owned(),
+            event_style: "timed".to_owned(),
+        }
+    }
+
+    #[test]
+    fn valid_name_passes() {
+        assert!(req("My Calendar").validate_name().is_ok());
+    }
+
+    #[test]
+    fn empty_name_fails() {
+        assert!(req("").validate_name().is_err());
+    }
+
+    #[test]
+    fn name_too_long_fails() {
+        let long = "a".repeat(101);
+        assert!(req(&long).validate_name().is_err());
+    }
+
+    #[test]
+    fn name_with_cr_fails() {
+        let result = req("Bad\rName").validate_name();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Calendar name cannot contain line breaks");
+    }
+
+    #[test]
+    fn name_with_lf_fails() {
+        let result = req("Bad\nName").validate_name();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Calendar name cannot contain line breaks");
+    }
+
+    #[test]
+    fn name_with_crlf_fails() {
+        let result = req("Bad\r\nName").validate_name();
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err(), "Calendar name cannot contain line breaks");
+    }
+
+    #[test]
+    fn name_exactly_100_chars_passes() {
+        let name = "a".repeat(100);
+        assert!(req(&name).validate_name().is_ok());
+    }
+}
+
 /// Accepted values for `CalendarRequest::event_style`. Mirrors the
 /// `calendars.event_style` column shape — `"timed"` (DTSTART:datetime) or
 /// `"all_day"` (DTSTART;VALUE=DATE). Everything else returns 400 with
@@ -246,12 +305,22 @@ pub struct CalendarRequest {
 }
 
 impl CalendarRequest {
-    /// Validates that the calendar name meets character limits
+    /// Validates that the calendar name meets character and content rules.
+    ///
+    /// Defence-in-depth: reject CR/LF at write time so no new row can ever
+    /// store an injected line break.  Existing rows saved before this check
+    /// landed are sanitized at the output sites (`ics_export.rs` helpers)
+    /// rather than here.
+    ///
     /// # Errors
-    /// Returns Ok(()) if valid, Err with error message if invalid
+    /// Returns `Err` with a human-readable message when validation fails.
     pub fn validate_name(&self) -> Result<(), String> {
         // Set character limit for calendar names
         const MAX_NAME_LENGTH: usize = 100;
+
+        if self.name.chars().any(|c| c == '\r' || c == '\n') {
+            return Err("Calendar name cannot contain line breaks".to_string());
+        }
 
         if self.name.is_empty() {
             return Err("Calendar name cannot be empty".to_string());
@@ -324,10 +393,7 @@ async fn export(
     };
 
     let calendar_id = calendar_data.id;
-    let filename = format!(
-        "{}.ics",
-        calendar_data.name.replace(' ', "_").to_lowercase()
-    );
+    let filename = crate::services::ics_export::build_attachment_filename(&calendar_data.name);
 
     let cache_key = crate::cache::generate_export_key(calendar_id);
     let cache_ttl = CACHE_TTL_CALENDAR;
