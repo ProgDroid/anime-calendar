@@ -8,8 +8,8 @@
 //! ## Design
 //!
 //! - **Public** (no JWT): Stripe signs the request; we verify via HMAC.
-//! - **Rate limit**: whitelisted from `actix-governor` (Stripe sends bursts on
-//!   retries — we'd otherwise rate-limit ourselves into delivery failures).
+//! - **Rate limit**: exempt from the in-house rate limiter (Stripe sends bursts
+//!   on retries — we'd otherwise rate-limit ourselves into delivery failures).
 //! - **Idempotency**: the `stripe_events` table holds every processed
 //!   `event.id`. The handler `INSERT ... ON CONFLICT DO NOTHING RETURNING`s,
 //!   and a missing returned row means we've already processed this event so

@@ -331,6 +331,8 @@ Added `cargo-deny` CI gate (M-22). First-run `cargo deny check` found **13 curre
 
 **CD-LICENSE-1 (HIGH — blocks commercial distribution)** — `actix-governor 0.7.0` is GPL-3.0-or-later (verified in upstream Cargo.toml; the underlying `governor` crate is MIT). Linking GPL-3.0 code into a closed-source binary is incompatible with proprietary distribution. SaaS-only network use is technically permitted by GPL-3.0 (this is what AGPL adds), but most legal teams refuse GPL-3.0 in product code regardless. **Phase 3 must treat this as HIGH priority and replace the dep before any commercial closed-source release.** Replacement options: (a) use `governor` directly with a thin in-house actix wrapper, (b) switch to a permissively-licensed actix rate-limiter (e.g. `actix-extensible-rate-limit` if MIT/Apache-2.0 — verify before adopting), (c) accept GPL-3.0 if the user is comfortable distributing the project under GPL-3.0 terms.
 
+**RESOLVED 2026-05-07** — replaced with in-house MIT-licensed wrapper around `governor` 0.10 (see `server/src/middleware/rate_limit.rs`). `actix-governor` removed from `server/Cargo.toml`; `[[licenses.exceptions]]` entry removed from `deny.toml`. IPv6 /56-prefix bucketing and webhook-exempt path semantics are fully preserved. `cargo deny check` exits 0 with no GPL crates in the tree.
+
 ---
 
 ## Phase 1 status (2026-05-07 — fully shipped)
@@ -361,7 +363,7 @@ Surfaced by the end-of-Phase-2 cumulative reviewer; file as Phase 3 candidates.
 
 ## Phase 2 deferred advisories — cargo-deny
 
-13 RUSTSEC advisories surfaced by the first cargo-deny run are deferred via `[advisories.ignore]` in `deny.toml`. Each is a Phase 3 candidate (5 × aws-lc-sys, 4 × rustls-webpki, 4 × misc, 1 × rsa Marvin attack via google-oauth). See the `# Phase 3:` comments in `deny.toml` for the per-advisory remediation path. **CD-LICENSE-1 (HIGH — blocks commercial closed-source distribution)**: `actix-governor 0.7.0` is GPL-3.0-or-later — the only direct copyleft dependency. Phase 3 must replace it before any commercial closed-source release. Replacement options documented in `deny.toml` exception comment.
+13 RUSTSEC advisories surfaced by the first cargo-deny run are deferred via `[advisories.ignore]` in `deny.toml`. Each is a Phase 3 candidate (5 × aws-lc-sys, 4 × rustls-webpki, 4 × misc, 1 × rsa Marvin attack via google-oauth). See the `# Phase 3:` comments in `deny.toml` for the per-advisory remediation path. **CD-LICENSE-1 (HIGH — blocks commercial closed-source distribution)**: ~~`actix-governor 0.7.0` is GPL-3.0-or-later — the only direct copyleft dependency. Phase 3 must replace it before any commercial closed-source release. Replacement options documented in `deny.toml` exception comment.~~ **RESOLVED 2026-05-07** — see CD-LICENSE-1 resolution note above.
 
 ---
 

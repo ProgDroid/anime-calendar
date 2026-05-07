@@ -6,8 +6,8 @@ publish = false
 
 [dependencies]
 actix-cors = "0.7"
-actix-governor = "0.7"
 actix-web = "4.11"
+governor = "0.10"
 actix-web-lab = "0.24"
 anilist = { path = "../anilist" }
 argon2 = { version = "0.5", features = [ "std" ] }

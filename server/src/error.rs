@@ -30,8 +30,6 @@ pub enum Error {
     CannotHashPassword(#[from] argon2::password_hash::Error),
     #[error("Cannot generate auth token")]
     CannotGenerateAuthToken(#[from] jsonwebtoken::errors::Error),
-    #[error("Governor config invalid")]
-    GovernorConfig,
     #[error("Invalid or expired reset token")]
     InvalidResetToken,
     #[error("Email not verified — please check your inbox")]
@@ -119,7 +117,6 @@ impl ResponseError for Error {
             Self::Database(_)
             | Self::Config(_)
             | Self::Server(_)
-            | Self::GovernorConfig
             | Self::EmailError(_)
             | Self::StripeNotConfigured
             | Self::Stripe(_)

@@ -100,13 +100,6 @@ ignore = true
 # license declarations. Each exception is single-crate scoped — adding a NEW
 # crate that uses one of these licenses will fail CI until explicitly listed.
 [[licenses.exceptions]]
-# actix-governor declares GPL-3.0-or-later — it is a direct runtime dependency (rate limiting).
-# Phase 3: evaluate replacing with a permissively-licensed alternative
-# (e.g. actix-limitation, tower-governor, or a hand-rolled token-bucket).
-allow = ["GPL-3.0-or-later"]
-crate = "actix-governor"
-
-[[licenses.exceptions]]
 # BSL-1.0 (Boost): transitive dep of redis crate.
 allow = ["BSL-1.0"]
 crate = "xxhash-rust"
