@@ -54,6 +54,15 @@ describe('UpgradeInterruptModalBody — reason-routed copy', () => {
     wrapper.unmount()
   })
 
+  it('renders share_calendar heading + description for reason=share_calendar', () => {
+    const wrapper = mountBody({ reason: 'share_calendar' })
+    expect(wrapper.find('[data-testid="upgrade-interrupt-heading"]').text())
+      .toBe(en.interrupt.heading.share_calendar)
+    expect(wrapper.find('[data-testid="upgrade-interrupt-description"]').text())
+      .toBe(en.interrupt.description.share_calendar)
+    wrapper.unmount()
+  })
+
   it('falls back to pro_accent copy when no reason is provided', () => {
     const wrapper = mountBody({})
     expect(wrapper.find('[data-testid="upgrade-interrupt-heading"]').text())
@@ -64,7 +73,7 @@ describe('UpgradeInterruptModalBody — reason-routed copy', () => {
   })
 
   it('keeps the shared 3-bullet feature list across all reasons', () => {
-    for (const reason of ['cap_calendars', 'cap_shows', 'pro_accent'] as const) {
+    for (const reason of ['cap_calendars', 'cap_shows', 'pro_accent', 'share_calendar'] as const) {
       const wrapper = mountBody({ reason })
       expect(wrapper.text()).toContain(en.interrupt.features.accents)
       expect(wrapper.text()).toContain(en.interrupt.features.priority)
