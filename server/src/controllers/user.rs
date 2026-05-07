@@ -8,6 +8,7 @@ use crate::{
 
 use crate::entity::user_settings::UserSettings;
 use crate::mappers::refresh_token::RefreshTokenMapper;
+use crate::mappers::subscription::SubscriptionMapper;
 use crate::mappers::user_settings::UserSettingsMapper;
 use actix_web::{HttpResponse, ResponseError, delete, get, post, put, web};
 use log::{debug, error, info};
@@ -248,12 +249,14 @@ pub async fn update_password(
         (status = 204, description = "User deleted"),
         (status = 401, body = crate::controllers::auth::ErrorResponse),
         (status = 403, description = "Forbidden — cannot delete another user"),
+        (status = 409, description = "Active subscription — cancel via portal first", body = crate::controllers::auth::ErrorResponse),
     ),
     security(("bearer_auth" = []))
 )]
 #[delete("/user/{id}")]
 pub async fn delete_user(
     user_mapper: web::Data<UserMapper>,
+    pool: web::Data<sqlx::PgPool>,
     cache: web::Data<Cache>,
     user_id: web::Path<i32>,
     claims: Claims,
@@ -271,17 +274,57 @@ pub async fn delete_user(
         return HttpResponse::Forbidden().finish();
     }
 
-    match user_mapper.delete_user(user_id_inner).await {
-        Ok(()) => {
-            // Invalidate user cache
-            let _ = cache.invalidate_user_details(user_id_inner).await;
-            HttpResponse::NoContent().finish()
-        }
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
         Err(e) => {
-            error!("{e}");
-            HttpResponse::InternalServerError().finish()
+            error!("Failed to begin transaction for delete_user: {e}");
+            return HttpResponse::InternalServerError().finish();
+        }
+    };
+
+    // Block deletion if the user has an active Stripe subscription (AUDIT.md C-1).
+    // The user must cancel via the Stripe portal before the account can be removed.
+    match SubscriptionMapper::find_active_for_user_with(&mut tx, user_id_inner).await {
+        Ok(Some(_)) => {
+            let _ = tx.rollback().await;
+            return Error::Conflict {
+                reason: "active_subscription",
+            }
+            .error_response();
+        }
+        Ok(None) => { /* no active sub — proceed */ }
+        Err(e) => {
+            error!("Failed to check active subscription for user {user_id_inner}: {e}");
+            let _ = tx.rollback().await;
+            return HttpResponse::InternalServerError().finish();
         }
     }
+
+    // Invalidate all refresh tokens so existing sessions are kicked immediately.
+    if let Err(e) =
+        RefreshTokenMapper::invalidate_all_for_user_with(&mut tx, user_id_inner).await
+    {
+        error!("Failed to invalidate refresh tokens for user {user_id_inner}: {e}");
+        let _ = tx.rollback().await;
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    // Soft-delete the user and cascade to their calendars.
+    if let Err(e) = UserMapper::delete_user_with(&mut tx, user_id_inner).await {
+        error!("Failed to soft-delete user {user_id_inner}: {e}");
+        let _ = tx.rollback().await;
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    if let Err(e) = tx.commit().await {
+        error!("Failed to commit delete_user transaction for user {user_id_inner}: {e}");
+        return HttpResponse::InternalServerError().finish();
+    }
+
+    // Post-commit: evict cached user details so stale data isn't served.
+    let _ = cache.invalidate_user_details(user_id_inner).await;
+
+    HttpResponse::NoContent().finish()
 }
 
 // User settings endpoints
@@ -731,19 +774,28 @@ mod integration_tests {
 
     // ─── DELETE /user/{id} ───────────────────────────────────────────────────
 
+    /// Build a test App for delete_user with all required dependencies.
+    macro_rules! delete_user_app {
+        ($pool:expr) => {{
+            let pool: sqlx::PgPool = $pool;
+            let cache = web::Data::new(Cache::for_tests().await);
+            test::init_service(
+                App::new()
+                    .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
+                    .app_data(web::Data::new(pool.clone()))
+                    .app_data(jwt_data())
+                    .app_data(cache)
+                    .service(delete_user),
+            )
+            .await
+        }};
+    }
+
     #[tokio::test]
     async fn delete_user_own_account_returns_204() {
         let pool = crate::test_helpers::test_pool().await;
         let user = seed_user(&pool).await;
-        let cache = web::Data::new(Cache::for_tests().await);
-        let app = test::init_service(
-            App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
-                .app_data(jwt_data())
-                .app_data(cache)
-                .service(delete_user),
-        )
-        .await;
+        let app = delete_user_app!(pool.clone());
         let req = test::TestRequest::delete()
             .uri(&format!("/user/{}", user.id))
             .insert_header(("Cookie", format!("auth_token={}", user.token)))
@@ -759,15 +811,7 @@ mod integration_tests {
         let pool = crate::test_helpers::test_pool().await;
         let user_a = seed_user(&pool).await;
         let user_b = seed_user(&pool).await;
-        let cache = web::Data::new(Cache::for_tests().await);
-        let app = test::init_service(
-            App::new()
-                .app_data(web::Data::new(UserMapper::from_pool(pool)))
-                .app_data(jwt_data())
-                .app_data(cache)
-                .service(delete_user),
-        )
-        .await;
+        let app = delete_user_app!(pool.clone());
         // user_a tries to delete user_b
         let req = test::TestRequest::delete()
             .uri(&format!("/user/{}", user_b.id))
@@ -776,6 +820,114 @@ mod integration_tests {
         assert_eq!(
             test::call_service(&app, req).await.status(),
             StatusCode::FORBIDDEN
+        );
+    }
+
+    /// Seeding helper: inserts an active subscription row for the given user.
+    async fn seed_active_subscription(pool: &sqlx::PgPool, user_id: i32, status: &str) {
+        use chrono::{Duration, Utc};
+        let n: u64 = rand::random();
+        let now = Utc::now().naive_utc();
+        sqlx::query(
+            "INSERT INTO subscriptions \
+             (user_id, tier, status, stripe_customer_id, stripe_subscription_id, \
+              stripe_price_id, current_period_start, current_period_end, cancel_at_period_end) \
+             VALUES ($1, 'paid', $2, $3, $4, 'price_test', $5, $6, false)",
+        )
+        .bind(user_id)
+        .bind(status)
+        .bind(format!("cus_deltest_{n}"))
+        .bind(format!("sub_deltest_{n}"))
+        .bind(now)
+        .bind(now + Duration::days(30))
+        .execute(pool)
+        .await
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn delete_user_with_active_sub_returns_409() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        seed_active_subscription(&pool, user.id, "active").await;
+
+        let app = delete_user_app!(pool.clone());
+        let req = test::TestRequest::delete()
+            .uri(&format!("/user/{}", user.id))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(resp.status(), StatusCode::CONFLICT);
+        let body: Value = test::read_body_json(resp).await;
+        assert_eq!(body["error"], "active_subscription");
+
+        // User must NOT have been soft-deleted.
+        let deleted_at: Option<chrono::NaiveDateTime> =
+            sqlx::query_scalar("SELECT deleted_at FROM users WHERE id = $1")
+                .bind(user.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert!(deleted_at.is_none(), "user must not be deleted when sub is active");
+    }
+
+    #[tokio::test]
+    async fn delete_user_without_active_sub_returns_204_and_cleans_tokens() {
+        use crate::controllers::auth::hash_refresh_token;
+
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+
+        // Seed a refresh token that should be wiped on delete.
+        RefreshTokenMapper::from_pool(pool.clone())
+            .replace_token(user.id, &hash_refresh_token("session_abc"))
+            .await
+            .unwrap();
+
+        let app = delete_user_app!(pool.clone());
+        let req = test::TestRequest::delete()
+            .uri(&format!("/user/{}", user.id))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::NO_CONTENT
+        );
+
+        // User must be soft-deleted.
+        let deleted_at: Option<chrono::NaiveDateTime> =
+            sqlx::query_scalar("SELECT deleted_at FROM users WHERE id = $1")
+                .bind(user.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert!(deleted_at.is_some(), "user must be soft-deleted");
+
+        // Refresh tokens must be wiped.
+        let token_count: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM refresh_tokens WHERE user_id = $1")
+                .bind(user.id)
+                .fetch_one(&pool)
+                .await
+                .unwrap();
+        assert_eq!(token_count, 0, "refresh tokens must be wiped on delete");
+    }
+
+    #[tokio::test]
+    async fn delete_user_with_canceled_sub_returns_204() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user = seed_user(&pool).await;
+        // A canceled subscription must NOT block deletion.
+        seed_active_subscription(&pool, user.id, "canceled").await;
+
+        let app = delete_user_app!(pool.clone());
+        let req = test::TestRequest::delete()
+            .uri(&format!("/user/{}", user.id))
+            .insert_header(("Cookie", format!("auth_token={}", user.token)))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, req).await.status(),
+            StatusCode::NO_CONTENT
         );
     }
 
