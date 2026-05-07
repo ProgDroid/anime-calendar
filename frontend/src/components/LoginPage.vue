@@ -41,8 +41,20 @@ const handleSubmit = async (e: Event) => {
     } else {
       await authStore.login(email.value, password.value)
     }
-    const redirect = route.query.redirect as string | undefined
-    router.push(redirect && redirect.startsWith('/') ? redirect : '/my-calendars')
+    const redirect = route.query.redirect
+    const safeRedirect = (() => {
+      if (typeof redirect !== 'string' || redirect.length === 0) return '/my-calendars'
+      try {
+        const target = new URL(redirect, location.origin)
+        if (target.origin === location.origin) {
+          return target.pathname + target.search + target.hash
+        }
+      } catch {
+        // invalid URL syntax; fall through to default
+      }
+      return '/my-calendars'
+    })()
+    router.push(safeRedirect)
   } catch {
     error.value = t('errors.generic')
   } finally {
