@@ -3,18 +3,29 @@
 //!
 //! Semantics preserved:
 //! - 60-request burst, 1-request-per-second steady-state replenishment.
-//! - Per-IP keying with IPv6 /56-prefix bucketing.
+//! - Per-IP keying with IPv6 /56-prefix bucketing (bytes 0–6 preserved,
+//!   bytes 7–15 zeroed).
 //! - Path-exempt: `/stripe/webhook` always allowed (Stripe retries failed
 //!   deliveries in bursts; HTTP 429 there would trip its endpoint-disabled
 //!   heuristic).
 //! - 429 response body: `{"error":"rate limited","retry_after":<secs>}`.
+//!
+//! ## Key bookkeeping
+//!
+//! `DefaultKeyedRateLimiter` is backed by a concurrent `DashMap` keyed by
+//! `IpAddr`. The map has no automatic eviction, so on a public-internet
+//! deployment a broad port-scan or DDoS attempt would otherwise grow it
+//! unboundedly (≈ 250 B per distinct source IP — 1 M IPs ≈ 250 MB).
+//! `RateLimit::new` therefore spawns a background task that calls
+//! `RateLimiter::retain_recent` every 60 seconds; the task holds only a
+//! `Weak` reference to the limiter, so it exits cleanly once the last
+//! `RateLimit` clone is dropped (e.g. on graceful shutdown).
 
 use std::{
-    future::{Future, Ready, ready},
+    future::{Ready, ready},
     net::{IpAddr, Ipv6Addr},
     num::NonZeroU32,
-    pin::Pin,
-    sync::Arc,
+    sync::{Arc, Weak},
     time::Duration,
 };
 
@@ -43,6 +54,12 @@ impl RateLimit {
     /// Create a rate limiter allowing `burst` requests of capacity that
     /// replenishes at one request per `period`.
     ///
+    /// Spawns a background tokio task that calls
+    /// [`RateLimiter::retain_recent`] every 60 seconds to evict idle keys
+    /// (see module docs for rationale). The task only holds a [`Weak`]
+    /// reference to the limiter, so it terminates once the last `RateLimit`
+    /// clone is dropped.
+    ///
     /// # Panics
     /// Panics if `burst` is 0 or if `period` is zero (programming error).
     #[must_use]
@@ -50,9 +67,25 @@ impl RateLimit {
         let quota = Quota::with_period(period)
             .expect("rate limit period must be > 0")
             .allow_burst(NonZeroU32::new(burst).expect("burst must be > 0"));
-        Self {
-            limiter: Arc::new(RateLimiter::keyed(quota)),
-        }
+        let limiter = Arc::new(RateLimiter::keyed(quota));
+
+        // Background eviction: holds Weak so it exits when the last RateLimit
+        // is dropped, rather than pinning the limiter alive forever.
+        let weak = Arc::downgrade(&limiter);
+        tokio::spawn(async move {
+            let mut interval = tokio::time::interval(Duration::from_secs(60));
+            // First tick fires immediately; skip it so we don't churn at startup.
+            interval.tick().await;
+            loop {
+                interval.tick().await;
+                let Some(limiter) = Weak::upgrade(&weak) else {
+                    break;
+                };
+                limiter.retain_recent();
+            }
+        });
+
+        Self { limiter }
     }
 }
 
@@ -89,7 +122,11 @@ where
 {
     type Response = ServiceResponse<EitherBody<B>>;
     type Error = Error;
-    type Future = Pin<Box<dyn Future<Output = Result<Self::Response, Self::Error>>>>;
+    // Actix-web 4 runs each worker on its own `LocalSet`, so service futures
+    // are NOT required to be `Send` (handlers may hold non-Send state like
+    // `Rc`). We use `LocalBoxFuture` to make the non-Send contract explicit
+    // and to match the convention in `server/src/middleware/auth.rs`.
+    type Future = futures::future::LocalBoxFuture<'static, Result<Self::Response, Self::Error>>;
 
     forward_ready!(service);
 
