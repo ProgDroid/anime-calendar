@@ -240,12 +240,12 @@ watch(lastEvent, (frame) => {
   switch (frame.type) {
     case 'item_added':
       // Only media_id is available; no endpoint to fetch a full Item — skip local list update.
-      if (frame.actor !== authStore.user) {
+      if (frame.actor !== String(authStore.userId)) {
         toastService.success(t('sharing.toasts.itemAdded', { actor: frame.actor }))
       }
       break
     case 'item_removed':
-      if (frame.actor !== authStore.user) {
+      if (frame.actor !== String(authStore.userId)) {
         itemsInCalendar.value = itemsInCalendar.value.filter(i => i.id !== frame.media_id)
         toastService.success(t('sharing.toasts.itemRemoved', { actor: frame.actor }))
       }

@@ -7,6 +7,7 @@ import { invalidateSettingsCache } from '@/services/userSettingsService'
 
 export const useAuthStore = defineStore('auth', () => {
   const user = ref('')
+  const userId = ref<number | null>(null)
   const name = ref('')
   const user_avatar = ref('')
 
@@ -29,8 +30,10 @@ export const useAuthStore = defineStore('auth', () => {
       try {
         const response = await api.get('/user')
         user.value = response.data.username ?? ''
+        userId.value = response.data.user_id ?? null
       } catch {
         user.value = ''
+        userId.value = null
       } finally {
         initialized = true
         initPromise = null
@@ -44,6 +47,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const response = await api.post('/login', { email, password })
       user.value = response.data.username
+      userId.value = response.data.user_id
       return response.data
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -71,6 +75,7 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.post('/auth/verify-email', { token })
       // Backend issues the auth cookie; set local state
       user.value = response.data.username
+      userId.value = response.data.user_id
       return response.data.username as string
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -83,8 +88,9 @@ export const useAuthStore = defineStore('auth', () => {
   const oauthLogin = async (provider: 'google', token_string: string) => {
     try {
       const response = await api.post(`/auth/${provider}`, { token: token_string })
-      const { username: userData, avatar: avatarUrl } = response.data
+      const { username: userData, avatar: avatarUrl, user_id: userIdValue } = response.data
       user.value = userData
+      userId.value = userIdValue
       name.value = userData
       user_avatar.value = avatarUrl
       // Non-sensitive display data only — no auth token in localStorage
@@ -106,6 +112,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Clear local state regardless of server response
     }
     user.value = ''
+    userId.value = null
     name.value = ''
     user_avatar.value = ''
     initialized = false
@@ -121,6 +128,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     user,
+    userId,
     user_avatar,
     name,
     isAuthenticated,

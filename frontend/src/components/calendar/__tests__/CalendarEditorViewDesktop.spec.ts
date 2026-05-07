@@ -54,7 +54,7 @@ vi.mock('@/stores/userSettingsStore', () => ({
 }))
 
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ user: 'testuser' }),
+  useAuthStore: () => ({ user: 'testuser', userId: 1 }),
 }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en, pt } })

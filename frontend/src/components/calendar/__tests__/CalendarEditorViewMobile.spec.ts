@@ -57,9 +57,9 @@ vi.mock('@/stores/userSettingsStore', () => ({
   }),
 }))
 
-// Mock auth store — user is a plain string
+// Mock auth store — user is a plain string; userId is the numeric id used for SSE actor filter
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ user: 'testuser' }),
+  useAuthStore: () => ({ user: 'testuser', userId: 1 }),
 }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en, pt } })
