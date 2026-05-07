@@ -89,6 +89,7 @@ pub async fn verify_email(
     record(OUTCOME_OK);
     HttpResponse::Ok().cookie(cookie).json(AuthResponse {
         username: user.username,
+        user_id: user.id,
     })
 }
 

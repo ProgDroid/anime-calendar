@@ -64,6 +64,7 @@ pub struct LoginRequest {
 #[derive(Serialize, utoipa::ToSchema)]
 pub struct AuthResponse {
     pub username: String,
+    pub user_id: i32,
 }
 
 #[derive(Serialize, utoipa::ToSchema)]
@@ -168,6 +169,7 @@ pub async fn login(
                 .cookie(refresh_cookie)
                 .json(AuthResponse {
                     username: user.username,
+                    user_id: user.id,
                 })
         } else {
             record(OUTCOME_FAILED);
@@ -337,6 +339,7 @@ pub async fn get_current_user(db: web::Data<UserMapper>, claims: Claims) -> Http
 
     HttpResponse::Ok().json(AuthResponse {
         username: user.username,
+        user_id: user.id,
     })
 }
 

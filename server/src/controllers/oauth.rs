@@ -20,6 +20,7 @@ pub struct GoogleOAuthResponse {
     pub username: String,
     pub email: String,
     pub avatar: String,
+    pub user_id: i32,
 }
 
 #[utoipa::path(
@@ -100,6 +101,7 @@ pub async fn google_oauth(
                 username: google_user.full_name,
                 email: user.email,
                 avatar: google_user.avatar_url,
+                user_id: user.id,
             };
 
             record(OUTCOME_OK);
