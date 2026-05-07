@@ -98,11 +98,14 @@ impl PresenceService {
                     && let Ok(stored) = serde_json::from_str::<ViewerStored>(&raw)
                 {
                     // Extract user_id from the key suffix `…:user:{id}`.
-                    let uid: i32 = key
+                    let Some(uid) = key
                         .rsplit(':')
                         .next()
-                        .and_then(|s| s.parse().ok())
-                        .unwrap_or(0);
+                        .and_then(|s| s.parse::<i32>().ok())
+                    else {
+                        log::warn!("presence: unparseable key suffix in '{key}'; skipping");
+                        continue;
+                    };
                     viewers.push(Viewer {
                         user_id: uid,
                         display: stored.display,
