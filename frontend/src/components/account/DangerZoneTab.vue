@@ -21,6 +21,7 @@ const userSettingsStore = useUserSettingsStore()
 const isDeleting = ref(false)
 const isOpeningPortal = ref(false)
 const error = ref<string | null>(null)
+const portalError = ref<string | null>(null)
 const confirmDeleteOpen = ref(false)
 const activeSubModalOpen = ref(false)
 
@@ -39,6 +40,7 @@ const handleDelete = async () => {
       err.response?.status === 409 &&
       err.response.data?.error === 'active_subscription'
     ) {
+      portalError.value = null
       activeSubModalOpen.value = true
     } else {
       error.value = t('userDetails.accountDeleteFailed')
@@ -51,10 +53,11 @@ const handleDelete = async () => {
 const openStripePortal = async () => {
   try {
     isOpeningPortal.value = true
+    portalError.value = null
     const res = await api.post<{ url: string }>('/stripe/portal')
     window.location.href = res.data.url
   } catch {
-    error.value = t('userDetails.accountDeleteFailed')
+    portalError.value = t('account.danger.activeSubscription.portalFailed')
   } finally {
     isOpeningPortal.value = false
   }
@@ -85,6 +88,13 @@ const openStripePortal = async () => {
       </template>
       <p class="text-sm text-fg-2" data-testid="active-sub-message">
         {{ t('account.danger.activeSubscription.message') }}
+      </p>
+      <p
+        v-if="portalError"
+        class="text-sm text-danger-text mt-3"
+        data-testid="active-sub-error"
+      >
+        {{ portalError }}
       </p>
       <template #footer>
         <UiButton

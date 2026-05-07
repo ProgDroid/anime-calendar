@@ -363,7 +363,8 @@
       "activeSubscription": {
         "title": "Subscrição ativa",
         "message": "Tem uma subscrição ativa. Cancele-a através do portal Stripe antes de eliminar a sua conta.",
-        "openPortal": "Abrir portal Stripe"
+        "openPortal": "Abrir portal Stripe",
+        "portalFailed": "Não foi possível abrir o portal Stripe. Por favor tente novamente."
       }
     }
   },

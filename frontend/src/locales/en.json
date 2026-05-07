@@ -363,7 +363,8 @@
       "activeSubscription": {
         "title": "Active subscription",
         "message": "You have an active subscription. Cancel it via the Stripe portal before deleting your account.",
-        "openPortal": "Open Stripe portal"
+        "openPortal": "Open Stripe portal",
+        "portalFailed": "Could not open the Stripe portal. Please try again."
       }
     }
   },

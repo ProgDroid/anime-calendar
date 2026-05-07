@@ -147,4 +147,44 @@ describe('DangerZoneTab', () => {
 
     expect(apiPostMock).toHaveBeenCalledWith('/stripe/portal')
   })
+
+  // ── generic delete failure (non-409) ────────────────────────────────────────
+  it('shows generic error on unexpected delete failure', async () => {
+    apiDeleteMock.mockRejectedValueOnce(makeAxiosError(500, { error: 'internal' }))
+    const { wrapper } = mountTab()
+
+    const confirmModal = wrapper.findComponent({ name: 'ConfirmModal' })
+    await confirmModal.vm.$emit('confirm')
+    await flushPromises()
+
+    const err = wrapper.find('[data-testid="danger-error"]')
+    expect(err.exists()).toBe(true)
+    expect(document.body.querySelector('[data-testid="active-sub-modal"]')).toBeNull()
+    expect(logoutMock).not.toHaveBeenCalled()
+  })
+
+  // ── portal-fetch failure surfaces inside the modal ──────────────────────────
+  it('shows portal-failed message inside the modal when /stripe/portal fails', async () => {
+    apiDeleteMock.mockRejectedValueOnce(
+      makeAxiosError(409, { error: 'active_subscription' }),
+    )
+    apiPostMock.mockRejectedValueOnce(new Error('portal down'))
+
+    const { wrapper } = mountTab()
+
+    const confirmModal = wrapper.findComponent({ name: 'ConfirmModal' })
+    await confirmModal.vm.$emit('confirm')
+    await flushPromises()
+
+    const portalBtn = document.body.querySelector<HTMLElement>('[data-testid="open-portal-button"]')
+    portalBtn!.click()
+    await flushPromises()
+
+    const portalErr = document.body.querySelector('[data-testid="active-sub-error"]')
+    expect(portalErr).not.toBeNull()
+    expect(portalErr?.textContent).toContain('Could not open the Stripe portal')
+
+    // Generic delete-error banner stays absent
+    expect(wrapper.find('[data-testid="danger-error"]').exists()).toBe(false)
+  })
 })
