@@ -16,7 +16,7 @@
             <span>{{ $t('sharing.collisionWarning') }}</span>
             <button
               class="text-accent-1 font-medium hover:underline shrink-0"
-              @click="() => { showCollisionBanner = false; reloadPage() }"
+              @click="reloadPage"
             >
               {{ $t('sharing.reloadButton') }}
             </button>
@@ -85,7 +85,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
 import type { Calendar, EventStyle } from '@/types/calendar'
-import type { Viewer } from '@/types/sharing'
+import type { Viewer, CalendarEvent } from '@/types/sharing'
 import api from '@/config/api'
 import axios from 'axios'
 import { toastService } from '@/services/toastService'
@@ -118,7 +118,7 @@ const isExistingCalendar = calendarId !== 'new' && calendarId !== undefined && c
 const numericCalendarId = isExistingCalendar ? parseInt(calendarId as string, 10) : 0
 const { viewers, lastEvent } = isExistingCalendar
   ? usePresence(numericCalendarId)
-  : { viewers: ref<Viewer[]>([]), lastEvent: ref<import('@/types/sharing').CalendarEvent | null>(null) }
+  : { viewers: ref<Viewer[]>([]), lastEvent: ref<CalendarEvent | null>(null) }
 
 const showCollisionBanner = ref(false)
 const localBaselineMetaVersion = ref(0)
@@ -312,6 +312,7 @@ watch(lastEvent, (frame) => {
   if (!frame) return
   switch (frame.type) {
     case 'item_added':
+      // Only media_id is available; no endpoint to fetch a full Item — skip local list update.
       if (frame.actor !== authStore.user) {
         toastService.success(t('sharing.toasts.itemAdded', { actor: frame.actor }))
       }
@@ -323,7 +324,7 @@ watch(lastEvent, (frame) => {
       }
       break
     case 'meta_updated':
-      if (frame.v > localBaselineMetaVersion.value) {
+      if (frame.actor !== authStore.user && frame.v > localBaselineMetaVersion.value) {
         showCollisionBanner.value = true
       }
       break
