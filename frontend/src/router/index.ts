@@ -108,7 +108,7 @@ const router = createRouter({
       path: '/invite/:token',
       name: 'invite-landing',
       component: () => import('@/components/InviteLandingPage.vue'),
-      meta: { public: true },
+      meta: { public: true, bottomTabBar: false },
     },
     {
       path: '/:pathMatch(.*)*',

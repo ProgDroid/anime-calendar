@@ -534,20 +534,4 @@ mod tests {
         assert!(check_not_self("foo@bar.com", "FOO@bar.com").is_err());
     }
 
-    #[allow(dead_code)]
-    fn dummy_calendar(id: i32, user_id: i32, name: &str) -> Calendar {
-        Calendar {
-            id,
-            item_ids: Vec::new(),
-            language: Language::English,
-            name: name.to_owned(),
-            subscription_token: "tok".to_owned(),
-            user_id,
-            created_at: Utc::now().naive_utc(),
-            updated_at: Utc::now().naive_utc(),
-            event_style: "timed".to_owned(),
-            frozen_subscribe_ics: None,
-            meta_version: 1,
-        }
-    }
 }

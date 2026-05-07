@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import GoogleLoginButton from './GoogleLoginButton.vue'
 import UiAuthShell from './ui/UiAuthShell.vue'
@@ -16,6 +16,7 @@ defineOptions({ name: 'LoginPage' })
 
 const { t } = useI18n()
 
+const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
 
@@ -40,7 +41,8 @@ const handleSubmit = async (e: Event) => {
     } else {
       await authStore.login(email.value, password.value)
     }
-    router.push('/my-calendars')
+    const redirect = route.query.redirect as string | undefined
+    router.push(redirect && redirect.startsWith('/') ? redirect : '/my-calendars')
   } catch {
     error.value = t('errors.generic')
   } finally {

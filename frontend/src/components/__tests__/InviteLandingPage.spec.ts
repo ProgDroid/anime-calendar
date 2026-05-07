@@ -28,7 +28,7 @@ function makeRouter(token: string = 'abc123') {
     routes: [
       { path: '/invite/:token', component: Stub },
       { path: '/my-calendars', component: Stub },
-      { path: '/calendars/:id', component: Stub },
+      { path: '/calendar/:id', component: Stub },
       { path: '/login', component: Stub },
       { path: '/register', component: Stub },
     ],

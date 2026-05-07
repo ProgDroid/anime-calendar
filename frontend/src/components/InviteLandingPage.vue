@@ -46,7 +46,11 @@ async function accept() {
 }
 
 async function decline() {
-  await sharingService.decline(token)
+  try {
+    await sharingService.decline(token)
+  } catch {
+    // network/server errors: proceed to my-calendars regardless
+  }
   router.push('/my-calendars')
 }
 </script>
