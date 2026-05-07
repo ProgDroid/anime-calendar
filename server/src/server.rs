@@ -291,6 +291,10 @@ pub fn start(
             .service(crate::controllers::sharing::accept_invitation)
             .service(crate::controllers::sharing::decline_invitation)
             .service(crate::controllers::sharing::presence_heartbeat)
+            .service(
+                web::resource("/calendars/{id}/events")
+                    .route(web::get().to(crate::controllers::sse::calendar_events)),
+            )
     })
     .bind(format!("{host}:{port}"))?
     .run())

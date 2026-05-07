@@ -10,6 +10,7 @@ actix-web = "4.11"
 actix-web-lab = "0.24"
 anilist = { path = "../anilist" }
 argon2 = { version = "0.5", features = [ "std" ] }
+async-stream = "0.3"
 async-stripe = "=1.0.0-rc.5"
 async-stripe-billing = { version = "=1.0.0-rc.5", features = ["subscription", "subscription_item", "billing_portal_session", "serialize", "deserialize"] }
 async-stripe-checkout = { version = "=1.0.0-rc.5", features = ["checkout_session", "serialize", "deserialize"] }

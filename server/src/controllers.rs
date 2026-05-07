@@ -9,6 +9,7 @@ pub mod password_reset;
 pub mod public_config;
 pub mod refresh;
 pub mod sharing;
+pub mod sse;
 pub mod stripe;
 pub mod stripe_webhook;
 pub mod subscription;

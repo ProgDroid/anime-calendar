@@ -68,7 +68,7 @@ const fn ok_json() -> EmptyOk {
 /// Resolve a calendar by id, treating "row missing" as `404 NotFound` and
 /// every other failure as the underlying error. Used by every owner-side
 /// route below.
-async fn load_calendar_any_owner(
+pub(crate) async fn load_calendar_any_owner(
     pool: &sqlx::PgPool,
     id: i32,
 ) -> Result<crate::entity::calendar::Calendar, Error> {
