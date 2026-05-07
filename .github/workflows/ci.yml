@@ -238,4 +238,4 @@ jobs:
         run: cargo run --quiet --bin openapi-export > openapi.json
 
       - name: Validate OpenAPI spec
-        run: npx --yes @redocly/cli@latest lint openapi.json --format=summary
+        run: npx --yes @redocly/cli@2.30.4 lint openapi.json --format=summary
