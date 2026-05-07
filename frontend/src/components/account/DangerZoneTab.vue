@@ -77,7 +77,7 @@ const openStripePortal = async () => {
     />
     <UiModal
       :open="activeSubModalOpen"
-      :aria-label="t('account.danger.activeSubscription.title')"
+      :ariaLabel="t('account.danger.activeSubscription.title')"
       data-testid="active-sub-modal"
       @close="activeSubModalOpen = false"
     >
