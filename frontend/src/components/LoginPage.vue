@@ -11,6 +11,7 @@ import IconLock from './ui/icons/IconLock.vue'
 import IconEye from './ui/icons/IconEye.vue'
 import UiCheckbox from './ui/UiCheckbox.vue'
 import { useI18n } from 'vue-i18n'
+import { consumeInviteRedirect } from '@/composables/inviteRedirect'
 
 defineOptions({ name: 'LoginPage' })
 
@@ -41,8 +42,14 @@ const handleSubmit = async (e: Event) => {
     } else {
       await authStore.login(email.value, password.value)
     }
-    const redirect = route.query.redirect
+    // H-10: prefer a token stashed by InviteLandingPage in sessionStorage
+    // over the legacy ?redirect= query param. The query path is kept for
+    // back-compat with deep links that still embed it but is bounded by
+    // the same-origin URL check below.
+    const stashedInvite = consumeInviteRedirect()
+    const redirect = stashedInvite ?? route.query.redirect
     const safeRedirect = (() => {
+      if (stashedInvite !== null) return `/invite/${stashedInvite}`
       if (typeof redirect !== 'string' || redirect.length === 0) return '/my-calendars'
       try {
         const target = new URL(redirect, location.origin)

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
 import { sharingService } from '@/services/sharingService'
+import { stashInviteToken } from '@/composables/inviteRedirect'
 import type { InvitationPreview } from '@/types/sharing'
 import UiButton from '@/components/ui/UiButton.vue'
 import axios from 'axios'
@@ -52,6 +53,14 @@ async function decline() {
     // network/server errors: proceed to my-calendars regardless
   }
   router.push('/my-calendars')
+}
+
+// H-10: stash token in sessionStorage and route to plain /login or /register
+// so the token doesn't ride along in the URL query (which would leak via
+// history, bookmarks, browser sync, and extensions with tab-read access).
+function goToAuth(target: 'login' | 'register') {
+  stashInviteToken(token)
+  router.push(`/${target}`)
 }
 </script>
 
@@ -102,20 +111,22 @@ async function decline() {
       </div>
 
       <div class="flex flex-col gap-3">
-        <router-link
-          :to="`/login?redirect=/invite/${token}`"
+        <button
+          type="button"
           data-testid="invite-sign-in"
           class="inline-flex items-center justify-center h-10 px-4 rounded-md font-medium bg-accent-1 text-bg-0 hover:-translate-y-[0.5px] transition-all"
+          @click="goToAuth('login')"
         >
           {{ t('sharing.landing.signIn') }}
-        </router-link>
-        <router-link
-          :to="`/register?redirect=/invite/${token}`"
+        </button>
+        <button
+          type="button"
           data-testid="invite-sign-up"
           class="inline-flex items-center justify-center h-10 px-4 rounded-md font-medium bg-bg-2 text-fg-1 border border-line hover:-translate-y-[0.5px] transition-all"
+          @click="goToAuth('register')"
         >
           {{ t('sharing.landing.signUp') }}
-        </router-link>
+        </button>
       </div>
     </div>
 
@@ -162,13 +173,14 @@ async function decline() {
       <p class="text-fg-1">
         {{ t('sharing.landing.mismatch', { email: preview?.masked_email ?? '' }) }}
       </p>
-      <router-link
-        :to="`/login?redirect=/invite/${token}`"
+      <button
+        type="button"
         data-testid="invite-sign-in"
         class="inline-flex items-center justify-center h-10 px-4 rounded-md font-medium bg-accent-1 text-bg-0 hover:-translate-y-[0.5px] transition-all w-fit"
+        @click="goToAuth('login')"
       >
         {{ t('sharing.landing.signIn') }}
-      </router-link>
+      </button>
     </div>
   </main>
 </template>

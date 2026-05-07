@@ -45,6 +45,7 @@ function makeRouter(initialPath: string) {
       { path: '/my-calendars', component: Stub },
       { path: '/calendar/:id', component: Stub },
       { path: '/forgot-password', component: Stub },
+      { path: '/invite/:token', component: Stub },
     ],
   })
   void router.push(initialPath)
@@ -73,6 +74,7 @@ describe('LoginPage — redirect validation (AUDIT H-9)', () => {
     loginMock.mockReset()
     registerMock.mockReset()
     loginMock.mockResolvedValue(undefined)
+    sessionStorage.clear()
   })
 
   it('rejects a protocol-relative URL (//evil.com) and falls back to /my-calendars', async () => {
@@ -110,5 +112,32 @@ describe('LoginPage — redirect validation (AUDIT H-9)', () => {
     await flushPromises()
 
     expect(pushSpy).toHaveBeenCalledWith('/my-calendars')
+  })
+
+  // H-10: a token stashed in sessionStorage by InviteLandingPage takes
+  // precedence over the legacy ?redirect= query param and is consumed
+  // (cleared) on use.
+  it('uses a stashed invite token from sessionStorage and clears it (H-10)', async () => {
+    sessionStorage.setItem('pendingInviteToken', 'invite-token-from-stash')
+
+    const { wrapper, pushSpy } = await mountLogin('/login')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(pushSpy).toHaveBeenCalledWith('/invite/invite-token-from-stash')
+    expect(sessionStorage.getItem('pendingInviteToken')).toBeNull()
+  })
+
+  it('stashed invite token wins over a redirect query param (H-10)', async () => {
+    sessionStorage.setItem('pendingInviteToken', 'stashed-wins')
+
+    const { wrapper, pushSpy } = await mountLogin('/login?redirect=/calendar/42')
+
+    await wrapper.find('form').trigger('submit')
+    await flushPromises()
+
+    expect(pushSpy).toHaveBeenCalledWith('/invite/stashed-wins')
+    expect(pushSpy).not.toHaveBeenCalledWith('/calendar/42')
   })
 })

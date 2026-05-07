@@ -44,6 +44,7 @@ describe('InviteLandingPage', () => {
     pinia = createPinia()
     setActivePinia(pinia)
     vi.restoreAllMocks()
+    sessionStorage.clear()
   })
 
   async function mountPage(token = 'abc123') {
@@ -131,6 +132,42 @@ describe('InviteLandingPage', () => {
 
     expect(wrapper.find('[data-testid="invite-mismatch"]').exists()).toBe(true)
     expect(wrapper.text()).toContain(SAMPLE_PREVIEW.masked_email)
+  })
+
+  // H-10: clicking "Sign in" / "Sign up" must stash the token in
+  // sessionStorage and route to plain /login or /register WITHOUT the token
+  // appearing in the URL query.
+  it('stashes token in sessionStorage and routes to /login on Sign in click (H-10)', async () => {
+    vi.spyOn(sharingService, 'preview').mockResolvedValue(SAMPLE_PREVIEW)
+
+    const { wrapper, router } = await mountPage('top-secret-token-abc')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="invite-unauth"]').exists()).toBe(true)
+
+    const pushSpy = vi.spyOn(router, 'push')
+    await wrapper.find('[data-testid="invite-sign-in"]').trigger('click')
+    await flushPromises()
+
+    expect(sessionStorage.getItem('pendingInviteToken')).toBe('top-secret-token-abc')
+    expect(pushSpy).toHaveBeenCalledWith('/login')
+    expect(pushSpy).not.toHaveBeenCalledWith(expect.stringContaining('redirect='))
+    expect(pushSpy).not.toHaveBeenCalledWith(expect.stringContaining('top-secret-token'))
+  })
+
+  it('stashes token in sessionStorage and routes to /register on Sign up click (H-10)', async () => {
+    vi.spyOn(sharingService, 'preview').mockResolvedValue(SAMPLE_PREVIEW)
+
+    const { wrapper, router } = await mountPage('top-secret-token-xyz')
+    await flushPromises()
+
+    const pushSpy = vi.spyOn(router, 'push')
+    await wrapper.find('[data-testid="invite-sign-up"]').trigger('click')
+    await flushPromises()
+
+    expect(sessionStorage.getItem('pendingInviteToken')).toBe('top-secret-token-xyz')
+    expect(pushSpy).toHaveBeenCalledWith('/register')
+    expect(pushSpy).not.toHaveBeenCalledWith(expect.stringContaining('top-secret-token'))
   })
 
   it('redirects to /calendars/:id when accept succeeds', async () => {
