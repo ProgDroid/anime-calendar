@@ -23,6 +23,13 @@ use stripe::Client as StripeClient;
 #[actix_web::main]
 async fn main() -> ServerResult<()> {
     let settings = ServerConfig::new().expect("Failed to load config");
+    if let Err(e) = settings.validate() {
+        log::error!("{e}");
+        return Err(server::error::Error::Server(std::io::Error::new(
+            std::io::ErrorKind::InvalidInput,
+            e,
+        )));
+    }
 
     let anilist = Anilist::new();
     let db_config = DatabaseConfig::new()?;

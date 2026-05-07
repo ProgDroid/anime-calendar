@@ -251,7 +251,6 @@ impl Default for LimitsConfig {
     }
 }
 
-
 /// Co-editor sharing limits and timing. Read by the invitation service to
 /// gate cap, expiry, rate-limit, and SSE heartbeat decisions.
 #[derive(Debug, Deserialize, Clone)]
@@ -366,6 +365,55 @@ mod tests {
         assert_eq!(cfg.host, "127.0.0.1");
         assert_eq!(cfg.port, 9090);
     }
+
+    #[test]
+    fn validate_rejects_production_without_cookie_secure() {
+        let cfg = Server {
+            app: AppConfig {
+                environment: "production".to_string(),
+                ..AppConfig::default()
+            },
+            cookie_secure: false,
+            ..Server::default()
+        };
+        let result = cfg.validate();
+        assert!(result.is_err());
+        let msg = result.unwrap_err();
+        assert!(
+            msg.contains("cookie_secure"),
+            "error message should mention cookie_secure: {msg}"
+        );
+        assert!(
+            msg.contains("production"),
+            "error message should mention production: {msg}"
+        );
+    }
+
+    #[test]
+    fn validate_accepts_production_with_cookie_secure() {
+        let cfg = Server {
+            app: AppConfig {
+                environment: "production".to_string(),
+                ..AppConfig::default()
+            },
+            cookie_secure: true,
+            ..Server::default()
+        };
+        assert!(cfg.validate().is_ok());
+    }
+
+    #[test]
+    fn validate_accepts_development_without_cookie_secure() {
+        let cfg = Server {
+            app: AppConfig {
+                environment: "development".to_string(),
+                ..AppConfig::default()
+            },
+            cookie_secure: false,
+            ..Server::default()
+        };
+        assert!(cfg.validate().is_ok());
+    }
 }
 
 /// Newtype wrapper for the frontend base URL — injected as `web::Data<AppBaseUrl>`.
@@ -393,6 +441,24 @@ impl Server {
             .build()?;
 
         server_config.try_deserialize()
+    }
+
+    /// Reject configurations that would be unsafe in production. Currently:
+    /// - `cookie_secure = false` while `app.environment = "production"` would
+    ///   issue auth/refresh cookies without the Secure flag, leaking them on
+    ///   any non-HTTPS hop. The server refuses to start rather than degrade
+    ///   silently.
+    ///
+    /// # Errors
+    /// Returns a descriptive `String` if the configuration is rejected.
+    pub fn validate(&self) -> Result<(), String> {
+        if self.app.environment == "production" && !self.cookie_secure {
+            return Err("config rejected: cookie_secure must be true in production \
+                 (otherwise auth/refresh cookies are issued without the Secure \
+                 flag and may be exposed on non-HTTPS hops)"
+                .to_string());
+        }
+        Ok(())
     }
 }
 
