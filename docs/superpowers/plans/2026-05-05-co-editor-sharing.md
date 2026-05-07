@@ -14,7 +14,7 @@
 
 ---
 
-## Implementation status (last updated 2026-05-07, Phase 4 done)
+## Implementation status (last updated 2026-05-07, all phases done)
 
 Phase 0: ✅ **DONE.** All 12 tasks shipped. 281 server / 412 frontend tests
 green. Pedantic+nursery clippy clean. Frontend lint + build clean. OpenAPI
@@ -48,7 +48,7 @@ as a reference for Phase 1+ briefs):
 | Phase 2 — Editor mutations + Members tab | ✅ Done (5/5) | `7724e8b..82fe724` |
 | Phase 3 — Live sync (SSE + Pub/Sub) | ✅ Done (8/8) | `6bf8d28..3d47850` |
 | Phase 4 — Tier transitions | ✅ Done (5/5) | `c665313..ec5f2e8` |
-| Phase 5 — Public landing + E2E + ops | ⬜ Pending | — |
+| Phase 5 — Public landing + E2E + ops | ✅ Done (6/6) | `a95ad80...31d3ecb` |
 
 **Phase 0 commit map:**
 
