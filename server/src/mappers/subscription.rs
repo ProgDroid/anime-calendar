@@ -340,10 +340,21 @@ impl SubscriptionMapper {
     }
 
     /// Apply a Stripe-side truth update to a local row, guarded so a webhook
-    /// write that landed mid-pass doesn't get clobbered. Skips the update
-    /// when the local `current_period_end` has already moved past Stripe's
-    /// (`rows_affected` = 0). Caller should treat 0 as "newer write won, no
-    /// drift correction needed."
+    /// write that landed mid-pass doesn't get clobbered.
+    ///
+    /// `rows_affected = 0` means a fresher webhook write already landed and
+    /// drift correction is unnecessary. The guard fires when:
+    ///
+    /// - `current_period_end` is *strictly newer* than the local row, OR
+    /// - `current_period_end` is equal but the `status` differs (so we
+    ///   converge on Stripe's status when the equal-period webhook hasn't yet
+    ///   touched the row, e.g. a webhook landed `active` first and the next
+    ///   reconcile pass sees `past_due` from Stripe with the same period).
+    ///
+    /// Both halves of the guard are required: without the status check the
+    /// loop could regress an `active`-by-webhook row back to `past_due` if
+    /// Stripe still reports the older state for the same period boundary; without
+    /// the period check it would regress a fresher period back to an older one.
     ///
     /// # Errors
     /// Returns an error if the database query fails.
@@ -356,6 +367,14 @@ impl SubscriptionMapper {
         stripe_trial_end: Option<chrono::NaiveDateTime>,
     ) -> ServerResult<u64> {
         crate::metrics::db::timed("subscription.apply_reconcile_update", async {
+            // sqlx::query! note: PostgreSQL PREPARE rejects the same $N appearing
+            // in both `SET col = $N` and a comparison like `col <> $N`. Use
+            // distinct params ($6, $7) for the WHERE-clause comparisons and
+            // clone the small input fields to feed them.
+            let status_for_set = stripe_status.to_owned();
+            let status_for_cmp = stripe_status.to_owned();
+            let period_for_set = stripe_period_end;
+            let period_for_cmp = stripe_period_end;
             let result = sqlx::query!(
                 "UPDATE subscriptions SET \
                     status = $2, \
@@ -364,12 +383,16 @@ impl SubscriptionMapper {
                     trial_end = $5, \
                     updated_at = NOW() \
                  WHERE id = $1 \
-                   AND current_period_end <= $3",
+                   AND (current_period_end < $6 \
+                        OR (current_period_end = $7 AND status <> $8))",
                 id,
-                stripe_status,
-                stripe_period_end,
+                status_for_set,
+                period_for_set,
                 stripe_cancel_at_period_end,
                 stripe_trial_end,
+                period_for_cmp,
+                period_for_cmp,
+                status_for_cmp,
             )
             .execute(&self.db.pool)
             .await?;
@@ -504,6 +527,119 @@ mod tests {
             .unwrap();
         assert!(sub.is_none());
         tx.rollback().await.unwrap();
+    }
+
+    // ---- apply_reconcile_update guard tests --------------------------------
+
+    /// Insert a subscription row and return its (id, stripe_subscription_id).
+    /// Uses `pool.acquire()`-bound queries because `apply_reconcile_update` is
+    /// an instance method on `SubscriptionMapper` that only takes `&self` and
+    /// reaches the pool itself, so we can't share a `tx` here.
+    async fn seed_reconcile_row(
+        pool: &sqlx::PgPool,
+        user_id: i32,
+        status: &str,
+        period_end: chrono::NaiveDateTime,
+    ) -> i32 {
+        let n: u64 = rand::random();
+        let period_start = (Utc::now() - Duration::days(30)).naive_utc();
+        sqlx::query_scalar(
+            "INSERT INTO subscriptions \
+             (user_id, tier, status, stripe_customer_id, stripe_subscription_id, \
+              stripe_price_id, current_period_start, current_period_end, cancel_at_period_end) \
+             VALUES ($1, 'paid', $2, $3, $4, 'price_test', $5, $6, false) RETURNING id",
+        )
+        .bind(user_id)
+        .bind(status)
+        .bind(format!("cus_recon_{n}"))
+        .bind(format!("sub_recon_{n}"))
+        .bind(period_start)
+        .bind(period_end)
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    async fn seed_user_in_pool(pool: &sqlx::PgPool) -> i32 {
+        let n: u64 = rand::random();
+        sqlx::query_scalar(
+            "INSERT INTO users (username, email, password_hash) \
+             VALUES ($1, $2, 'hash') RETURNING id",
+        )
+        .bind(format!("recontester_{n}"))
+        .bind(format!("recontester_{n}@test.com"))
+        .fetch_one(pool)
+        .await
+        .unwrap()
+    }
+
+    async fn cleanup_user_pool(pool: &sqlx::PgPool, user_id: i32) {
+        sqlx::query("DELETE FROM subscriptions WHERE user_id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(pool)
+            .await
+            .unwrap();
+    }
+
+    /// H-7: reconcile must converge on Stripe's `status` when the local row has
+    /// the same `current_period_end` but a different status. First call updates
+    /// (status diverges); a second call with the same status is a no-op.
+    #[tokio::test]
+    async fn apply_reconcile_update_flips_status_at_equal_period() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_id = seed_user_in_pool(&pool).await;
+        let period_end = (Utc::now() + Duration::days(14)).naive_utc();
+        let row_id = seed_reconcile_row(&pool, user_id, "active", period_end).await;
+
+        let mapper = SubscriptionMapper::from_pool(pool.clone());
+
+        // First call: same period, different status → must update.
+        let updated = mapper
+            .apply_reconcile_update(row_id, "past_due", period_end, false, None)
+            .await
+            .unwrap();
+        assert_eq!(updated, 1, "status divergence must drive an update");
+
+        // Second call: same period, same status → no-op.
+        let updated_again = mapper
+            .apply_reconcile_update(row_id, "past_due", period_end, false, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            updated_again, 0,
+            "matching status + matching period must be a no-op",
+        );
+
+        cleanup_user_pool(&pool, user_id).await;
+    }
+
+    /// H-7: a strictly older Stripe period must never overwrite a fresher local
+    /// row (this is the original guard that we kept).
+    #[tokio::test]
+    async fn apply_reconcile_update_skips_strictly_older_period() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_id = seed_user_in_pool(&pool).await;
+        let local_period_end = (Utc::now() + Duration::days(14)).naive_utc();
+        let stripe_period_end = local_period_end - Duration::seconds(10);
+        let row_id = seed_reconcile_row(&pool, user_id, "active", local_period_end).await;
+
+        let mapper = SubscriptionMapper::from_pool(pool.clone());
+
+        let updated = mapper
+            .apply_reconcile_update(row_id, "active", stripe_period_end, false, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            updated, 0,
+            "older Stripe period must not overwrite a fresher local row",
+        );
+
+        cleanup_user_pool(&pool, user_id).await;
     }
 
     #[tokio::test]

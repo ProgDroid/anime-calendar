@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE calendar_invitations SET status = 'declined', resolved_at = NOW()\n             WHERE token_hash = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6044051c6c89391d1f0d30f4f0503c7b4f0c3cd0d7db97b9caa769a555b2a5e6"
+}
