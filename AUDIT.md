@@ -329,7 +329,7 @@ Added `cargo-deny` CI gate (M-22). First-run `cargo deny check` found **13 curre
 - **CD-12 (HIGH)** — `RUSTSEC-2026-0099`: Name constraints accepted for certs asserting wildcard name. Affected dep: `rustls-webpki 0.103.4`. **Fix:** `cargo update -p rustls-webpki`.
 - **CD-13 (HIGH)** — `RUSTSEC-2026-0104`: Reachable panic in CRL parsing. Affected dep: `rustls-webpki 0.103.4`. **Fix:** `cargo update -p rustls-webpki`.
 
-Additionally: `actix-governor 0.7.0` declares `GPL-3.0-or-later`. Allowed via `[[licenses.exceptions]]` in `deny.toml`. Flagged as a license concern — evaluate a permissively-licensed rate-limiting alternative in Phase 3.
+**CD-LICENSE-1 (HIGH — blocks commercial distribution)** — `actix-governor 0.7.0` is GPL-3.0-or-later (verified in upstream Cargo.toml; the underlying `governor` crate is MIT). Linking GPL-3.0 code into a closed-source binary is incompatible with proprietary distribution. SaaS-only network use is technically permitted by GPL-3.0 (this is what AGPL adds), but most legal teams refuse GPL-3.0 in product code regardless. **Phase 3 must treat this as HIGH priority and replace the dep before any commercial closed-source release.** Replacement options: (a) use `governor` directly with a thin in-house actix wrapper, (b) switch to a permissively-licensed actix rate-limiter (e.g. `actix-extensible-rate-limit` if MIT/Apache-2.0 — verify before adopting), (c) accept GPL-3.0 if the user is comfortable distributing the project under GPL-3.0 terms.
 
 ---
 
