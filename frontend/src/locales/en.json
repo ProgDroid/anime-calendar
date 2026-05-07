@@ -359,7 +359,12 @@
       "eyebrow": "Danger zone",
       "headingLead": "Delete",
       "headingItalic": "account",
-      "subtitle": "This is permanent and cannot be undone."
+      "subtitle": "This is permanent and cannot be undone.",
+      "activeSubscription": {
+        "title": "Active subscription",
+        "message": "You have an active subscription. Cancel it via the Stripe portal before deleting your account.",
+        "openPortal": "Open Stripe portal"
+      }
     }
   },
   "schedule": {

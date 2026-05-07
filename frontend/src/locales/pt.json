@@ -359,7 +359,12 @@
       "eyebrow": "Zona perigosa",
       "headingLead": "Eliminar",
       "headingItalic": "conta",
-      "subtitle": "Isto é permanente e não pode ser desfeito."
+      "subtitle": "Isto é permanente e não pode ser desfeito.",
+      "activeSubscription": {
+        "title": "Subscrição ativa",
+        "message": "Tem uma subscrição ativa. Cancele-a através do portal Stripe antes de eliminar a sua conta.",
+        "openPortal": "Abrir portal Stripe"
+      }
     }
   },
   "schedule": {

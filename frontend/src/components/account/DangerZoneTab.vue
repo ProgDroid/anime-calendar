@@ -2,12 +2,14 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
+import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { applySettings } from '@/services/applySettings'
 import api from '@/config/api'
 import UiButton from '@/components/ui/UiButton.vue'
 import ConfirmModal from '@/components/shared/ConfirmModal.vue'
+import UiModal from '@/components/ui/UiModal.vue'
 
 defineOptions({ name: 'DangerZoneTab' })
 
@@ -17,22 +19,44 @@ const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
 
 const isDeleting = ref(false)
+const isOpeningPortal = ref(false)
 const error = ref<string | null>(null)
 const confirmDeleteOpen = ref(false)
+const activeSubModalOpen = ref(false)
 
 const handleDelete = async () => {
   confirmDeleteOpen.value = false
   try {
     isDeleting.value = true
-    await api.delete('/user')
+    await api.delete(`/user/${authStore.userId}`)
     authStore.logout()
     userSettingsStore.clearCache()
     applySettings(userSettingsStore.getDefaultSettings())
     router.push('/login')
+  } catch (err) {
+    if (
+      axios.isAxiosError(err) &&
+      err.response?.status === 409 &&
+      err.response.data?.error === 'active_subscription'
+    ) {
+      activeSubModalOpen.value = true
+    } else {
+      error.value = t('userDetails.accountDeleteFailed')
+    }
+  } finally {
+    isDeleting.value = false
+  }
+}
+
+const openStripePortal = async () => {
+  try {
+    isOpeningPortal.value = true
+    const res = await api.post<{ url: string }>('/stripe/portal')
+    window.location.href = res.data.url
   } catch {
     error.value = t('userDetails.accountDeleteFailed')
   } finally {
-    isDeleting.value = false
+    isOpeningPortal.value = false
   }
 }
 </script>
@@ -48,6 +72,32 @@ const handleDelete = async () => {
       @confirm="handleDelete"
       @cancel="confirmDeleteOpen = false"
     />
+    <UiModal
+      :open="activeSubModalOpen"
+      :aria-label="t('account.danger.activeSubscription.title')"
+      data-testid="active-sub-modal"
+      @close="activeSubModalOpen = false"
+    >
+      <template #header>
+        <h2 class="text-base font-semibold text-fg-1" data-testid="active-sub-title">
+          {{ t('account.danger.activeSubscription.title') }}
+        </h2>
+      </template>
+      <p class="text-sm text-fg-2" data-testid="active-sub-message">
+        {{ t('account.danger.activeSubscription.message') }}
+      </p>
+      <template #footer>
+        <UiButton
+          variant="primary"
+          :loading="isOpeningPortal"
+          :disabled="isOpeningPortal"
+          data-testid="open-portal-button"
+          @click="openStripePortal"
+        >
+          {{ t('account.danger.activeSubscription.openPortal') }}
+        </UiButton>
+      </template>
+    </UiModal>
     <header class="mb-2">
       <p class="text-xs uppercase tracking-wider text-danger-text" data-testid="account-tab-eyebrow">{{ t('account.danger.eyebrow') }}</p>
       <h1 class="text-3xl md:text-4xl font-medium tracking-tight mt-1 text-fg-1" data-testid="account-tab-heading">
