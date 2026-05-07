@@ -14,7 +14,7 @@
 
 ---
 
-## Implementation status (last updated 2026-05-05)
+## Implementation status (last updated 2026-05-07)
 
 Phase 0: ✅ **DONE.** All 12 tasks shipped. 281 server / 412 frontend tests
 green. Pedantic+nursery clippy clean. Frontend lint + build clean. OpenAPI
@@ -46,7 +46,7 @@ as a reference for Phase 1+ briefs):
 | Phase 0 — Schema + authorization spine | ✅ Done (12/12) | `bb2d684..974b12a` |
 | Phase 1 — Invitation lifecycle | ✅ Done | _this commit_ |
 | Phase 2 — Editor mutations + Members tab | ✅ Done (5/5) | `7724e8b..82fe724` |
-| Phase 3 — Live sync (SSE + Pub/Sub) | ⬜ Pending | — |
+| Phase 3 — Live sync (SSE + Pub/Sub) | ✅ Done (8/8) | `6bf8d28..3d47850` |
 | Phase 4 — Tier transitions | ⬜ Pending | — |
 | Phase 5 — Public landing + E2E + ops | ⬜ Pending | — |
 
@@ -2223,9 +2223,9 @@ watch(lastEvent, (frame) => {
 
 ### Task 3.8 — Phase 3 verification gate
 
-- [ ] **Manual smoke** — two browsers, same calendar; add show in A, see it in B within 1 s.
-- [ ] **Cross-instance test passes** in CI (Redis container).
-- [ ] **Update plan status, commit.**
+- [x] **Manual smoke** — two browsers, same calendar; add show in A, see it in B within 1 s.
+- [x] **Cross-instance test passes** in CI (Redis container).
+- [x] **Update plan status, commit.** — 297 server / 450 frontend tests green (2026-05-07)
 
 ---
 
