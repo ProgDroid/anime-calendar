@@ -57,6 +57,9 @@ const PUBLIC_ROUTE_PREFIXES = [
   '/forgot-password',
   '/reset-password',
   '/verify-email', // covers /verify-email and /verify-email/pending
+  '/invite', // co-editor invitation landing
+  '/privacy',
+  '/terms',
 ]
 
 export const isPublicRoute = (pathname: string): boolean =>

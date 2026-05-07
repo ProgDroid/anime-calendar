@@ -10,7 +10,8 @@
     "skipToMain": "Saltar para o conteúdo principal",
     "nav": {
       "primary": "Principal",
-      "mobilePrimary": "Móvel principal"
+      "mobilePrimary": "Móvel principal",
+      "footer": "Rodapé"
     },
     "toggleNavigation": "Alternar menu de navegação",
     "toggleTheme": "Alternar tema",
@@ -520,6 +521,23 @@
         "tapToSelect": "toca para selecionar",
         "resultsCount": "Resultados · {count}"
       }
+    }
+  },
+  "footer": {
+    "copyright": "© {year} Anime Calendar",
+    "privacy": "Política de Privacidade",
+    "terms": "Termos de Serviço",
+    "poweredBy": "Desenvolvido pela AniList",
+    "linksLabel": "Links de rodapé"
+  },
+  "legal": {
+    "privacy": {
+      "title": "Política de Privacidade",
+      "placeholder": "Política de privacidade em breve."
+    },
+    "terms": {
+      "title": "Termos de Serviço",
+      "placeholder": "Termos de serviço em breve."
     }
   },
   "sharing": {

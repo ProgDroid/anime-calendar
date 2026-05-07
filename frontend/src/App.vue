@@ -7,6 +7,7 @@ import { applySettings } from './services/applySettings'
 import { useTheme } from './composables/useTheme'
 import { useViewportLayout } from './composables/useViewportLayout'
 import { useUpgradeInterrupt } from './composables/useUpgradeInterrupt'
+import AppFooter from './components/ui/AppFooter.vue'
 import UiToastHost from './components/ui/UiToastHost.vue'
 import UiMenu from './components/ui/UiMenu.vue'
 import UiBottomTabBar from './components/ui/UiBottomTabBar.vue'
@@ -223,6 +224,7 @@ watch(
     >
       <RouterView />
     </main>
+    <AppFooter />
     <UiBottomTabBar />
     <UiToastHost />
     <!-- Global upgrade interrupt — driven by useUpgradeInterrupt + the axios

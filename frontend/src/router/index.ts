@@ -111,6 +111,18 @@ const router = createRouter({
       meta: { public: true, bottomTabBar: false },
     },
     {
+      path: '/privacy',
+      name: 'PrivacyPolicy',
+      component: () => import('@/components/PrivacyPolicyPage.vue'),
+      meta: { public: true, bottomTabBar: false }
+    },
+    {
+      path: '/terms',
+      name: 'TermsOfService',
+      component: () => import('@/components/TermsOfServicePage.vue'),
+      meta: { public: true, bottomTabBar: false }
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'NotFound',
       component: () => import('@/components/NotFoundPage.vue'),
