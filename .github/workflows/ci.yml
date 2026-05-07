@@ -197,6 +197,25 @@ jobs:
           retention-days: 7
 
   # ---------------------------------------------------------------------------
+  # Dependency advisory, license, and supply-chain checks
+  #
+  # Uses cargo-deny with deny.toml at the repo root.
+  # All four checks run: advisories, bans, licenses, sources.
+  # Currently-known advisories are listed in [advisories.ignore] in deny.toml
+  # with Phase 3 comments — new advisories fail CI immediately.
+  # ---------------------------------------------------------------------------
+  cargo-deny:
+    name: cargo-deny
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+      # v2.0.17
+      - uses: EmbarkStudios/cargo-deny-action@91bf2b620e09e18d6eb78b92e7861937469acedb
+        with:
+          command: check
+          arguments: --all-features --show-stats
+
+  # ---------------------------------------------------------------------------
   # OpenAPI spec validation
   #
   # The spec is generated at CI time from the utoipa annotations on the server

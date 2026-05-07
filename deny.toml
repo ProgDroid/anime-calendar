@@ -1,0 +1,127 @@
+# Configuration for cargo-deny — supply-chain + license + advisory checks.
+# Run locally: `cargo deny check`
+# CI: see .github/workflows/ci.yml job `cargo-deny`.
+
+[graph]
+# Targets the project actually builds for. Restricting reduces noise from
+# platform-specific dependencies that are never compiled in practice.
+targets = [
+  { triple = "x86_64-unknown-linux-gnu" },
+  { triple = "x86_64-pc-windows-msvc" },
+]
+
+[advisories]
+version = 2
+# Ignore current advisories that we've consciously deferred to Phase 3.
+# Format: ignore = ["RUSTSEC-YYYY-XXXX"]  — one per line, ALWAYS with a comment.
+# When a new advisory appears, CI fails — DO NOT add to this list without
+# filing a corresponding Phase 3 entry in AUDIT.md.
+ignore = [
+  # Phase 3: aws-lc-sys 0.35.0 — X.509 Name Constraints Bypass via Wildcard/Unicode CN
+  # Fix: upgrade aws-lc-sys to >=0.39.0 (cargo update -p aws-lc-sys)
+  "RUSTSEC-2026-0044",
+
+  # Phase 3: aws-lc-sys 0.35.0 — Timing Side-Channel in AES-CCM Tag Verification
+  # Fix: upgrade aws-lc-sys to >=0.38.0 (cargo update -p aws-lc-sys)
+  "RUSTSEC-2026-0045",
+
+  # Phase 3: aws-lc-sys 0.35.0 — PKCS7_verify Certificate Chain Validation Bypass
+  # Fix: upgrade aws-lc-sys (cargo update -p aws-lc-sys)
+  "RUSTSEC-2026-0046",
+
+  # Phase 3: aws-lc-sys 0.35.0 — PKCS7_verify Signature Validation Bypass
+  # Fix: upgrade aws-lc-sys (cargo update -p aws-lc-sys)
+  "RUSTSEC-2026-0047",
+
+  # Phase 3: aws-lc-sys 0.35.0 — CRL Distribution Point Scope Check Logic Error
+  # Fix: upgrade aws-lc-sys (cargo update -p aws-lc-sys)
+  "RUSTSEC-2026-0048",
+
+  # Phase 3: bytes 1.x — Integer overflow in `BytesMut::reserve` (RUSTSEC-2026-0007 or 0009)
+  # Fix: cargo update -p bytes to >=1.10.1
+  "RUSTSEC-2026-0009",
+
+  # Phase 3: rand 0.9.2 — Rand is unsound with a custom logger using `rand::rng()`
+  # Fix: upgrade rand to >=0.10.1 or >=0.9.3 (transitive via actix-http)
+  "RUSTSEC-2026-0097",
+
+  # Phase 3: rsa 0.9.8 — Marvin Attack: potential key recovery through timing sidechannels
+  # Affected dep: google-oauth → rsa. No safe upgrade available yet.
+  # Workaround: not exploitable for our use (Google ID token verification, not RSA decrypt path)
+  "RUSTSEC-2023-0071",
+
+  # Phase 3: rustls-webpki 0.103.4 — CRLs not considered authoritative by Distribution Point
+  # Fix: upgrade rustls-webpki to >=0.103.10 (cargo update -p rustls-webpki)
+  "RUSTSEC-2026-0049",
+
+  # Phase 3: rustls-webpki 0.103.4 — Name constraints for URI names were incorrectly accepted
+  # Fix: upgrade rustls-webpki (cargo update -p rustls-webpki)
+  "RUSTSEC-2026-0098",
+
+  # Phase 3: rustls-webpki 0.103.4 — Name constraints accepted for certs asserting wildcard name
+  # Fix: upgrade rustls-webpki (cargo update -p rustls-webpki)
+  "RUSTSEC-2026-0099",
+
+  # Phase 3: rustls-webpki 0.103.4 — Reachable panic in CRL parsing
+  # Fix: upgrade rustls-webpki (cargo update -p rustls-webpki)
+  "RUSTSEC-2026-0104",
+
+  # Phase 3: bytes or related — Denial of Service via Stack Exhaustion
+  # Fix: cargo update -p bytes (or the affected dep once identified)
+  "RUSTSEC-2026-0007",
+]
+
+[licenses]
+version = 2
+# Permissive licenses we explicitly allow project-wide.
+allow = [
+  "MIT",
+  "Apache-2.0",
+  "BSD-2-Clause",
+  "BSD-3-Clause",
+  "ISC",
+  "Unicode-3.0",
+  "Zlib",
+  "CC0-1.0",
+  "OpenSSL",
+  # BSL-1.0 (Boost): used by xxhash-rust (transitive dep of redis crate)
+  "BSL-1.0",
+  # 0BSD: used by quoted_printable (transitive dep of lettre)
+  "0BSD",
+  # CDLA-Permissive-2.0: used by webpki-roots (transitive dep of hyper-rustls)
+  "CDLA-Permissive-2.0",
+]
+confidence-threshold = 0.93
+
+# Skip license checks for unpublished workspace-private crates (server, anilist, common).
+# These crates have publish = false and are internal-only; they carry no third-party license risk.
+[licenses.private]
+ignore = true
+
+# Per-crate license overrides for crates with non-SPDX or unconventional
+# license declarations. Add exceptions here, NOT to `allow`, to keep the
+# global allow-list clean.
+[[licenses.exceptions]]
+# actix-governor declares GPL-3.0-or-later — it is a direct runtime dependency (rate limiting).
+# Phase 3: evaluate replacing with a permissively-licensed alternative
+# (e.g. actix-limitation, tower-governor, or a hand-rolled token-bucket).
+allow = ["GPL-3.0-or-later"]
+crate = "actix-governor"
+
+[bans]
+multiple-versions = "warn"
+# Suppress the wildcard error for workspace path dependencies (anilist, common).
+# These are internal crates with no version pinning needed.
+wildcards = "allow"
+highlight = "all"
+skip-tree = []
+
+# Crates we explicitly deny (e.g. unmaintained, replaced).
+deny = []
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+# No git dependencies in this project.
+allow-git = []

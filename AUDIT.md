@@ -311,6 +311,28 @@ Surfaced by the end-of-Phase-1 cumulative reviewer; not part of the original par
 - **CR-2 (LOW)** — `frontend/src/__tests__/App.spec.ts`: the stub router built by `makeRouter()` does not include `/privacy` or `/terms`, so `<RouterLink>` in `AppFooter` emits Vue Router warnings on every test run (tests still pass; warnings are cosmetic). Pre-existing from the `feat(legal)` commit on main; not introduced by Phase 1.
 - **CR-3 (LOW)** — `frontend/src/components/account/DangerZoneTab.vue`: no unit tests for the logout flow. After the T6 refactor (`logout(push?)`), there is now an injection seam that would make a unit test trivial — but no test exists. Latent risk for future regressions.
 
+## Phase 2 deferred advisories — cargo-deny (2026-05-07)
+
+Added `cargo-deny` CI gate (M-22). First-run `cargo deny check` found **13 current advisories**, all deferred to Phase 3 via `[advisories.ignore]` in `deny.toml`. CI is green from day one; any new advisory going forward fails CI.
+
+- **CD-1 (HIGH)** — `RUSTSEC-2026-0044`: AWS-LC X.509 Name Constraints Bypass via Wildcard/Unicode CN. Affected dep: `aws-lc-sys 0.35.0` (via `jsonwebtoken`, `rustls`). **Fix:** `cargo update -p aws-lc-sys` to >=0.39.0.
+- **CD-2 (HIGH)** — `RUSTSEC-2026-0045`: Timing Side-Channel in AES-CCM Tag Verification in AWS-LC. Affected dep: `aws-lc-sys 0.35.0`. **Fix:** upgrade to >=0.38.0.
+- **CD-3 (HIGH)** — `RUSTSEC-2026-0046`: PKCS7_verify Certificate Chain Validation Bypass in AWS-LC. Affected dep: `aws-lc-sys 0.35.0`. **Fix:** `cargo update -p aws-lc-sys`.
+- **CD-4 (HIGH)** — `RUSTSEC-2026-0047`: PKCS7_verify Signature Validation Bypass in AWS-LC. Affected dep: `aws-lc-sys 0.35.0`. **Fix:** `cargo update -p aws-lc-sys`.
+- **CD-5 (HIGH)** — `RUSTSEC-2026-0048`: CRL Distribution Point Scope Check Logic Error in AWS-LC. Affected dep: `aws-lc-sys 0.35.0`. **Fix:** `cargo update -p aws-lc-sys`.
+- **CD-6 (MEDIUM)** — `RUSTSEC-2026-0009`: Integer overflow in `BytesMut::reserve`. Affected dep: `bytes` (transitive). **Fix:** `cargo update -p bytes` to >=1.10.1.
+- **CD-7 (MEDIUM)** — `RUSTSEC-2026-0007`: Denial of Service via Stack Exhaustion. Affected dep: transitive. **Fix:** `cargo update` to pick up patched version once available.
+- **CD-8 (MEDIUM)** — `RUSTSEC-2026-0097`: Rand is unsound with a custom logger using `rand::rng()`. Affected dep: `rand 0.9.2` (transitive via `actix-http`). **Fix:** upgrade rand to >=0.9.3 or >=0.10.1.
+- **CD-9 (HIGH)** — `RUSTSEC-2023-0071`: Marvin Attack — potential key recovery through timing sidechannels. Affected dep: `rsa 0.9.8` (via `google-oauth`). No safe upgrade available yet. Low exploitability for our use case (Google ID token verification only). **Fix:** track upstream `RustCrypto/RSA` for patch; consider switching to `google-oauth` version that uses `ring` or `aws-lc-rs` instead of `rsa`.
+- **CD-10 (HIGH)** — `RUSTSEC-2026-0049`: CRLs not considered authoritative by Distribution Point due to faulty matching logic. Affected dep: `rustls-webpki 0.103.4` (via `rustls`). **Fix:** `cargo update -p rustls-webpki` to >=0.103.10.
+- **CD-11 (HIGH)** — `RUSTSEC-2026-0098`: Name constraints for URI names were incorrectly accepted. Affected dep: `rustls-webpki 0.103.4`. **Fix:** `cargo update -p rustls-webpki`.
+- **CD-12 (HIGH)** — `RUSTSEC-2026-0099`: Name constraints accepted for certs asserting wildcard name. Affected dep: `rustls-webpki 0.103.4`. **Fix:** `cargo update -p rustls-webpki`.
+- **CD-13 (HIGH)** — `RUSTSEC-2026-0104`: Reachable panic in CRL parsing. Affected dep: `rustls-webpki 0.103.4`. **Fix:** `cargo update -p rustls-webpki`.
+
+Additionally: `actix-governor 0.7.0` declares `GPL-3.0-or-later`. Allowed via `[[licenses.exceptions]]` in `deny.toml`. Flagged as a license concern — evaluate a permissively-licensed rate-limiting alternative in Phase 3.
+
+---
+
 ## Phase 1 status (2026-05-07 — fully shipped)
 
 8 audit findings closed across 14 commits on `audit/phase-1-cheap-and-critical` (merged to main):
