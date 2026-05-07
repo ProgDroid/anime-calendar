@@ -3,6 +3,18 @@ use serde::Serialize;
 
 use crate::{redis_pubsub::RedisPubSub, ServerResult};
 
+/// Events published over the SSE / Redis Pub-Sub channel for a calendar.
+///
+/// # `actor` field contract
+///
+/// Every variant that carries an `actor` field MUST set it as follows:
+/// - **Human-initiated events**: `user_id.to_string()` (the numeric database id,
+///   e.g. `"42"`). Never the username.
+/// - **Backend-initiated events** (webhook, reconcile): `"system".to_string()`.
+///
+/// The frontend self-echo filter that suppresses events originating from the
+/// current user compares `frame.actor` to the authenticated user's id. Using
+/// the username here breaks that filter silently.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CalendarEvent {
@@ -97,5 +109,90 @@ impl CalendarEventPublisher {
                 &CalendarEvent::Presence { viewers },
             )
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Asserts that the `actor` field in every `CalendarEvent` variant that
+    /// carries one serialises as the plain string that was passed in.
+    /// This documents the wire-shape invariant: actor is always a `user_id`
+    /// string (or "system") — never a username.
+    #[test]
+    fn actor_field_serialises_as_plain_string() {
+        let actor = "42";
+        let at = chrono::NaiveDate::from_ymd_opt(2026, 1, 1)
+            .unwrap()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+
+        let cases: &[(&str, CalendarEvent)] = &[
+            (
+                "ItemAdded",
+                CalendarEvent::ItemAdded {
+                    media_id: 1,
+                    actor: actor.into(),
+                    v: 1,
+                    at,
+                },
+            ),
+            (
+                "ItemRemoved",
+                CalendarEvent::ItemRemoved {
+                    media_id: 1,
+                    actor: actor.into(),
+                    v: 1,
+                    at,
+                },
+            ),
+            (
+                "MetaUpdated",
+                CalendarEvent::MetaUpdated {
+                    fields: vec![],
+                    actor: actor.into(),
+                    v: 1,
+                    at,
+                },
+            ),
+            (
+                "MemberJoined",
+                CalendarEvent::MemberJoined {
+                    user_id: actor.into(),
+                    display: "Alice".into(),
+                    actor: actor.into(),
+                },
+            ),
+            (
+                "MemberLeft",
+                CalendarEvent::MemberLeft {
+                    user_id: actor.into(),
+                    actor: actor.into(),
+                    reason: "left".into(),
+                },
+            ),
+        ];
+
+        for (name, event) in cases {
+            let json = serde_json::to_value(event).expect("serialize");
+            assert_eq!(
+                json["actor"],
+                serde_json::Value::String(actor.to_string()),
+                "{name}: actor must serialize as the exact string passed in"
+            );
+        }
+    }
+
+    /// Asserts that backend-initiated events use the "system" sentinel.
+    #[test]
+    fn system_actor_sentinel_serialises_correctly() {
+        let event = CalendarEvent::MemberLeft {
+            user_id: "42".into(),
+            actor: "system".into(),
+            reason: "suspended".into(),
+        };
+        let json = serde_json::to_value(&event).expect("serialize");
+        assert_eq!(json["actor"], serde_json::Value::String("system".into()));
     }
 }

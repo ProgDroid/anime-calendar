@@ -617,7 +617,7 @@ async fn put(
                 calendar.id,
                 &CalendarEvent::MetaUpdated {
                     fields: vec![], // field-level diffing is out of scope
-                    actor: user.username.clone(),
+                    actor: user.id.to_string(),
                     v: calendar.meta_version,
                     at: chrono::Utc::now().naive_utc(),
                 },
