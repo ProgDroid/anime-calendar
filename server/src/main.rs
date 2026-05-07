@@ -112,6 +112,8 @@ async fn main() -> ServerResult<()> {
             editor_mapper: calendar_editor_mapper.clone(),
             invitation_mapper: calendar_invitation_mapper.clone(),
             publisher: calendar_event_publisher.clone(),
+            email_service: email_service.clone(),
+            user_mapper: user_mapper.clone(),
             pool: reconcile_pool,
         };
         server::services::reconcile::spawn_loop(

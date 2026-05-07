@@ -21,9 +21,10 @@ use crate::mappers::subscription::{ReconcileRow, SubscriptionMapper};
 use crate::metrics::names;
 use crate::services::calendar_events::{CalendarEvent, CalendarEventPublisher};
 
-/// Optional sharing-suspension dependencies for the reconcile loop.
+/// Optional sharing-suspension/restore dependencies for the reconcile loop.
 /// When `Some`, a Paid→Free correction triggers editor + invitation suspension
-/// and publishes `MemberLeft` + `kick` events via Redis Pub/Sub.
+/// and publishes `MemberLeft` + `kick` events via Redis Pub/Sub; a Free→Paid
+/// correction restores editors and invitations and sends restore emails.
 /// When `None`, reconcile corrects subscription data only (legacy behaviour,
 /// used by `reconcile_for_user` in the CLI and by existing unit tests).
 #[derive(Clone)]
@@ -31,7 +32,9 @@ pub struct SharingDeps {
     pub editor_mapper: crate::mappers::calendar_editor::CalendarEditorMapper,
     pub invitation_mapper: crate::mappers::calendar_invitation::CalendarInvitationMapper,
     pub publisher: CalendarEventPublisher,
-    /// A separate pool used to open the short suspend transaction. Must be
+    pub email_service: crate::services::email::EmailService,
+    pub user_mapper: crate::mappers::user::UserMapper,
+    /// A separate pool used to open the short suspend/restore transaction. Must be
     /// independent of the `SubscriptionMapper`'s pool so the advisory-lock
     /// path in the editors mapper stays clean.
     pub pool: sqlx::PgPool,
@@ -186,10 +189,12 @@ async fn reconcile_one<F: StripeSubscriptionFetcher>(
         return Ok(false);
     }
 
-    // Detect a potential Paid→Free transition before applying the update, so
-    // we can decide whether sharing suspension is needed afterward.
+    // Detect potential tier transitions before applying the update, so we can
+    // decide whether sharing suspension or restore is needed afterward.
     let was_paid_status = matches!(row.status.as_str(), "active" | "trialing");
     let becomes_free_status = remote.status == "canceled";
+    let was_free_status = matches!(row.status.as_str(), "canceled" | "past_due" | "unpaid");
+    let becomes_paid_status = matches!(remote.status.as_str(), "active" | "trialing");
 
     // Conditional UPDATE guarded on local current_period_end <= stripe's.
     // rows_affected = 0 means a webhook landed mid-pass and moved us past
@@ -229,6 +234,14 @@ async fn reconcile_one<F: StripeSubscriptionFetcher>(
         apply_sharing_side_effects(row.user_id, deps).await;
     }
 
+    // After a confirmed Free→Paid correction, restore sharing for all
+    // calendars owned by this user and send restore emails. Best-effort.
+    if was_free_status && becomes_paid_status
+        && let Some(deps) = sharing
+    {
+        apply_restore_sharing_side_effects(row.user_id, deps).await;
+    }
+
     Ok(true)
 }
 
@@ -237,7 +250,7 @@ async fn reconcile_one<F: StripeSubscriptionFetcher>(
 /// correction. All errors are logged and swallowed — the subscription data
 /// is already correct; Redis/DB failures here are recoverable on next page load.
 async fn apply_sharing_side_effects(owner_id: i32, deps: &SharingDeps) {
-    use crate::controllers::stripe_webhook::suspend_owner_sharing_in_tx;
+    use crate::services::sharing::suspend_owner_sharing_in_tx;
 
     // Open a short transaction for the suspend writes.
     let mut tx = match deps.pool.begin().await {
@@ -291,6 +304,55 @@ async fn apply_sharing_side_effects(owner_id: i32, deps: &SharingDeps) {
                     kick.user_id
                 );
             });
+    }
+}
+
+/// Restore all editors + invitations for `owner_id`'s calendars and send
+/// "access restored" emails post-commit. Called after a confirmed Free→Paid
+/// reconcile correction. All errors are logged and swallowed — the
+/// subscription data is already correct; SMTP failures here are recoverable.
+async fn apply_restore_sharing_side_effects(owner_id: i32, deps: &SharingDeps) {
+    use crate::services::sharing::restore_owner_sharing_in_tx;
+
+    // Open a short transaction for the restore writes.
+    let mut tx = match deps.pool.begin().await {
+        Ok(t) => t,
+        Err(e) => {
+            error!("reconcile: failed to begin sharing restore tx for user {owner_id}: {e}");
+            return;
+        }
+    };
+
+    let restored = match restore_owner_sharing_in_tx(&mut tx, owner_id).await {
+        Ok(r) => r,
+        Err(e) => {
+            error!("reconcile: restore_owner_sharing_in_tx failed for user {owner_id}: {e}");
+            let _ = tx.rollback().await;
+            return;
+        }
+    };
+
+    if let Err(e) = tx.commit().await {
+        error!("reconcile: sharing restore commit failed for user {owner_id}: {e}");
+        return;
+    }
+
+    // Send "access restored" emails for each restored editor (best-effort).
+    for r in restored {
+        match deps.user_mapper.get_user_by_id(r.user_id).await {
+            Ok(user) => {
+                deps.email_service
+                    .send_editor_restored(&user.email, &r.calendar_name)
+                    .await
+                    .ok();
+            }
+            Err(e) => {
+                error!(
+                    "reconcile: get_user_by_id({}) for restore email failed: {e:?}",
+                    r.user_id
+                );
+            }
+        }
     }
 }
 
