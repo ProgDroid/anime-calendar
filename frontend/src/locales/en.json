@@ -552,6 +552,11 @@
     "leaveMenuLabel": "Calendar options",
     "leaveConfirmTitle": "Leave calendar",
     "leaveConfirmMessage": "You'll lose editor access to this calendar. The owner can re-invite you later.",
-    "leaveError": "Failed to leave calendar. Please try again."
+    "leaveError": "Failed to leave calendar. Please try again.",
+    "presence": {
+      "justYou": "Just you",
+      "youPlusN": "You + {n} other | You + {n} others",
+      "nViewing": "{n} viewing"
+    }
   }
 }

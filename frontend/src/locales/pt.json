@@ -552,6 +552,11 @@
     "leaveMenuLabel": "Opções do calendário",
     "leaveConfirmTitle": "Sair do calendário",
     "leaveConfirmMessage": "Perderás o acesso de editor a este calendário. O proprietário pode convidar-te novamente.",
-    "leaveError": "Falha ao sair do calendário. Por favor tenta novamente."
+    "leaveError": "Falha ao sair do calendário. Por favor tenta novamente.",
+    "presence": {
+      "justYou": "Só você",
+      "youPlusN": "Você + {n} outro | Você + {n} outros",
+      "nViewing": "{n} visualizando"
+    }
   }
 }
