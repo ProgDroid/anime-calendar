@@ -5,7 +5,7 @@ import PresenceChip from '../PresenceChip.vue'
 
 // Stub auth store — user is viewer #1
 vi.mock('@/stores/auth', () => ({
-  useAuthStore: () => ({ user: { id: 1 } }),
+  useAuthStore: () => ({ user: 'Me' }),
 }))
 
 const i18n = createI18n({

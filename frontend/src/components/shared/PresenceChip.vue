@@ -10,9 +10,8 @@ const { t } = useI18n()
 const auth = useAuthStore()
 const open = ref(false)
 
-const currentUserId = computed(() => auth.user?.id ?? null)
-const others = computed(() => props.viewers.filter((v) => v.user_id !== currentUserId.value))
-const includesSelf = computed(() => props.viewers.some((v) => v.user_id === currentUserId.value))
+const others = computed(() => props.viewers.filter((v) => v.display !== auth.user))
+const includesSelf = computed(() => props.viewers.some((v) => v.display === auth.user))
 
 const label = computed(() => {
   const n = others.value.length
