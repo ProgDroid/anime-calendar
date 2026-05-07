@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter, RouterLink, onBeforeRouteLeave, onBeforeRouteUpdate } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
@@ -8,22 +8,27 @@ import { toastService } from '@/services/toastService'
 import { addItem, removeItem } from '@/services/calendars'
 import type { Item } from '@/types/item'
 import type { Calendar, EventStyle } from '@/types/calendar'
+import type { Viewer } from '@/types/sharing'
+import { useAuthStore } from '@/stores/auth'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { useEditorSelectionStore } from '@/stores/editorSelection'
 import { useUsageStore } from '@/stores/usageStore'
 import { useRecommendations } from '@/composables/useRecommendations'
+import { usePresence } from '@/composables/usePresence'
 import { getMySubscription } from '@/services/subscription'
 import UiSegmented from '@/components/ui/UiSegmented.vue'
 import IconPlus from '@/components/ui/icons/IconPlus.vue'
 import EditorItemsPanelMobile from './EditorItemsPanelMobile.vue'
 import EditorSearchPanelMobile from './EditorSearchPanelMobile.vue'
 import CalendarSettingsForm from './CalendarSettingsForm.vue'
+import PresenceChip from '@/components/shared/PresenceChip.vue'
 
 defineOptions({ name: 'CalendarEditorViewMobile' })
 
 const { t } = useI18n()
 const route = useRoute()
 const router = useRouter()
+const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
 const selection = useEditorSelectionStore()
 const usage = useUsageStore()
@@ -219,6 +224,49 @@ void (async () => {
 
 // Load calendar on mount — same logic as desktop onBeforeMount
 const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
+const isExistingCalendar = calendarId !== 'new' && calendarId !== undefined && calendarId !== ''
+const numericCalendarId = isExistingCalendar ? parseInt(calendarId as string, 10) : 0
+const { viewers, lastEvent } = isExistingCalendar
+  ? usePresence(numericCalendarId)
+  : { viewers: ref<Viewer[]>([]), lastEvent: ref<import('@/types/sharing').CalendarEvent | null>(null) }
+
+const showCollisionBanner = ref(false)
+const localBaselineMetaVersion = ref(0)
+
+const reloadPage = () => { window.location.reload() }
+
+watch(lastEvent, (frame) => {
+  if (!frame) return
+  switch (frame.type) {
+    case 'item_added':
+      if (frame.actor !== authStore.user) {
+        toastService.success(t('sharing.toasts.itemAdded', { actor: frame.actor }))
+      }
+      break
+    case 'item_removed':
+      if (frame.actor !== authStore.user) {
+        itemsInCalendar.value = itemsInCalendar.value.filter(i => i.id !== frame.media_id)
+        toastService.success(t('sharing.toasts.itemRemoved', { actor: frame.actor }))
+      }
+      break
+    case 'meta_updated':
+      if (frame.v > localBaselineMetaVersion.value) {
+        showCollisionBanner.value = true
+      }
+      break
+    case 'member_joined':
+      toastService.success(t('sharing.toasts.joined', { name: frame.display }))
+      break
+    case 'member_left':
+      toastService.success(t(`sharing.toasts.left.${frame.reason}`))
+      break
+    case 'kick':
+      toastService.error(t(`sharing.toasts.kick.${frame.reason}`))
+      void router.push('/my-calendars')
+      break
+  }
+})
+
 if (calendarId && calendarId !== 'new') {
   submitLoading.value = true
   api.get(`/calendars/${calendarId}`)
@@ -231,6 +279,7 @@ if (calendarId && calendarId !== 'new') {
       currentCalendar.value = calendar
       originalItemIds.value = new Set(calendar.items.map(i => i.id))
       calculateRecommendations(itemsInCalendar.value)
+      localBaselineMetaVersion.value = calendar.meta_version ?? 0
     })
     .catch(() => {
       calendarError.value = t('calendar.loadFailed')
@@ -268,8 +317,24 @@ if (calendarId && calendarId !== 'new') {
         <span class="font-semibold text-fg-1 truncate flex-1">
           {{ calendarName || t('calendar.edit') }}
         </span>
+        <PresenceChip v-if="isExistingCalendar && viewers.length > 0" :viewers="viewers" />
       </div>
     </header>
+
+    <!-- Collision banner -->
+    <div
+      v-if="showCollisionBanner"
+      data-testid="collision-banner"
+      class="mx-4 mt-2 rounded-md bg-bg-2 border border-line px-3 py-2 text-sm text-fg-2 flex items-center justify-between gap-2"
+    >
+      <span>{{ $t('sharing.collisionWarning') }}</span>
+      <button
+        class="text-accent-1 font-medium hover:underline shrink-0"
+        @click="() => { showCollisionBanner = false; reloadPage() }"
+      >
+        {{ $t('sharing.reloadButton') }}
+      </button>
+    </div>
 
     <!-- Settings form (always visible at top on mobile) -->
     <div class="px-4 pt-3">

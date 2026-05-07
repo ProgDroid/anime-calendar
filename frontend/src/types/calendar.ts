@@ -11,6 +11,7 @@ export interface Calendar {
   event_style?: EventStyle;
   created_at: string;
   updated_at: string;
+  meta_version?: number;
 }
 
 /**

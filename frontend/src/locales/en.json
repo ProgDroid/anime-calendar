@@ -557,6 +557,22 @@
       "justYou": "Just you",
       "youPlusN": "You + {n} other | You + {n} others",
       "nViewing": "{n} viewing"
+    },
+    "collisionWarning": "Another editor changed the calendar settings.",
+    "reloadButton": "Reload",
+    "toasts": {
+      "itemAdded": "{actor} added an item",
+      "itemRemoved": "{actor} removed an item",
+      "joined": "{name} joined the calendar",
+      "left": {
+        "left": "An editor left the calendar",
+        "removed": "An editor was removed from the calendar",
+        "downgrade": "An editor lost access due to a plan downgrade"
+      },
+      "kick": {
+        "role_revoked": "You've been removed from this calendar.",
+        "owner_downgrade": "Your editor access was removed because the calendar owner downgraded their plan."
+      }
     }
   }
 }

@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createI18n } from 'vue-i18n'
 import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
+import { MockEventSource } from '@/__tests__/setup'
 import en from '@/locales/en.json'
 import pt from '@/locales/pt.json'
 
@@ -54,6 +55,11 @@ vi.mock('@/stores/userSettingsStore', () => ({
   useUserSettingsStore: () => ({
     fetchSettings: vi.fn().mockResolvedValue({ title_language_preference: 'English' }),
   }),
+}))
+
+// Mock auth store — user is a plain string
+vi.mock('@/stores/auth', () => ({
+  useAuthStore: () => ({ user: 'testuser' }),
 }))
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en, pt } })
@@ -223,6 +229,63 @@ describe('CalendarEditorViewMobile', () => {
     expect(removeItem).not.toHaveBeenCalled()
     // Meta PUT should have been called once
     expect(api.put).toHaveBeenCalledTimes(1)
+    w.unmount()
+  })
+
+  it('shows collision banner when meta_updated event arrives with higher version', async () => {
+    const { default: api } = await import('@/config/api')
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: {
+        id: 42,
+        name: 'My Cal',
+        language: 'english',
+        event_style: 'timed',
+        meta_version: 1,
+        items: [],
+        user_id: 1,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    })
+    const w = await mountView('42')
+    expect(w.find('[data-testid="collision-banner"]').exists()).toBe(false)
+    MockEventSource.lastInstance.emit(
+      'message',
+      JSON.stringify({ type: 'meta_updated', fields: ['name'], actor: 'other', v: 2, at: '2026-01-01T00:00:00Z' }),
+    )
+    await flushPromises()
+    expect(w.find('[data-testid="collision-banner"]').exists()).toBe(true)
+    w.unmount()
+  })
+
+  it('calls router.push(/my-calendars) on kick event', async () => {
+    // Note: We verify the push call rather than the resulting route because
+    // actually navigating away triggers a Vue 3.5 KeepAlive + component-ref
+    // unmount crash in jsdom — a Vue runtime issue, not a component bug.
+    const { default: api } = await import('@/config/api')
+    vi.mocked(api.get).mockResolvedValueOnce({
+      data: {
+        id: 42,
+        name: 'My Cal',
+        language: 'english',
+        event_style: 'timed',
+        meta_version: 1,
+        items: [],
+        user_id: 1,
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+    })
+    const w = await mountView('42')
+    const mobileVm = w.findComponent({ name: 'CalendarEditorViewMobile' })
+    const router = (mobileVm.vm as unknown as { $router: { push: (path: string) => Promise<void> } }).$router
+    const pushSpy = vi.spyOn(router, 'push').mockImplementation(() => Promise.resolve())
+    MockEventSource.lastInstance.emit(
+      'message',
+      JSON.stringify({ type: 'kick', reason: 'role_revoked' }),
+    )
+    await flushPromises()
+    expect(pushSpy).toHaveBeenCalledWith('/my-calendars')
     w.unmount()
   })
 

@@ -557,6 +557,22 @@
       "justYou": "Só você",
       "youPlusN": "Você + {n} outro | Você + {n} outros",
       "nViewing": "{n} visualizando"
+    },
+    "collisionWarning": "Outro editor alterou as configurações do calendário.",
+    "reloadButton": "Recarregar",
+    "toasts": {
+      "itemAdded": "{actor} adicionou um item",
+      "itemRemoved": "{actor} removeu um item",
+      "joined": "{name} entrou no calendário",
+      "left": {
+        "left": "Um editor saiu do calendário",
+        "removed": "Um editor foi removido do calendário",
+        "downgrade": "Um editor perdeu acesso devido a um downgrade do plano"
+      },
+      "kick": {
+        "role_revoked": "Você foi removido deste calendário.",
+        "owner_downgrade": "Seu acesso de editor foi removido porque o proprietário do calendário fez downgrade do plano."
+      }
     }
   }
 }

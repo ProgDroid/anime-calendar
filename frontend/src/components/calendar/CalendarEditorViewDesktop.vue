@@ -4,7 +4,23 @@
       <!-- Left: Calendar settings + items list (3fr) -->
       <div data-testid="editor-items-list" class="bg-bg-1 border border-line rounded-lg shadow-sm">
         <div class="p-4 flex flex-col gap-4">
-          <h2 class="font-semibold text-fg-1 text-lg">{{ $t('calendar.edit') }}</h2>
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="font-semibold text-fg-1 text-lg">{{ $t('calendar.edit') }}</h2>
+            <PresenceChip v-if="isExistingCalendar && viewers.length > 0" :viewers="viewers" />
+          </div>
+          <div
+            v-if="showCollisionBanner"
+            data-testid="collision-banner"
+            class="rounded-md bg-bg-2 border border-line px-3 py-2 text-sm text-fg-2 flex items-center justify-between gap-2"
+          >
+            <span>{{ $t('sharing.collisionWarning') }}</span>
+            <button
+              class="text-accent-1 font-medium hover:underline shrink-0"
+              @click="() => { showCollisionBanner = false; reloadPage() }"
+            >
+              {{ $t('sharing.reloadButton') }}
+            </button>
+          </div>
           <CalendarSettingsForm
             :name="calendarName"
             :language="calendarLanguage"
@@ -64,33 +80,48 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, onBeforeMount, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, nextTick, watch, onBeforeMount, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import type { Item } from '@/types/item'
 import type { Calendar, EventStyle } from '@/types/calendar'
+import type { Viewer } from '@/types/sharing'
 import api from '@/config/api'
 import axios from 'axios'
 import { toastService } from '@/services/toastService'
 import { addItem, removeItem } from '@/services/calendars'
+import { useAuthStore } from '@/stores/auth'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
 import { useUsageStore } from '@/stores/usageStore'
 import { useCalendarSearch } from '@/composables/useCalendarSearch'
 import { useRecommendations } from '@/composables/useRecommendations'
+import { usePresence } from '@/composables/usePresence'
 import { getMySubscription } from '@/services/subscription'
 import CalendarSettingsForm from '@/components/calendar/CalendarSettingsForm.vue'
 import CalendarItemsList from '@/components/calendar/CalendarItemsList.vue'
 import ItemSearchPanel from '@/components/calendar/ItemSearchPanel.vue'
 import RecommendationsSection from '@/components/calendar/RecommendationsSection.vue'
+import PresenceChip from '@/components/shared/PresenceChip.vue'
 
 defineOptions({ name: 'CalendarEditorViewDesktop' })
 
 const { t } = useI18n()
 const router = useRouter()
 const route = useRoute()
+const authStore = useAuthStore()
 const userSettingsStore = useUserSettingsStore()
 const usage = useUsageStore()
 const isFreeTier = ref(true)
+
+const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
+const isExistingCalendar = calendarId !== 'new' && calendarId !== undefined && calendarId !== ''
+const numericCalendarId = isExistingCalendar ? parseInt(calendarId as string, 10) : 0
+const { viewers, lastEvent } = isExistingCalendar
+  ? usePresence(numericCalendarId)
+  : { viewers: ref<Viewer[]>([]), lastEvent: ref<import('@/types/sharing').CalendarEvent | null>(null) }
+
+const showCollisionBanner = ref(false)
+const localBaselineMetaVersion = ref(0)
 
 const { fetchedItems, selectedItems, loading: searchLoading, searchError, handleSearch, toggleItemSelection } = useCalendarSearch()
 const { recommendations, calculateRecommendations } = useRecommendations()
@@ -275,6 +306,40 @@ onBeforeUnmount(() => {
   }
 })
 
+const reloadPage = () => { window.location.reload() }
+
+watch(lastEvent, (frame) => {
+  if (!frame) return
+  switch (frame.type) {
+    case 'item_added':
+      if (frame.actor !== authStore.user) {
+        toastService.success(t('sharing.toasts.itemAdded', { actor: frame.actor }))
+      }
+      break
+    case 'item_removed':
+      if (frame.actor !== authStore.user) {
+        itemsInCalendar.value = itemsInCalendar.value.filter(i => i.id !== frame.media_id)
+        toastService.success(t('sharing.toasts.itemRemoved', { actor: frame.actor }))
+      }
+      break
+    case 'meta_updated':
+      if (frame.v > localBaselineMetaVersion.value) {
+        showCollisionBanner.value = true
+      }
+      break
+    case 'member_joined':
+      toastService.success(t('sharing.toasts.joined', { name: frame.display }))
+      break
+    case 'member_left':
+      toastService.success(t(`sharing.toasts.left.${frame.reason}`))
+      break
+    case 'kick':
+      toastService.error(t(`sharing.toasts.kick.${frame.reason}`))
+      void router.push('/my-calendars')
+      break
+  }
+})
+
 onBeforeMount(async () => {
   // Bootstrap effective tier + usage counts. Free users get the counter
   // chip + 80% banner + cap-aware add gates; Pro users do not.
@@ -285,7 +350,6 @@ onBeforeMount(async () => {
     isFreeTier.value = true
   }
   if (isFreeTier.value) void usage.refresh()
-  const calendarId = Array.isArray(route.params.id) ? route.params.id[0] : route.params.id
   if (calendarId && calendarId !== 'new') {
     submitLoading.value = true
     try {
@@ -298,6 +362,7 @@ onBeforeMount(async () => {
       currentCalendar.value = calendar
       originalItemIds.value = new Set(calendar.items.map(i => i.id))
       calculateRecommendations(itemsInCalendar.value)
+      localBaselineMetaVersion.value = calendar.meta_version ?? 0
     } catch {
       calendarError.value = t('calendar.loadFailed')
     } finally {
