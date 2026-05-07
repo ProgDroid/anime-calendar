@@ -47,7 +47,7 @@ const PRO_FEATURE_KEYS = [
   'pricing.features.liveSubscribeUrl',
   'pricing.features.customisableReminders',
   'pricing.features.allAccents',
-  'pricing.features.earlyAccess',
+  'pricing.features.shareCalendars',
 ] as const
 
 async function startCheckout() {

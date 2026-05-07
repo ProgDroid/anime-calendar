@@ -432,7 +432,7 @@
       "liveSubscribeUrl": "Live subscribe URL with hourly refresh",
       "customisableReminders": "Customisable reminders (up to 5)",
       "allAccents": "All accent themes — Coral, Iris, Matcha, Sakura, Citron",
-      "earlyAccess": "Early access to new features"
+      "shareCalendars": "Share calendars with co-editors (up to 5 per calendar)"
     },
     "footer": "Cancel anytime · Secure payment · 14-day free trial."
   },
