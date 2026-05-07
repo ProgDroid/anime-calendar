@@ -561,22 +561,33 @@ mod tests {
         )
     }
 
-    /// Seed a user + calendar + invitation row. Returns `(actor_id, raw_token)`.
-    /// The invitation's `invitee_email` is set to `invitee_email`, and the
-    /// `expires_at` is set according to `expired` (in the past or future).
+    /// Generate a random hex suffix unique to this test invocation, mirroring
+    /// `services::reconcile::tests::unique_sub_id`. Tests share a real
+    /// `DATABASE_URL` via `test_pool()`, so all seeded usernames / emails /
+    /// tokens must be unique across runs to avoid `users_username_key` /
+    /// `users_email_key` collisions on re-run.
+    fn unique_suffix() -> String {
+        let n: u64 = rand::random();
+        format!("{n:016x}")
+    }
+
+    /// Seed a user + calendar + invitation row. Returns
+    /// `(invitee_user_id, raw_token, invitee_email)`. All identifiers are
+    /// uniquified per call; `tag` is a cosmetic prefix only.
     async fn seed_invitation(
         pool: &sqlx::PgPool,
         tag: &str,
-        invitee_email: &str,
         expired: bool,
-    ) -> (i32, String) {
+    ) -> (i32, String, String) {
         let mut conn = pool.acquire().await.unwrap();
+        let suffix = unique_suffix();
+        let invitee_email = format!("invitee_{tag}_{suffix}@example.com");
 
         // Owner user
         let owner = sqlx::query!(
             "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, NULL) RETURNING id",
-            format!("owner_{tag}"),
-            format!("owner_{tag}@example.com"),
+            format!("owner_{tag}_{suffix}"),
+            format!("owner_{tag}_{suffix}@example.com"),
         )
         .fetch_one(&mut *conn)
         .await
@@ -587,14 +598,18 @@ mod tests {
             "INSERT INTO calendars (name, language, user_id, subscription_token, event_style) \
              VALUES ($1, 'english'::language, $2, gen_random_uuid()::text, 'timed') RETURNING id",
         )
-        .bind(format!("cal_{tag}"))
+        .bind(format!("cal_{tag}_{suffix}"))
         .bind(owner.id)
         .fetch_one(&mut *conn)
         .await
         .unwrap();
 
-        // Raw token + hash
-        let raw_token = format!("deadbeef{tag:0>48}");
+        // Raw token + hash. Token must be 64 hex chars; build it from two
+        // random u64s so it's unique across runs. The token is high-entropy
+        // and is not reused as a DB primary key, but its hash IS indexed.
+        let token_hi: u64 = rand::random();
+        let token_lo: u64 = rand::random();
+        let raw_token = format!("{token_hi:016x}{token_lo:016x}{token_hi:016x}{token_lo:016x}");
         let token_hash = hash_token(&raw_token);
 
         let expires_at: NaiveDateTime = if expired {
@@ -619,17 +634,34 @@ mod tests {
         .await
         .unwrap();
 
-        // Invitee user (email matches invitee_email)
+        // Invitee user (email matches invitee_email so the email-bound
+        // accept/decline path will succeed for this user).
         let invitee = sqlx::query!(
             "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, NULL) RETURNING id",
-            format!("invitee_{tag}"),
+            format!("invitee_{tag}_{suffix}"),
             invitee_email,
         )
         .fetch_one(&mut *conn)
         .await
         .unwrap();
 
-        (invitee.id, raw_token)
+        (invitee.id, raw_token, invitee_email)
+    }
+
+    /// Seed a standalone user (not tied to an invitation). Used when a test
+    /// needs an actor whose email does NOT match any invite. Returns the
+    /// new user's id.
+    async fn seed_user(pool: &sqlx::PgPool, tag: &str) -> i32 {
+        let suffix = unique_suffix();
+        sqlx::query_scalar!(
+            "INSERT INTO users (username, email, password_hash)
+             VALUES ($1, $2, NULL) RETURNING id",
+            format!("u_{tag}_{suffix}"),
+            format!("u_{tag}_{suffix}@example.com"),
+        )
+        .fetch_one(pool)
+        .await
+        .unwrap()
     }
 
     // --- accept: token not found ---
@@ -640,18 +672,14 @@ mod tests {
         let svc = make_svc(pool.clone());
 
         // seed a real user so actor_id is valid
-        let user_id: i32 = sqlx::query_scalar!(
-            "INSERT INTO users (username, email, password_hash)
-             VALUES ('acc_unk1', 'acc_unk1@example.com', NULL) RETURNING id"
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let user_id = seed_user(&pool, "acc_unk").await;
 
-        let err = svc
-            .accept(user_id, "0000000000000000000000000000000000000000000000000000000000000000")
-            .await
-            .unwrap_err();
+        // Random 64-char hex string that won't match any seeded token_hash.
+        let bogus = format!("{:016x}{:016x}{:016x}{:016x}",
+            rand::random::<u64>(), rand::random::<u64>(),
+            rand::random::<u64>(), rand::random::<u64>());
+
+        let err = svc.accept(user_id, &bogus).await.unwrap_err();
         assert!(
             matches!(err, Error::InvalidRequest),
             "expected InvalidRequest for missing token, got {err:?}"
@@ -665,18 +693,12 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        // Seed invitation for invitee_a@example.com
-        let (_invitee_id, raw_token) =
-            seed_invitation(&pool, "amm", "invitee_amm@example.com", false).await;
+        // Seed invitation for a unique invitee email.
+        let (_invitee_id, raw_token, _invitee_email) =
+            seed_invitation(&pool, "amm", false).await;
 
         // A different user whose email does NOT match the invitee_email
-        let other_id: i32 = sqlx::query_scalar!(
-            "INSERT INTO users (username, email, password_hash)
-             VALUES ('other_amm', 'other_amm@example.com', NULL) RETURNING id"
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let other_id = seed_user(&pool, "other_amm").await;
 
         let err = svc.accept(other_id, &raw_token).await.unwrap_err();
         assert!(
@@ -692,8 +714,8 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        let (invitee_id, raw_token) =
-            seed_invitation(&pool, "aar", "invitee_aar@example.com", false).await;
+        let (invitee_id, raw_token, _invitee_email) =
+            seed_invitation(&pool, "aar", false).await;
 
         // Manually resolve the row so the race-condition branch fires.
         sqlx::query!(
@@ -721,18 +743,13 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        let user_id: i32 = sqlx::query_scalar!(
-            "INSERT INTO users (username, email, password_hash)
-             VALUES ('dec_unk1', 'dec_unk1@example.com', NULL) RETURNING id"
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let user_id = seed_user(&pool, "dec_unk").await;
 
-        let err = svc
-            .decline(user_id, "1111111111111111111111111111111111111111111111111111111111111111")
-            .await
-            .unwrap_err();
+        let bogus = format!("{:016x}{:016x}{:016x}{:016x}",
+            rand::random::<u64>(), rand::random::<u64>(),
+            rand::random::<u64>(), rand::random::<u64>());
+
+        let err = svc.decline(user_id, &bogus).await.unwrap_err();
         assert!(
             matches!(err, Error::InvalidRequest),
             "expected InvalidRequest for missing token on decline, got {err:?}"
@@ -746,16 +763,10 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        let (_invitee_id, raw_token) =
-            seed_invitation(&pool, "dmm", "invitee_dmm@example.com", false).await;
+        let (_invitee_id, raw_token, _invitee_email) =
+            seed_invitation(&pool, "dmm", false).await;
 
-        let other_id: i32 = sqlx::query_scalar!(
-            "INSERT INTO users (username, email, password_hash)
-             VALUES ('other_dmm', 'other_dmm@example.com', NULL) RETURNING id"
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let other_id = seed_user(&pool, "other_dmm").await;
 
         let err = svc.decline(other_id, &raw_token).await.unwrap_err();
         assert!(
@@ -771,8 +782,8 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        let (invitee_id, raw_token) =
-            seed_invitation(&pool, "dar", "invitee_dar@example.com", false).await;
+        let (invitee_id, raw_token, _invitee_email) =
+            seed_invitation(&pool, "dar", false).await;
 
         sqlx::query!(
             "UPDATE calendar_invitations SET status = 'declined', resolved_at = NOW()
@@ -800,16 +811,10 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        let (_invitee_id, raw_token) =
-            seed_invitation(&pool, "anf", "invitee_anf@example.com", false).await;
+        let (_invitee_id, raw_token, _invitee_email) =
+            seed_invitation(&pool, "anf", false).await;
 
-        let attacker_id: i32 = sqlx::query_scalar!(
-            "INSERT INTO users (username, email, password_hash)
-             VALUES ('attacker_anf', 'attacker_anf@example.com', NULL) RETURNING id"
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let attacker_id = seed_user(&pool, "attacker_anf").await;
 
         match svc.accept(attacker_id, &raw_token).await {
             Err(Error::Forbidden) => panic!("accept must NOT return Forbidden — AUDIT.md H-5"),
@@ -823,16 +828,10 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        let (_invitee_id, raw_token) =
-            seed_invitation(&pool, "dnf", "invitee_dnf@example.com", false).await;
+        let (_invitee_id, raw_token, _invitee_email) =
+            seed_invitation(&pool, "dnf", false).await;
 
-        let attacker_id: i32 = sqlx::query_scalar!(
-            "INSERT INTO users (username, email, password_hash)
-             VALUES ('attacker_dnf', 'attacker_dnf@example.com', NULL) RETURNING id"
-        )
-        .fetch_one(&pool)
-        .await
-        .unwrap();
+        let attacker_id = seed_user(&pool, "attacker_dnf").await;
 
         match svc.decline(attacker_id, &raw_token).await {
             Err(Error::Forbidden) => panic!("decline must NOT return Forbidden — AUDIT.md H-5"),
