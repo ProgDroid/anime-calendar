@@ -251,7 +251,7 @@ watch(lastEvent, (frame) => {
       }
       break
     case 'meta_updated':
-      if (frame.actor !== authStore.user && frame.v > localBaselineMetaVersion.value) {
+      if (frame.actor !== String(authStore.userId) && frame.v > localBaselineMetaVersion.value) {
         showCollisionBanner.value = true
       }
       break
