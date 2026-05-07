@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT id, stripe_subscription_id, status, current_period_end, cancel_at_period_end, trial_end FROM subscriptions WHERE status <> 'canceled' ORDER BY updated_at ASC",
+  "query": "SELECT id, user_id, stripe_subscription_id, status, current_period_end, cancel_at_period_end, trial_end FROM subscriptions WHERE status <> 'canceled' ORDER BY updated_at ASC",
   "describe": {
     "columns": [
       {
@@ -10,26 +10,31 @@
       },
       {
         "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
         "name": "stripe_subscription_id",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 2,
+        "ordinal": 3,
         "name": "status",
         "type_info": "Varchar"
       },
       {
-        "ordinal": 3,
+        "ordinal": 4,
         "name": "current_period_end",
         "type_info": "Timestamp"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "cancel_at_period_end",
         "type_info": "Bool"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "trial_end",
         "type_info": "Timestamp"
       }
@@ -43,8 +48,9 @@
       false,
       false,
       false,
+      false,
       true
     ]
   },
-  "hash": "effb15a44374709c319ec53945176759a3a279fc730c0a45c3d6e0c07cbfdc1c"
+  "hash": "e54e1dab0e00aa6e76c7b3ff1350f8249e4835cfc0234081c75bcf8bda1b1096"
 }

@@ -49,13 +49,34 @@ use ::stripe_webhook::{EventObject, Webhook};
 use crate::{
     config::server::StripeConfig,
     entity::subscription::Tier,
-    mappers::{stripe_event::StripeEventMapper, subscription::SubscriptionMapper},
-    services::{entitlement::EntitlementService, frozen_ics::FrozenIcsService},
+    mappers::{
+        calendar_editor::CalendarEditorMapper,
+        calendar_invitation::CalendarInvitationMapper,
+        stripe_event::StripeEventMapper,
+        subscription::SubscriptionMapper,
+    },
+    services::{
+        calendar_events::{CalendarEvent, CalendarEventPublisher},
+        entitlement::EntitlementService,
+        frozen_ics::FrozenIcsService,
+    },
 };
 use secrecy::ExposeSecret as _;
 // SubscriptionMapper is used via its static `_in_tx` helpers in
 // `dispatch_event` — the handler itself only needs the pool from
 // StripeEventMapper to open the outer transaction.
+
+/// A calendar-editor/user pair collected during a Paid→Free downgrade so
+/// that `MemberLeft` + `kick` events can be published after the outer
+/// transaction commits (Redis Pub/Sub must fire post-commit).
+///
+/// `pub(crate)` so the reconcile safety-net loop can use the same
+/// `suspend_owner_sharing_in_tx` helper and work with the returned records.
+#[derive(Debug, Clone)]
+pub(crate) struct KickRecord {
+    pub(crate) calendar_id: i32,
+    pub(crate) user_id: i32,
+}
 
 /// `POST /api/stripe/webhook` — Stripe-hosted webhook receiver.
 ///
@@ -70,13 +91,14 @@ use secrecy::ExposeSecret as _;
 ///
 /// Returns 500 on database errors so Stripe will retry.
 #[post("/stripe/webhook")]
-#[allow(clippy::future_not_send)]
+#[allow(clippy::future_not_send, clippy::too_many_arguments)]
 pub async fn stripe_webhook(
     req: HttpRequest,
     body: web::Bytes,
     event_mapper: web::Data<StripeEventMapper>,
     stripe_config: web::Data<StripeConfig>,
     frozen_ics: web::Data<FrozenIcsService>,
+    publisher: web::Data<CalendarEventPublisher>,
 ) -> HttpResponse {
     if !stripe_config.is_configured() {
         // No Stripe credentials in this deployment — nothing should be
@@ -152,7 +174,7 @@ pub async fn stripe_webhook(
     let result = dispatch_event(&mut tx, event.data.object).await;
 
     match result {
-        Ok(action) => {
+        Ok((action, kicks)) => {
             if let Err(e) = tx.commit().await {
                 error!("stripe webhook: commit failed for {event_id}: {e}");
                 return HttpResponse::InternalServerError()
@@ -166,6 +188,38 @@ pub async fn stripe_webhook(
             // succeeded, and a failed regenerate is recoverable via the lazy
             // safety net on `GET /api/calendars/subscribe/:token`.
             dispatch_frozen_action(&frozen_ics, action).await;
+            // Post-commit: publish MemberLeft + kick events for every editor
+            // that was suspended by a Paid→Free downgrade. Best-effort — the
+            // webhook has already committed; a Redis failure here is recoverable
+            // (editors will be suspended in the DB; the UI reflects truth on
+            // next page load even without the SSE push).
+            for kick in kicks {
+                let _ = publisher
+                    .publish_calendar(
+                        kick.calendar_id,
+                        &CalendarEvent::MemberLeft {
+                            user_id: kick.user_id.to_string(),
+                            actor: "system".to_string(),
+                            reason: "downgrade".to_string(),
+                        },
+                    )
+                    .await
+                    .map_err(|e| {
+                        error!(
+                            "stripe webhook: publish MemberLeft downgrade cal={} uid={}: {e}",
+                            kick.calendar_id, kick.user_id
+                        );
+                    });
+                let _ = publisher
+                    .publish_kick(kick.user_id, "owner_downgrade")
+                    .await
+                    .map_err(|e| {
+                        error!(
+                            "stripe webhook: publish kick downgrade uid={}: {e}",
+                            kick.user_id
+                        );
+                    });
+            }
             HttpResponse::Ok().json(serde_json::json!({"received":true}))
         }
         Err(e) => {
@@ -223,25 +277,28 @@ async fn dispatch_frozen_action(frozen_ics: &FrozenIcsService, action: FrozenAct
 }
 
 /// Route a verified Stripe event object to the right writer. Returns the
-/// `FrozenAction` (if any) implied by a tier transition the event caused, so
-/// the outer handler can fire the corresponding `FrozenIcsService` call
-/// **after** the transaction commits.
+/// `FrozenAction` (if any) implied by a tier transition the event caused, plus
+/// any `KickRecord`s for editors suspended by a Paid→Free downgrade, so
+/// the outer handler can fire the corresponding `FrozenIcsService` call and
+/// Pub/Sub notifications **after** the transaction commits.
 ///
-/// Events we deliberately ignore return `Ok(FrozenAction::None)` — the
-/// idempotency insert is enough to stop Stripe retries. Invoice events do
+/// Events we deliberately ignore return `Ok((FrozenAction::None, vec![]))` —
+/// the idempotency insert is enough to stop Stripe retries. Invoice events do
 /// not contribute to tier-transition detection (out of scope for Phase 1.4
 /// — the lazy-regen safety net on the subscribe endpoint covers any holes).
 async fn dispatch_event(
     tx: &mut sqlx::PgConnection,
     object: EventObject,
-) -> Result<FrozenAction, String> {
+) -> Result<(FrozenAction, Vec<KickRecord>), String> {
     match object {
         // checkout.session.completed: Stripe also fires
         // customer.subscription.created with the full subscription object and
         // our metadata, so we don't write here. The event id is already
         // persisted by record_first_time_in_tx, so 200 is correct.
         EventObject::CustomerSubscriptionCreated(sub)
-        | EventObject::CustomerSubscriptionUpdated(sub) => upsert_subscription(tx, &sub).await,
+        | EventObject::CustomerSubscriptionUpdated(sub) => {
+            upsert_subscription(tx, &sub).await
+        }
 
         EventObject::CustomerSubscriptionDeleted(sub) => {
             handle_subscription_deleted(tx, &sub).await
@@ -249,17 +306,77 @@ async fn dispatch_event(
 
         EventObject::InvoicePaymentSucceeded(invoice) => {
             handle_invoice_succeeded(tx, &invoice).await?;
-            Ok(FrozenAction::None)
+            Ok((FrozenAction::None, vec![]))
         }
 
         EventObject::InvoicePaymentFailed(invoice) => {
             handle_invoice_failed(tx, &invoice).await?;
-            Ok(FrozenAction::None)
+            Ok((FrozenAction::None, vec![]))
         }
 
         // Any other event: idempotency-only path. Nothing to write.
-        EventObject::CheckoutSessionCompleted(_) | _ => Ok(FrozenAction::None),
+        EventObject::CheckoutSessionCompleted(_) | _ => Ok((FrozenAction::None, vec![])),
     }
+}
+
+/// Suspend all active editors and pending invitations for every calendar owned
+/// by `owner_id`, collecting a `KickRecord` for each editor that was active
+/// before the suspend. All writes happen on `tx` so they are rolled back
+/// atomically with the caller's transaction if anything fails downstream.
+///
+/// `pub(crate)` so the reconcile safety-net can call this after detecting a
+/// Paid→Free drift correction.
+///
+/// # Errors
+/// Returns the underlying sqlx error wrapped in a `String`.
+pub(crate) async fn suspend_owner_sharing_in_tx(
+    tx: &mut sqlx::PgConnection,
+    owner_id: i32,
+) -> Result<Vec<KickRecord>, String> {
+    // Fetch all calendar IDs owned by this user.
+    let calendar_ids: Vec<i32> = sqlx::query_scalar(
+        "SELECT id FROM calendars WHERE user_id = $1",
+    )
+    .bind(owner_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|e| format!("fetch calendars for owner failed: {e}"))?;
+
+    let mut kick_records: Vec<KickRecord> = Vec::new();
+
+    for calendar_id in calendar_ids {
+        // Capture active editors BEFORE suspending so we know who to kick.
+        let active_editors =
+            CalendarEditorMapper::list_active_in_tx(&mut *tx, calendar_id)
+                .await
+                .map_err(|e| format!("list_active_in_tx for cal {calendar_id} failed: {e}"))?;
+
+        // Suspend active editors.
+        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut *tx, calendar_id)
+            .await
+            .map_err(|e| {
+                format!("suspend_for_calendar_in_tx for cal {calendar_id} failed: {e}")
+            })?;
+
+        // Suspend pending invitations.
+        CalendarInvitationMapper::suspend_pending_for_calendar_in_tx(&mut *tx, calendar_id)
+            .await
+            .map_err(|e| {
+                format!(
+                    "suspend_pending_for_calendar_in_tx for cal {calendar_id} failed: {e}"
+                )
+            })?;
+
+        // Collect kick records for every editor that was active.
+        for editor in active_editors {
+            kick_records.push(KickRecord {
+                calendar_id,
+                user_id: editor.user_id,
+            });
+        }
+    }
+
+    Ok(kick_records)
 }
 
 /// Resolve the `user_id` referenced by a subscription payload, then handle
@@ -267,18 +384,19 @@ async fn dispatch_event(
 /// `canceled`. Reads effective tier on the same `tx` before and after the
 /// write, so the returned `FrozenAction` reflects whether downgrading this
 /// subscription actually moved the user from Paid to Free (other rows in
-/// other states could keep them Paid).
+/// other states could keep them Paid). On a Paid→Free transition, also
+/// suspends all editors and pending invitations for the owner's calendars.
 async fn handle_subscription_deleted(
     tx: &mut sqlx::PgConnection,
     sub: &stripe_shared::Subscription,
-) -> Result<FrozenAction, String> {
+) -> Result<(FrozenAction, Vec<KickRecord>), String> {
     let sub_id = sub.id.as_str();
     let existing = SubscriptionMapper::find_by_stripe_id_with(&mut *tx, sub_id)
         .await
         .map_err(|e| format!("find_by_stripe_id_with failed: {e}"))?;
     let Some(row) = existing else {
         warn!("stripe webhook: subscription.deleted for unknown stripe_subscription_id {sub_id}");
-        return Ok(FrozenAction::None);
+        return Ok((FrozenAction::None, vec![]));
     };
     let user_id = row.user_id;
     let old_tier = EntitlementService::effective_tier_in_tx(&mut *tx, user_id)
@@ -296,18 +414,25 @@ async fn handle_subscription_deleted(
             "stripe webhook: subscription.deleted update affected 0 rows for {sub_id} \
              despite earlier find succeeding"
         );
-        return Ok(FrozenAction::None);
+        return Ok((FrozenAction::None, vec![]));
     }
     let new_tier = EntitlementService::effective_tier_in_tx(&mut *tx, user_id)
         .await
         .map_err(|e| format!("effective_tier_in_tx (new) failed: {e}"))?;
-    Ok(transition_action(user_id, old_tier, new_tier))
+    let action = transition_action(user_id, old_tier, new_tier);
+    let kicks = if matches!(action, FrozenAction::Regenerate(_)) {
+        // Paid→Free: suspend sharing for all owned calendars.
+        suspend_owner_sharing_in_tx(&mut *tx, user_id).await?
+    } else {
+        vec![]
+    };
+    Ok((action, kicks))
 }
 
 async fn upsert_subscription(
     tx: &mut sqlx::PgConnection,
     sub: &stripe_shared::Subscription,
-) -> Result<FrozenAction, String> {
+) -> Result<(FrozenAction, Vec<KickRecord>), String> {
     let sub_id = sub.id.as_str();
     let stripe_customer_id = match &sub.customer {
         stripe_types::Expandable::Object(c) => c.id.to_string(),
@@ -340,7 +465,7 @@ async fn upsert_subscription(
             "stripe webhook: subscription event for {sub_id} has no resolvable user_id \
              (metadata empty, no prior customer row for {stripe_customer_id})"
         );
-        return Ok(FrozenAction::None);
+        return Ok((FrozenAction::None, vec![]));
     };
 
     let item = sub
@@ -382,7 +507,14 @@ async fn upsert_subscription(
         .await
         .map_err(|e| format!("effective_tier_in_tx (new) failed: {e}"))?;
 
-    Ok(transition_action(user_id, old_tier, new_tier))
+    let action = transition_action(user_id, old_tier, new_tier);
+    let kicks = if matches!(action, FrozenAction::Regenerate(_)) {
+        // Paid→Free: suspend sharing for all owned calendars.
+        suspend_owner_sharing_in_tx(&mut *tx, user_id).await?
+    } else {
+        vec![]
+    };
+    Ok((action, kicks))
 }
 
 async fn handle_invoice_succeeded(
@@ -709,5 +841,164 @@ mod tests {
         );
 
         cleanup_user(&pool, user_id).await;
+    }
+
+    // ---- downgrade sharing suspension tests --------------------------------
+
+    /// A Paid → Free downgrade must:
+    /// - Suspend every active `calendar_editors` row for all calendars owned
+    ///   by the downgraded user.
+    /// - Suspend every pending `calendar_invitations` row for those calendars.
+    /// - Return one `KickRecord` per previously-active editor with the correct
+    ///   `calendar_id` and `user_id`.
+    ///
+    /// This test exercises `suspend_owner_sharing_in_tx` directly because
+    /// constructing a full `stripe_shared::Subscription` in tests is
+    /// impractical. The wiring through `dispatch_event` is covered by the
+    /// compile-time signature check and the existing dispatch-path tests.
+    #[tokio::test]
+    async fn downgrade_suspends_editors_and_invites_and_collects_kicks() {
+        use crate::mappers::calendar_editor::CalendarEditorMapper;
+        use crate::mappers::calendar_invitation::CalendarInvitationMapper;
+        use chrono::Duration;
+
+        let pool = crate::test_helpers::test_pool().await;
+
+        // Seed owner
+        let owner_id = seed_user(&pool).await;
+
+        // Seed two calendars for the owner
+        let cal_a = seed_calendar(&pool, owner_id).await;
+        let cal_b = seed_calendar(&pool, owner_id).await;
+
+        // Seed two active editors for each calendar
+        let editor_a1 = seed_user(&pool).await;
+        let editor_a2 = seed_user(&pool).await;
+        let editor_b1 = seed_user(&pool).await;
+        let editor_b2 = seed_user(&pool).await;
+
+        // Seed one pending invitation per calendar
+        let inv_expires = (Utc::now() + Duration::days(7)).naive_utc();
+
+        let mut conn = pool.acquire().await.unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut conn, cal_a, editor_a1)
+            .await
+            .unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut conn, cal_a, editor_a2)
+            .await
+            .unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut conn, cal_b, editor_b1)
+            .await
+            .unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut conn, cal_b, editor_b2)
+            .await
+            .unwrap();
+
+        let n: u64 = rand::random();
+        CalendarInvitationMapper::create_in_tx(
+            &mut conn, cal_a, owner_id,
+            &format!("invite_a_{n}@example.com"), &format!("hash_a_{n}"), inv_expires,
+        )
+        .await
+        .unwrap();
+        let m: u64 = rand::random();
+        CalendarInvitationMapper::create_in_tx(
+            &mut conn, cal_b, owner_id,
+            &format!("invite_b_{m}@example.com"), &format!("hash_b_{m}"), inv_expires,
+        )
+        .await
+        .unwrap();
+        drop(conn);
+
+        // Act: run suspend_owner_sharing_in_tx inside a transaction, commit.
+        let mut tx = pool.begin().await.unwrap();
+        let kicks = suspend_owner_sharing_in_tx(&mut tx, owner_id)
+            .await
+            .unwrap();
+        tx.commit().await.unwrap();
+
+        // Assert: all editors are now suspended
+        let active_a: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM calendar_editors \
+             WHERE calendar_id = $1 AND active = true",
+        )
+        .bind(cal_a)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(active_a, 0, "cal_a: no active editors after downgrade");
+
+        let active_b: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM calendar_editors \
+             WHERE calendar_id = $1 AND active = true",
+        )
+        .bind(cal_b)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(active_b, 0, "cal_b: no active editors after downgrade");
+
+        // Assert: suspended_at is set
+        let suspended_at_null_count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM calendar_editors \
+             WHERE calendar_id = ANY($1) AND suspended_at IS NULL",
+        )
+        .bind(&[cal_a, cal_b] as &[i32])
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(suspended_at_null_count, 0, "all editor rows must have suspended_at set");
+
+        // Assert: pending invitations are now suspended
+        let pending_a: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM calendar_invitations \
+             WHERE calendar_id = $1 AND status = 'pending'",
+        )
+        .bind(cal_a)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(pending_a, 0, "cal_a: no pending invitations after downgrade");
+
+        let pending_b: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM calendar_invitations \
+             WHERE calendar_id = $1 AND status = 'pending'",
+        )
+        .bind(cal_b)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(pending_b, 0, "cal_b: no pending invitations after downgrade");
+
+        // Assert: kick records cover all 4 editors
+        assert_eq!(kicks.len(), 4, "exactly 4 kick records (2 per calendar)");
+        let mut kick_pairs: Vec<(i32, i32)> =
+            kicks.iter().map(|k| (k.calendar_id, k.user_id)).collect();
+        kick_pairs.sort_unstable();
+        let mut expected_pairs = vec![
+            (cal_a, editor_a1),
+            (cal_a, editor_a2),
+            (cal_b, editor_b1),
+            (cal_b, editor_b2),
+        ];
+        expected_pairs.sort_unstable();
+        assert_eq!(kick_pairs, expected_pairs, "kick records must cover all editors");
+
+        // Cleanup
+        sqlx::query("DELETE FROM calendar_invitations WHERE calendar_id = ANY($1)")
+            .bind(&[cal_a, cal_b] as &[i32])
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM calendar_editors WHERE calendar_id = ANY($1)")
+            .bind(&[cal_a, cal_b] as &[i32])
+            .execute(&pool)
+            .await
+            .unwrap();
+        cleanup_user(&pool, editor_a1).await;
+        cleanup_user(&pool, editor_a2).await;
+        cleanup_user(&pool, editor_b1).await;
+        cleanup_user(&pool, editor_b2).await;
+        cleanup_user(&pool, owner_id).await;
     }
 }

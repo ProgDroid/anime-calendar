@@ -9,6 +9,7 @@ use crate::{
 #[derive(Debug, Clone)]
 pub struct ReconcileRow {
     pub id: i32,
+    pub user_id: i32,
     pub stripe_subscription_id: String,
     pub status: String,
     pub current_period_end: chrono::NaiveDateTime,
@@ -325,7 +326,7 @@ impl SubscriptionMapper {
         crate::metrics::db::timed("subscription.list_for_reconcile", async {
             let rows = sqlx::query_as!(
                 ReconcileRow,
-                "SELECT id, stripe_subscription_id, status, current_period_end, \
+                "SELECT id, user_id, stripe_subscription_id, status, current_period_end, \
                         cancel_at_period_end, trial_end \
                  FROM subscriptions \
                  WHERE status <> 'canceled' \

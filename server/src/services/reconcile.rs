@@ -19,6 +19,23 @@ use metrics::counter;
 use crate::ServerResult;
 use crate::mappers::subscription::{ReconcileRow, SubscriptionMapper};
 use crate::metrics::names;
+use crate::services::calendar_events::{CalendarEvent, CalendarEventPublisher};
+
+/// Optional sharing-suspension dependencies for the reconcile loop.
+/// When `Some`, a Paid→Free correction triggers editor + invitation suspension
+/// and publishes `MemberLeft` + `kick` events via Redis Pub/Sub.
+/// When `None`, reconcile corrects subscription data only (legacy behaviour,
+/// used by `reconcile_for_user` in the CLI and by existing unit tests).
+#[derive(Clone)]
+pub struct SharingDeps {
+    pub editor_mapper: crate::mappers::calendar_editor::CalendarEditorMapper,
+    pub invitation_mapper: crate::mappers::calendar_invitation::CalendarInvitationMapper,
+    pub publisher: CalendarEventPublisher,
+    /// A separate pool used to open the short suspend transaction. Must be
+    /// independent of the `SubscriptionMapper`'s pool so the advisory-lock
+    /// path in the editors mapper stays clean.
+    pub pool: sqlx::PgPool,
+}
 
 /// What the reconcile loop needs from Stripe. Generic + native AFIT so we
 /// stay free of the `async-trait` macro and let the live + mock impls
@@ -110,6 +127,11 @@ fn naive_from_ts(ts: stripe_types::Timestamp) -> Option<NaiveDateTime> {
 /// Returns the number of rows that drifted (were corrected) — used by the
 /// CLI to print a summary and by tests to assert convergence.
 ///
+/// When `sharing` is `Some`, a Paid→Free correction additionally suspends
+/// all editors and pending invitations for the owner's calendars and
+/// publishes `MemberLeft` + `kick` events via Redis Pub/Sub (best-effort;
+/// failures are logged but don't count as errors).
+///
 /// # Errors
 /// Returns an error only on a top-level DB failure (couldn't list rows).
 /// Per-row errors are logged and counted in
@@ -117,13 +139,14 @@ fn naive_from_ts(ts: stripe_types::Timestamp) -> Option<NaiveDateTime> {
 pub async fn run_pass<F: StripeSubscriptionFetcher>(
     mapper: &SubscriptionMapper,
     fetcher: &F,
+    sharing: Option<&SharingDeps>,
 ) -> ServerResult<u64> {
     let rows = mapper.list_for_reconcile().await?;
     let total = rows.len();
     let mut corrected: u64 = 0;
 
     for row in rows {
-        match reconcile_one(mapper, fetcher, &row).await {
+        match reconcile_one(mapper, fetcher, &row, sharing).await {
             Ok(true) => corrected += 1,
             Ok(false) => {}
             Err(e) => {
@@ -144,6 +167,7 @@ async fn reconcile_one<F: StripeSubscriptionFetcher>(
     mapper: &SubscriptionMapper,
     fetcher: &F,
     row: &ReconcileRow,
+    sharing: Option<&SharingDeps>,
 ) -> Result<bool, String> {
     let remote = match fetcher.retrieve(&row.stripe_subscription_id).await {
         Ok(Some(r)) => r,
@@ -161,6 +185,11 @@ async fn reconcile_one<F: StripeSubscriptionFetcher>(
     if drifted_fields.is_empty() {
         return Ok(false);
     }
+
+    // Detect a potential Paid→Free transition before applying the update, so
+    // we can decide whether sharing suspension is needed afterward.
+    let was_paid_status = matches!(row.status.as_str(), "active" | "trialing");
+    let becomes_free_status = remote.status == "canceled";
 
     // Conditional UPDATE guarded on local current_period_end <= stripe's.
     // rows_affected = 0 means a webhook landed mid-pass and moved us past
@@ -181,15 +210,88 @@ async fn reconcile_one<F: StripeSubscriptionFetcher>(
         return Ok(false);
     }
 
-    for field in drifted_fields {
-        counter!(names::ENTITLEMENT_RECONCILE_DRIFT_TOTAL, names::LABEL_FIELD => field)
+    for field in &drifted_fields {
+        counter!(names::ENTITLEMENT_RECONCILE_DRIFT_TOTAL, names::LABEL_FIELD => *field)
             .increment(1);
         warn!(
             "reconcile: drift corrected on sub {} field={field}",
             row.stripe_subscription_id
         );
     }
+
+    // After a confirmed Paid→Free correction, suspend sharing for all
+    // calendars owned by this user. Best-effort: log failures but don't
+    // propagate them as reconcile errors — the subscription data is already
+    // corrected, which is the primary goal.
+    if was_paid_status && becomes_free_status
+        && let Some(deps) = sharing
+    {
+        apply_sharing_side_effects(row.user_id, deps).await;
+    }
+
     Ok(true)
+}
+
+/// Suspend all editors + invitations for `owner_id`'s calendars and publish
+/// `MemberLeft` + `kick` events. Called after a confirmed Paid→Free reconcile
+/// correction. All errors are logged and swallowed — the subscription data
+/// is already correct; Redis/DB failures here are recoverable on next page load.
+async fn apply_sharing_side_effects(owner_id: i32, deps: &SharingDeps) {
+    use crate::controllers::stripe_webhook::suspend_owner_sharing_in_tx;
+
+    // Open a short transaction for the suspend writes.
+    let mut tx = match deps.pool.begin().await {
+        Ok(t) => t,
+        Err(e) => {
+            error!("reconcile: failed to begin sharing suspend tx for user {owner_id}: {e}");
+            return;
+        }
+    };
+
+    let kicks = match suspend_owner_sharing_in_tx(&mut tx, owner_id).await {
+        Ok(k) => k,
+        Err(e) => {
+            error!("reconcile: suspend_owner_sharing_in_tx failed for user {owner_id}: {e}");
+            let _ = tx.rollback().await;
+            return;
+        }
+    };
+
+    if let Err(e) = tx.commit().await {
+        error!("reconcile: sharing suspend commit failed for user {owner_id}: {e}");
+        return;
+    }
+
+    // Publish MemberLeft + kick for each suspended editor (best-effort).
+    for kick in kicks {
+        let _ = deps
+            .publisher
+            .publish_calendar(
+                kick.calendar_id,
+                &CalendarEvent::MemberLeft {
+                    user_id: kick.user_id.to_string(),
+                    actor: "system".to_string(),
+                    reason: "downgrade".to_string(),
+                },
+            )
+            .await
+            .map_err(|e| {
+                error!(
+                    "reconcile: publish MemberLeft downgrade cal={} uid={}: {e}",
+                    kick.calendar_id, kick.user_id
+                );
+            });
+        let _ = deps
+            .publisher
+            .publish_kick(kick.user_id, "owner_downgrade")
+            .await
+            .map_err(|e| {
+                error!(
+                    "reconcile: publish kick downgrade uid={}: {e}",
+                    kick.user_id
+                );
+            });
+    }
 }
 
 fn collect_drift(local: &ReconcileRow, remote: &RemoteSubscription) -> Vec<&'static str> {
@@ -231,19 +333,30 @@ pub async fn reconcile_for_user<F: StripeSubscriptionFetcher>(
     };
     let row = ReconcileRow {
         id: sub.id,
+        user_id: sub.user_id,
         stripe_subscription_id: sub.stripe_subscription_id.clone(),
         status: sub.status,
         current_period_end: sub.current_period_end,
         cancel_at_period_end: sub.cancel_at_period_end,
         trial_end: sub.trial_end,
     };
-    let corrected = reconcile_one(mapper, fetcher, &row).await?;
+    // reconcile_for_user is used by the CLI, which has no sharing deps.
+    let corrected = reconcile_one(mapper, fetcher, &row, None).await?;
     Ok(Some(corrected))
 }
 
 /// Spawn the reconcile loop on the current Tokio runtime. `interval_secs = 0`
 /// returns without spawning, so dev / test deployments can opt out.
-pub fn spawn_loop<F>(mapper: SubscriptionMapper, fetcher: F, interval_secs: u64)
+///
+/// Pass `sharing = Some(deps)` to enable sharing suspension on Paid→Free
+/// corrections. Pass `None` if the sharing services are not available
+/// (e.g. deployment without Redis).
+pub fn spawn_loop<F>(
+    mapper: SubscriptionMapper,
+    fetcher: F,
+    interval_secs: u64,
+    sharing: Option<SharingDeps>,
+)
 where
     F: StripeSubscriptionFetcher + 'static,
 {
@@ -260,7 +373,7 @@ where
         ticker.tick().await;
         loop {
             ticker.tick().await;
-            if let Err(e) = run_pass(&mapper, &fetcher).await {
+            if let Err(e) = run_pass(&mapper, &fetcher, sharing.as_ref()).await {
                 error!("reconcile: pass failed at top level: {e}");
             }
         }
@@ -392,7 +505,7 @@ mod tests {
             },
         );
 
-        run_pass(&mapper, &fetcher).await.unwrap();
+        run_pass(&mapper, &fetcher, None).await.unwrap();
 
         let row = sqlx::query!(
             "SELECT status FROM subscriptions WHERE stripe_subscription_id = $1",
@@ -425,7 +538,7 @@ mod tests {
             },
         );
 
-        run_pass(&mapper, &fetcher).await.unwrap();
+        run_pass(&mapper, &fetcher, None).await.unwrap();
 
         let row = sqlx::query!(
             "SELECT current_period_end FROM subscriptions WHERE stripe_subscription_id = $1",
@@ -460,7 +573,7 @@ mod tests {
             },
         );
 
-        run_pass(&mapper, &fetcher).await.unwrap();
+        run_pass(&mapper, &fetcher, None).await.unwrap();
 
         let row = sqlx::query!(
             "SELECT current_period_end FROM subscriptions WHERE stripe_subscription_id = $1",
@@ -524,7 +637,7 @@ mod tests {
             },
         );
 
-        run_pass(&mapper, &fetcher).await.unwrap();
+        run_pass(&mapper, &fetcher, None).await.unwrap();
 
         let row = sqlx::query!(
             "SELECT status FROM subscriptions WHERE stripe_subscription_id = $1",
@@ -560,7 +673,7 @@ mod tests {
             },
         );
 
-        run_pass(&mapper, &fetcher).await.unwrap();
+        run_pass(&mapper, &fetcher, None).await.unwrap();
 
         let real = sqlx::query!(
             "SELECT status FROM subscriptions WHERE stripe_subscription_id = $1",
@@ -588,6 +701,7 @@ mod tests {
             .unwrap();
         let local = ReconcileRow {
             id: 1,
+            user_id: 1,
             stripe_subscription_id: "sub_x".to_string(),
             status: "active".to_string(),
             current_period_end: now,

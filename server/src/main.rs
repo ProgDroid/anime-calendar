@@ -73,18 +73,8 @@ async fn main() -> ServerResult<()> {
     }
 
     // Reconcile loop: hourly safety net for the Stripe webhook path. Skips
-    // itself if Stripe isn't configured (no point hitting Stripe with an
-    // empty secret). `interval_secs = 0` also disables it, used in tests.
-    if settings.stripe.is_configured() {
-        let fetcher = server::services::reconcile::LiveStripeFetcher::new(stripe_client.clone());
-        server::services::reconcile::spawn_loop(
-            subscription_mapper.clone(),
-            fetcher,
-            settings.reconcile.interval_secs,
-        );
-    } else {
-        log::info!("reconcile: stripe not configured, loop not spawned");
-    }
+    // Reconcile loop: spawned further below, after redis_pubsub and
+    // calendar_event_publisher are initialised (sharing deps need them).
 
     // Initialize Redis cache
     let cache = Cache::new(
@@ -108,6 +98,31 @@ async fn main() -> ServerResult<()> {
     .expect("Failed to initialize Redis Pub/Sub");
 
     let calendar_event_publisher = CalendarEventPublisher::new(redis_pubsub.clone());
+
+    // Reconcile loop: hourly safety net for the Stripe webhook path. Skips
+    // itself if Stripe isn't configured (no point hitting Stripe with an
+    // empty secret). `interval_secs = 0` also disables it, used in tests.
+    if settings.stripe.is_configured() {
+        let fetcher = server::services::reconcile::LiveStripeFetcher::new(stripe_client.clone());
+        // Dedicated pool for the reconcile sharing-suspend transaction.
+        let reconcile_pool = server::mappers::database::Database::new(db_config.clone())
+            .await?
+            .pool;
+        let sharing_deps = server::services::reconcile::SharingDeps {
+            editor_mapper: calendar_editor_mapper.clone(),
+            invitation_mapper: calendar_invitation_mapper.clone(),
+            publisher: calendar_event_publisher.clone(),
+            pool: reconcile_pool,
+        };
+        server::services::reconcile::spawn_loop(
+            subscription_mapper.clone(),
+            fetcher,
+            settings.reconcile.interval_secs,
+            Some(sharing_deps),
+        );
+    } else {
+        log::info!("reconcile: stripe not configured, loop not spawned");
+    }
 
     let presence_service = server::services::presence::PresenceService::new(
         &settings.redis.host,
