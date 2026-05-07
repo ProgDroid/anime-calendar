@@ -58,6 +58,49 @@ pub struct InvitationPreview {
     /// shape to avoid a frontend break when the column lands.
     pub owner_avatar: Option<String>,
     pub item_count: i64,
+    /// Obfuscated form of the invitee's email address, e.g. `f***@h***.com`.
+    /// Shown on the landing page so the recipient can confirm the invite is
+    /// meant for them without revealing the full address to an observer.
+    pub masked_email: String,
+}
+
+/// Mask an email address for display: `first_char***@first_domain_char***.tld`.
+///
+/// Rules:
+/// - Local part: keep first character, append `***` (unless the local part is
+///   a single character, in which case just that character).
+/// - Domain: keep the first character of the domain label before the last `.`,
+///   append `***`, keep the TLD.  If there is no `.` in the domain, mask the
+///   whole domain to `first_char***`.
+fn mask_email(email: &str) -> String {
+    match email.split_once('@') {
+        None => {
+            // Malformed — best-effort mask.
+            let first = email.chars().next().unwrap_or('?');
+            format!("{first}***")
+        }
+        Some((local, domain)) => {
+            let local_first = local.chars().next().unwrap_or('?');
+            let masked_local = if local.len() == 1 {
+                local_first.to_string()
+            } else {
+                format!("{local_first}***")
+            };
+
+            let masked_domain = match domain.rsplit_once('.') {
+                None => {
+                    let domain_first = domain.chars().next().unwrap_or('?');
+                    format!("{domain_first}***")
+                }
+                Some((label, tld)) => {
+                    let label_first = label.chars().next().unwrap_or('?');
+                    format!("{label_first}***.{tld}")
+                }
+            };
+
+            format!("{masked_local}@{masked_domain}")
+        }
+    }
 }
 
 /// Invitation orchestration service. Constructed once at startup with all
@@ -445,6 +488,7 @@ impl InvitationService {
             owner_display: owner.username,
             owner_avatar: None,
             item_count: item_count.unwrap_or(0),
+            masked_email: mask_email(&inv.invitee_email),
         })
     }
 }
@@ -459,6 +503,28 @@ mod tests {
     /// unit test, so the rich integration coverage lives in
     /// `controllers::sharing::tests`. The tests here pin pure logic that
     /// doesn't need DB / email — input validation paths.
+
+    #[test]
+    fn mask_email_typical() {
+        assert_eq!(mask_email("foo@hotmail.com"), "f***@h***.com");
+        assert_eq!(mask_email("alice@example.com"), "a***@e***.com");
+    }
+
+    #[test]
+    fn mask_email_single_char_local() {
+        assert_eq!(mask_email("a@example.com"), "a@e***.com");
+    }
+
+    #[test]
+    fn mask_email_domain_no_dot() {
+        assert_eq!(mask_email("foo@localhost"), "f***@l***");
+    }
+
+    #[test]
+    fn mask_email_malformed_no_at() {
+        assert_eq!(mask_email("notanemail"), "n***");
+    }
+
     #[tokio::test]
     async fn validate_email_is_invoked_via_check() {
         // Direct sanity — ensures the helper is wired into the orchestrator

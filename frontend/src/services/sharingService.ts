@@ -1,5 +1,5 @@
 import api from '@/config/api'
-import type { MembersResponse, SharingInvitation } from '@/types/sharing'
+import type { MembersResponse, SharingInvitation, InvitationPreview } from '@/types/sharing'
 
 export const sharingService = {
   async listMembers(calendarId: number): Promise<MembersResponse> {
@@ -19,5 +19,16 @@ export const sharingService = {
   async resend(calendarId: number, invitationId: number): Promise<SharingInvitation> {
     const { data } = await api.post(`/calendars/${calendarId}/invitations/${invitationId}/resend`)
     return data
+  },
+  async preview(token: string): Promise<InvitationPreview> {
+    const { data } = await api.get(`/invitations/${token}`)
+    return data
+  },
+  async accept(token: string): Promise<{ calendar_id: number }> {
+    const { data } = await api.post(`/invitations/${token}/accept`)
+    return data
+  },
+  async decline(token: string): Promise<void> {
+    await api.post(`/invitations/${token}/decline`)
   },
 }

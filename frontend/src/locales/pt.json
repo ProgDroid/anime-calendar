@@ -523,6 +523,20 @@
     }
   },
   "sharing": {
+    "landing": {
+      "loading": "A carregar convite…",
+      "invalid": "Este link de convite já não é válido. Pede ao dono do calendário que envie um novo.",
+      "unauth_heading": "Foste convidado para um calendário",
+      "unauth_subtext": "Inicia sessão para aceitar este convite.",
+      "signIn": "Iniciar sessão",
+      "signUp": "Registar",
+      "calendarPreview": "{name} · {count} séries",
+      "ownedBy": "De {owner}",
+      "accept": "Aceitar convite",
+      "decline": "Recusar",
+      "mismatch": "Este convite é para {email}. Inicia sessão com essa conta para aceitar.",
+      "accepting": "A aceitar…"
+    },
     "myCalendars": "Meus calendários",
     "sharedWithYou": "Compartilhados com você",
     "owner": "Dono: {name}",

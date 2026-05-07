@@ -523,6 +523,20 @@
     }
   },
   "sharing": {
+    "landing": {
+      "loading": "Loading invitation…",
+      "invalid": "This invitation link is no longer valid. Ask the calendar owner to send a new one.",
+      "unauth_heading": "You've been invited to a calendar",
+      "unauth_subtext": "Sign in to accept this invitation.",
+      "signIn": "Sign in",
+      "signUp": "Sign up",
+      "calendarPreview": "{name} · {count} shows",
+      "ownedBy": "Owned by {owner}",
+      "accept": "Accept invitation",
+      "decline": "Decline",
+      "mismatch": "This invite is for {email}. Sign in with that account to accept.",
+      "accepting": "Accepting…"
+    },
     "myCalendars": "My calendars",
     "sharedWithYou": "Shared with you",
     "owner": "Owner: {name}",

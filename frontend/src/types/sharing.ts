@@ -26,6 +26,14 @@ export interface SharingInvitation {
   expires_at: string
 }
 
+export interface InvitationPreview {
+  calendar_name: string
+  owner_display: string
+  owner_avatar: string | null
+  item_count: number
+  masked_email: string
+}
+
 export interface Viewer {
   user_id: number
   display: string
