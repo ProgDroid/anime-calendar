@@ -151,6 +151,6 @@ describe('InviteLandingPage', () => {
     await wrapper.find('[data-testid="invite-accept"]').trigger('click')
     await flushPromises()
 
-    expect(pushSpy).toHaveBeenCalledWith('/calendars/42')
+    expect(pushSpy).toHaveBeenCalledWith('/calendar/42')
   })
 })

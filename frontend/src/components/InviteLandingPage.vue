@@ -34,7 +34,7 @@ async function accept() {
   accepting.value = true
   try {
     const result = await sharingService.accept(token)
-    router.push(`/calendars/${result.calendar_id}`)
+    router.push(`/calendar/${result.calendar_id}`)
   } catch (err) {
     if (axios.isAxiosError(err) && err.response?.status === 403) {
       state.value = 'mismatch'
