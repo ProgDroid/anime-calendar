@@ -35,7 +35,8 @@ describe('Auth Store', () => {
   it('should login successfully', async () => {
     const mockResponse = {
       data: {
-        username: 'testuser'
+        username: 'testuser',
+        user_id: 42,
       }
     }
 
@@ -46,6 +47,7 @@ describe('Auth Store', () => {
 
     expect(result).toEqual(mockResponse.data)
     expect(store.user).toBe('testuser')
+    expect(store.userId).toBe(42)
     expect(store.isAuthenticated()).toBe(true)
     expect(api.post).toHaveBeenCalledWith('/login', {
       email: 'test@example.com',
@@ -99,20 +101,23 @@ describe('Auth Store', () => {
     vi.mocked(api.post).mockResolvedValue({})
     const store = useAuthStore()
     store.user = 'username'
+    store.userId = 7
 
     await store.logout()
 
     expect(store.user).toBe('')
+    expect(store.userId).toBeNull()
     expect(store.isAuthenticated()).toBe(false)
   })
 
   it('should initAuth — populates user on success', async () => {
-    vi.mocked(api.get).mockResolvedValue({ data: { username: 'testuser' } })
+    vi.mocked(api.get).mockResolvedValue({ data: { username: 'testuser', user_id: 1 } })
 
     const store = useAuthStore()
     await store.initAuth()
 
     expect(store.user).toBe('testuser')
+    expect(store.userId).toBe(1)
     expect(api.get).toHaveBeenCalledWith('/user')
   })
 
@@ -121,8 +126,10 @@ describe('Auth Store', () => {
 
     const store = useAuthStore()
     store.user = 'stale'
+    store.userId = 99
     await store.initAuth()
 
     expect(store.user).toBe('')
+    expect(store.userId).toBeNull()
   })
 })

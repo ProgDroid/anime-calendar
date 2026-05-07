@@ -63,7 +63,7 @@ describe('GoogleLoginButton', () => {
 
   it('calls oauthLogin with google token on callback', async () => {
     vi.mocked(api.post).mockResolvedValue({
-      data: { token: 'jwt', username: 'user', avatar: 'https://avatar.url' }
+      data: { token: 'jwt', username: 'user', avatar: 'https://avatar.url', user_id: 12 }
     })
     mountBtn()
     await window.handleGoogleLogin!({ client_id: 'cid', credential: 'google-credential' })

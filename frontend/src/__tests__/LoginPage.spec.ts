@@ -71,17 +71,21 @@ describe('LoginPage', () => {
   })
 
   it('calls api.post /login with correct credentials on submit', async () => {
-    vi.mocked(api.post).mockResolvedValue({ data: { username: 'user' } })
+    const { useAuthStore } = await import('@/stores/auth')
+    vi.mocked(api.post).mockResolvedValue({ data: { username: 'user', user_id: 5 } })
     const wrapper = mountPage()
+    const authStore = useAuthStore()
     await inputAt(wrapper, 'login-email').setValue('test@example.com')
     await inputAt(wrapper, 'login-password').setValue('secret')
     await wrapper.find('[data-testid="login-form"]').trigger('submit')
     await flushPromises()
     expect(api.post).toHaveBeenCalledWith('/login', { email: 'test@example.com', password: 'secret' })
+    expect(authStore.user).toBe('user')
+    expect(authStore.userId).toBe(5)
   })
 
   it('calls api.post /register with credentials in register mode', async () => {
-    vi.mocked(api.post).mockResolvedValue({ data: { username: 'user' } })
+    vi.mocked(api.post).mockResolvedValue({ data: { username: 'user', user_id: 5 } })
     const wrapper = mountPage()
     await wrapper.find('[data-testid="login-register-link"]').trigger('click')
     await inputAt(wrapper, 'login-username').setValue('newuser')
@@ -142,6 +146,6 @@ describe('LoginPage', () => {
     wrapper.find('[data-testid="login-form"]').trigger('submit')
     await wrapper.vm.$nextTick()
     expect(wrapper.find('[data-testid="login-submit"]').attributes('disabled')).toBeDefined()
-    resolve!({ data: { username: 'u' } })
+    resolve!({ data: { username: 'u', user_id: 1 } })
   })
 })
