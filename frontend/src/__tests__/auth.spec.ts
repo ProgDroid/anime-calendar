@@ -10,9 +10,18 @@ vi.mock('../config/api', () => ({
   }
 }))
 
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ push: vi.fn() })
-}))
+// Preserve all real vue-router exports (createRouter, createMemoryHistory, etc.)
+// but stub useRouter so the auth store's logout() action doesn't throw when
+// called outside a component tree. This scopes to this file's worker only —
+// no cross-file pollution because importActual re-exports everything else intact.
+const pushMock = vi.fn().mockResolvedValue(undefined)
+vi.mock('vue-router', async (importActual) => {
+  const actual = await importActual<typeof import('vue-router')>()
+  return {
+    ...actual,
+    useRouter: () => ({ push: pushMock }),
+  }
+})
 
 describe('Auth Store', () => {
   beforeEach(() => {

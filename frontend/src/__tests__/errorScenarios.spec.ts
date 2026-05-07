@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createWebHistory, createMemoryHistory } from 'vue-router'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import en from '@/locales/en.json'
 
 // ── Global mocks ────────────────────────────────────────────────────────────
@@ -201,7 +201,7 @@ describe('CalendarPage — error paths', () => {
 describe('MyCalendarsPage — delete failure', () => {
   const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
   const router = createRouter({
-    history: createWebHistory(),
+    history: createMemoryHistory(),
     routes: [{ path: '/:p*', component: { template: '<div/>' } }]
   })
   let pinia: ReturnType<typeof createPinia>

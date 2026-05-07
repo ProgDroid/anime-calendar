@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import axios from 'axios'
 import ResetPasswordPage from '@/components/ResetPasswordPage.vue'
 import en from '@/locales/en.json'
@@ -20,7 +20,7 @@ const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
 
 function makeRouter() {
   return createRouter({
-    history: createWebHistory(),
+    history: createMemoryHistory(),
     routes: [
       { path: '/reset-password', component: ResetPasswordPage },
       { path: '/forgot-password', name: 'ForgotPassword', component: { template: '<div />' } },

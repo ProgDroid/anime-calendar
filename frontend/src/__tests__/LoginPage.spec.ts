@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { setActivePinia, createPinia } from 'pinia'
 import { createI18n } from 'vue-i18n'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createMemoryHistory } from 'vue-router'
 import LoginPage from '@/components/LoginPage.vue'
 import en from '@/locales/en.json'
 import { inputAt } from './helpers/uiInput'
@@ -14,7 +14,7 @@ vi.mock('@/config/api', () => ({
 import api from '@/config/api'
 
 const i18n = createI18n({ legacy: false, locale: 'en', messages: { en } })
-const router = createRouter({ history: createWebHistory(), routes: [{ path: '/:p*', component: LoginPage }] })
+const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/:p*', component: LoginPage }] })
 
 function mountPage() {
   return mount(LoginPage, {
