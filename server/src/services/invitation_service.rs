@@ -257,10 +257,10 @@ impl InvitationService {
     /// invite's `invitee_email`. Caller is the authenticated invitee.
     ///
     /// # Errors
-    /// - `Error::InvalidRequest` for any token failure (missing, expired,
-    ///   already-resolved). Anti-enumeration: always identical shape.
-    /// - `Error::Forbidden` if the actor's email does not match the invite's
-    ///   `invitee_email`.
+    /// - `Error::InvalidRequest` for **any** token-related failure: token not
+    ///   found, expired, already-resolved, or caller's email does not match
+    ///   the invite's `invitee_email`. Anti-enumeration: response shape is
+    ///   always identical regardless of which condition triggered the error.
     /// - Database error variants on infra failure.
     pub async fn accept(&self, actor_id: i32, raw_token: &str) -> ServerResult<CalendarInvitation> {
         let token_hash = hash_token(raw_token);
@@ -274,7 +274,7 @@ impl InvitationService {
 
         let user = crate::mappers::user::UserMapper::get_user_by_id_with(&mut tx, actor_id).await?;
         if !user.email.eq_ignore_ascii_case(&inv.invitee_email) {
-            return Err(Error::Forbidden);
+            return Err(Error::InvalidRequest);
         }
 
         let resolved = CalendarInvitationMapper::mark_resolved_in_tx(
@@ -298,7 +298,11 @@ impl InvitationService {
     /// the invitation `Declined`; no editor row is created.
     ///
     /// # Errors
-    /// Same anti-enumeration shape as `accept`.
+    /// - `Error::InvalidRequest` for **any** token-related failure: token not
+    ///   found, expired, already-resolved, or caller's email does not match
+    ///   the invite's `invitee_email`. Anti-enumeration: response shape is
+    ///   always identical regardless of which condition triggered the error.
+    /// - Database error variants on infra failure.
     pub async fn decline(&self, actor_id: i32, raw_token: &str) -> ServerResult<()> {
         let token_hash = hash_token(raw_token);
         let mut tx = self.pool.begin().await?;
@@ -311,7 +315,7 @@ impl InvitationService {
 
         let user = crate::mappers::user::UserMapper::get_user_by_id_with(&mut tx, actor_id).await?;
         if !user.email.eq_ignore_ascii_case(&inv.invitee_email) {
-            return Err(Error::Forbidden);
+            return Err(Error::InvalidRequest);
         }
 
         let resolved = CalendarInvitationMapper::mark_resolved_in_tx(
@@ -496,6 +500,11 @@ impl InvitationService {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::server::SmtpConfig;
+    use crate::mappers::calendar_invitation::CalendarInvitationMapper;
+    use crate::services::auth::hash_token;
+    use crate::test_helpers::test_pool;
+    use sqlx::Row as _;
 
     /// Helpers aren't enough to build the full live SMTP/Pool service in a
     /// unit test, so the rich integration coverage lives in
@@ -532,4 +541,303 @@ mod tests {
         assert!(check_not_self("foo@bar.com", "FOO@bar.com").is_err());
     }
 
+    // -----------------------------------------------------------------------
+    // Anti-enumeration: accept/decline must collapse ALL token failures to
+    // Error::InvalidRequest (HTTP 400) regardless of condition.
+    // -----------------------------------------------------------------------
+
+    /// Build a minimal `InvitationService` backed by a live pool for
+    /// integration tests. Email is wired with an empty SMTP host so all
+    /// send calls log+no-op instead of touching a real SMTP server.
+    fn make_svc(pool: sqlx::PgPool) -> InvitationService {
+        let inv_mapper = CalendarInvitationMapper::from_pool(pool.clone());
+        let email = crate::services::email::EmailService::new(SmtpConfig::default());
+        InvitationService::new(
+            inv_mapper,
+            email,
+            pool,
+            SharingConfig::default(),
+            "http://localhost".to_string(),
+        )
+    }
+
+    /// Seed a user + calendar + invitation row. Returns `(actor_id, raw_token)`.
+    /// The invitation's `invitee_email` is set to `invitee_email`, and the
+    /// `expires_at` is set according to `expired` (in the past or future).
+    async fn seed_invitation(
+        pool: &sqlx::PgPool,
+        tag: &str,
+        invitee_email: &str,
+        expired: bool,
+    ) -> (i32, String) {
+        let mut conn = pool.acquire().await.unwrap();
+
+        // Owner user
+        let owner = sqlx::query!(
+            "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, NULL) RETURNING id",
+            format!("owner_{tag}"),
+            format!("owner_{tag}@example.com"),
+        )
+        .fetch_one(&mut *conn)
+        .await
+        .unwrap();
+
+        // Calendar owned by owner
+        let cal = sqlx::query(
+            "INSERT INTO calendars (name, language, user_id, subscription_token, event_style) \
+             VALUES ($1, 'english'::language, $2, gen_random_uuid()::text, 'timed') RETURNING id",
+        )
+        .bind(format!("cal_{tag}"))
+        .bind(owner.id)
+        .fetch_one(&mut *conn)
+        .await
+        .unwrap();
+
+        // Raw token + hash
+        let raw_token = format!("deadbeef{tag:0>48}");
+        let token_hash = hash_token(&raw_token);
+
+        let expires_at: NaiveDateTime = if expired {
+            (chrono::Utc::now() - chrono::Duration::days(1)).naive_utc()
+        } else {
+            (chrono::Utc::now() + chrono::Duration::days(7)).naive_utc()
+        };
+
+        let cal_id: i32 = cal.get("id");
+
+        sqlx::query!(
+            "INSERT INTO calendar_invitations
+                (calendar_id, inviter_id, invitee_email, token_hash, expires_at)
+             VALUES ($1, $2, $3, $4, $5)",
+            cal_id,
+            owner.id,
+            invitee_email,
+            token_hash,
+            expires_at,
+        )
+        .execute(&mut *conn)
+        .await
+        .unwrap();
+
+        // Invitee user (email matches invitee_email)
+        let invitee = sqlx::query!(
+            "INSERT INTO users (username, email, password_hash) VALUES ($1, $2, NULL) RETURNING id",
+            format!("invitee_{tag}"),
+            invitee_email,
+        )
+        .fetch_one(&mut *conn)
+        .await
+        .unwrap();
+
+        (invitee.id, raw_token)
+    }
+
+    // --- accept: token not found ---
+
+    #[tokio::test]
+    async fn accept_unknown_token_returns_invalid_request() {
+        let pool = test_pool().await;
+        let svc = make_svc(pool.clone());
+
+        // seed a real user so actor_id is valid
+        let user_id: i32 = sqlx::query_scalar!(
+            "INSERT INTO users (username, email, password_hash)
+             VALUES ('acc_unk1', 'acc_unk1@example.com', NULL) RETURNING id"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let err = svc
+            .accept(user_id, "0000000000000000000000000000000000000000000000000000000000000000")
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidRequest),
+            "expected InvalidRequest for missing token, got {err:?}"
+        );
+    }
+
+    // --- accept: email mismatch (anti-enumeration — was Forbidden, now 400) ---
+
+    #[tokio::test]
+    async fn accept_email_mismatch_returns_invalid_request_not_forbidden() {
+        let pool = test_pool().await;
+        let svc = make_svc(pool.clone());
+
+        // Seed invitation for invitee_a@example.com
+        let (_invitee_id, raw_token) =
+            seed_invitation(&pool, "amm", "invitee_amm@example.com", false).await;
+
+        // A different user whose email does NOT match the invitee_email
+        let other_id: i32 = sqlx::query_scalar!(
+            "INSERT INTO users (username, email, password_hash)
+             VALUES ('other_amm', 'other_amm@example.com', NULL) RETURNING id"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let err = svc.accept(other_id, &raw_token).await.unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidRequest),
+            "email mismatch must return InvalidRequest (not Forbidden), got {err:?}"
+        );
+    }
+
+    // --- accept: already-resolved race ---
+
+    #[tokio::test]
+    async fn accept_already_resolved_returns_invalid_request() {
+        let pool = test_pool().await;
+        let svc = make_svc(pool.clone());
+
+        let (invitee_id, raw_token) =
+            seed_invitation(&pool, "aar", "invitee_aar@example.com", false).await;
+
+        // Manually resolve the row so the race-condition branch fires.
+        sqlx::query!(
+            "UPDATE calendar_invitations SET status = 'accepted', resolved_at = NOW()
+             WHERE token_hash = $1",
+            hash_token(&raw_token),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        // The row is no longer 'pending', so find_pending_by_token_hash_in_tx
+        // returns None — collapses to InvalidRequest.
+        let err = svc.accept(invitee_id, &raw_token).await.unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidRequest),
+            "already-resolved token must return InvalidRequest, got {err:?}"
+        );
+    }
+
+    // --- decline: token not found ---
+
+    #[tokio::test]
+    async fn decline_unknown_token_returns_invalid_request() {
+        let pool = test_pool().await;
+        let svc = make_svc(pool.clone());
+
+        let user_id: i32 = sqlx::query_scalar!(
+            "INSERT INTO users (username, email, password_hash)
+             VALUES ('dec_unk1', 'dec_unk1@example.com', NULL) RETURNING id"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let err = svc
+            .decline(user_id, "1111111111111111111111111111111111111111111111111111111111111111")
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidRequest),
+            "expected InvalidRequest for missing token on decline, got {err:?}"
+        );
+    }
+
+    // --- decline: email mismatch (anti-enumeration — was Forbidden, now 400) ---
+
+    #[tokio::test]
+    async fn decline_email_mismatch_returns_invalid_request_not_forbidden() {
+        let pool = test_pool().await;
+        let svc = make_svc(pool.clone());
+
+        let (_invitee_id, raw_token) =
+            seed_invitation(&pool, "dmm", "invitee_dmm@example.com", false).await;
+
+        let other_id: i32 = sqlx::query_scalar!(
+            "INSERT INTO users (username, email, password_hash)
+             VALUES ('other_dmm', 'other_dmm@example.com', NULL) RETURNING id"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        let err = svc.decline(other_id, &raw_token).await.unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidRequest),
+            "email mismatch on decline must return InvalidRequest (not Forbidden), got {err:?}"
+        );
+    }
+
+    // --- decline: already-resolved race ---
+
+    #[tokio::test]
+    async fn decline_already_resolved_returns_invalid_request() {
+        let pool = test_pool().await;
+        let svc = make_svc(pool.clone());
+
+        let (invitee_id, raw_token) =
+            seed_invitation(&pool, "dar", "invitee_dar@example.com", false).await;
+
+        sqlx::query!(
+            "UPDATE calendar_invitations SET status = 'declined', resolved_at = NOW()
+             WHERE token_hash = $1",
+            hash_token(&raw_token),
+        )
+        .execute(&pool)
+        .await
+        .unwrap();
+
+        let err = svc.decline(invitee_id, &raw_token).await.unwrap_err();
+        assert!(
+            matches!(err, Error::InvalidRequest),
+            "already-resolved token must return InvalidRequest on decline, got {err:?}"
+        );
+    }
+
+    // --- no path in accept/decline returns Forbidden ---
+
+    #[tokio::test]
+    async fn accept_never_returns_forbidden() {
+        // Enumeration: every known error condition was covered above and all
+        // assert InvalidRequest. This test makes the absence of Forbidden
+        // explicit by checking a token whose record exists but email is wrong.
+        let pool = test_pool().await;
+        let svc = make_svc(pool.clone());
+
+        let (_invitee_id, raw_token) =
+            seed_invitation(&pool, "anf", "invitee_anf@example.com", false).await;
+
+        let attacker_id: i32 = sqlx::query_scalar!(
+            "INSERT INTO users (username, email, password_hash)
+             VALUES ('attacker_anf', 'attacker_anf@example.com', NULL) RETURNING id"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        match svc.accept(attacker_id, &raw_token).await {
+            Err(Error::Forbidden) => panic!("accept must NOT return Forbidden — AUDIT.md H-5"),
+            Err(Error::InvalidRequest) => {} // correct
+            other => panic!("unexpected result: {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn decline_never_returns_forbidden() {
+        let pool = test_pool().await;
+        let svc = make_svc(pool.clone());
+
+        let (_invitee_id, raw_token) =
+            seed_invitation(&pool, "dnf", "invitee_dnf@example.com", false).await;
+
+        let attacker_id: i32 = sqlx::query_scalar!(
+            "INSERT INTO users (username, email, password_hash)
+             VALUES ('attacker_dnf', 'attacker_dnf@example.com', NULL) RETURNING id"
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+
+        match svc.decline(attacker_id, &raw_token).await {
+            Err(Error::Forbidden) => panic!("decline must NOT return Forbidden — AUDIT.md H-5"),
+            Err(Error::InvalidRequest) => {} // correct
+            other => panic!("unexpected result: {other:?}"),
+        }
+    }
 }
