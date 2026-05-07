@@ -5,11 +5,80 @@ google_client_id = ""
 google_client_secret = ""
 jwt_secret = ""
 compress = true
+# Keep true when running behind a TLS-terminating reverse proxy (the normal
+# docker-compose production case). Set to false only for local HTTP-only testing.
 cookie_secure = true
+# Set to true only in development — exposes full API surface at /swagger-ui/
+enable_docs = false
 allowed_origins = ["http://localhost"]
 
 [redis]
+# "redis" resolves to the redis service on the docker-compose internal network.
 host = "redis"
 port = 6379
 password = ""
 db = 0
+
+# The frontend service publishes on host port 80. Override for production deployments.
+app_base_url = "http://localhost"
+
+[app]
+# "development" | "staging" | "production". The dev set_subscription CLI
+# refuses to run when this is "production".
+environment = "production"
+# Public base URL the frontend is served from. Used to build the Stripe
+# Checkout success/cancel return URLs and the Customer Portal return URL.
+# Override for production deployments with the actual public URL.
+frontend_url = "http://localhost"
+
+[stripe]
+# Test-mode credentials from your Stripe Dashboard. Live-mode keys MUST
+# only ever live in your production secrets store, never in this file.
+# Rotate webhook_secret when you re-create the webhook endpoint in Stripe.
+publishable_key = ""
+secret_key = ""
+webhook_secret = ""
+# Recurring price IDs created in Stripe Dashboard for the Pro tier.
+# v1 pricing: $2.99/month, $24.99/year (≈30% annual savings, 14-day trial).
+# Create these in test mode first via the Stripe Dashboard, then paste the
+# `price_*` IDs here. See docs/checklists/2026-05-monetisation-stripe-price-update.md.
+price_id_monthly = ""
+price_id_annual = ""
+
+[smtp]
+host = ""
+port = 587
+username = ""
+password = ""
+from_address = "noreply@example.com"
+
+[server.metrics]
+# Expose Prometheus metrics on an HTTP listener. Bind to 0.0.0.0 so a
+# Prometheus container on the same docker-compose network can scrape it.
+# For production deployments where Prometheus runs on a separate host,
+# consider binding to 127.0.0.1 and using an SSH tunnel or internal LB.
+enabled = true
+host = "0.0.0.0"
+port = 9090
+
+[cache]
+metadata_ttl_seconds       = 86400
+airing_ttl_seconds         = 900
+search_ttl_seconds         = 3600
+calendar_items_ttl_seconds = 300
+export_ttl_seconds         = 300
+
+[limits]
+free_calendar_limit = 3
+free_show_cap       = 25
+pro_max_reminders   = 5
+
+[sharing]
+# Co-editor sharing limits and timing. Read by the invitation service to
+# gate cap/expiry/rate-limit decisions.
+editor_cap                  = 5      # max active+pending editors per calendar
+invitation_expiry_days      = 7
+invite_rate_limit_per_hour  = 20
+presence_ttl_seconds        = 60
+presence_heartbeat_seconds  = 30
+sse_heartbeat_seconds       = 25
