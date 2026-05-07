@@ -10,7 +10,7 @@ use crate::entity::user_settings::UserSettings;
 use crate::mappers::refresh_token::RefreshTokenMapper;
 use crate::mappers::user_settings::UserSettingsMapper;
 use actix_web::{HttpResponse, ResponseError, delete, get, post, put, web};
-use log::{error, info};
+use log::{debug, error, info};
 use serde::{Deserialize, Serialize};
 
 /// Canonical set of reminder offsets (minutes before air time) that the
@@ -367,7 +367,7 @@ pub async fn update_user_settings(
         }
     }
 
-    info!("{settings_data:?}");
+    debug!("{settings_data:?}");
     match user_settings_mapper
         .update_user_settings(user_id, &settings_data)
         .await

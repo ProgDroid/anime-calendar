@@ -4,7 +4,7 @@ use common::id::Id;
 use common::item::AnimeDataSource as _;
 use common::language::Language;
 use icalendar::{Alarm, Calendar as Ics, Component as _, Event, EventLike as _};
-use log::info;
+use log::debug;
 use sqlx::PgPool;
 
 use crate::entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity};
@@ -231,11 +231,11 @@ fn render_common_calendar(
         .items
         .iter()
         .flat_map(|item| {
-            info!("Processing item {}", item.title.english);
+            debug!("Processing item {}", item.title.english);
             item.airing_schedule
                 .iter()
                 .map(|episode| {
-                    info!(
+                    debug!(
                         "Processing {} episode {} airing at {}",
                         item.title.english,
                         episode.episode,
