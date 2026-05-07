@@ -7,6 +7,7 @@ pub mod entitlement;
 pub mod frozen_ics;
 pub mod invitation_service;
 pub mod ics_export;
+pub mod presence;
 pub mod reconcile;
 pub mod sharing_authz;
 pub mod show_count;

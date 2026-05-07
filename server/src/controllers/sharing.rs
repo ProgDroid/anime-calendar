@@ -24,6 +24,7 @@ use crate::mappers::user::UserMapper;
 use crate::middleware::auth::Claims;
 use crate::services::calendar_events::{CalendarEvent, CalendarEventPublisher};
 use crate::services::invitation_service::{InvitationPreview, InvitationService};
+use crate::services::presence::PresenceService;
 use crate::services::sharing_authz::{Action, SharingAuthz};
 
 #[derive(Debug, Clone, Deserialize, ToSchema)]
@@ -543,4 +544,65 @@ pub async fn decline_invitation(
         Ok(()) => HttpResponse::Ok().json(ok_json()),
         Err(e) => e.error_response(),
     }
+}
+
+// ────────────────────────────────────────────────────────────────────────────
+// Presence
+// ────────────────────────────────────────────────────────────────────────────
+
+/// Record a heartbeat for the calling user on this calendar.
+///
+/// Allowed for both the calendar owner and active editors (`ItemMutate`
+/// permission). Publishes a `Presence` event with the current viewer list so
+/// SSE consumers receive live updates.  Returns `204 No Content`.
+#[utoipa::path(
+    post,
+    path = "/calendars/{id}/presence/heartbeat",
+    operation_id = "presence_heartbeat",
+    tag = "sharing",
+    responses(
+        (status = 204),
+        (status = 401),
+        (status = 403),
+        (status = 404),
+    ),
+    security(("bearer_auth" = []))
+)]
+#[post("/calendars/{id}/presence/heartbeat")]
+#[allow(clippy::future_not_send)]
+pub async fn presence_heartbeat(
+    path: web::Path<i32>,
+    claims: Claims,
+    pool: web::Data<sqlx::PgPool>,
+    authz: web::Data<SharingAuthz>,
+    user_mapper: web::Data<UserMapper>,
+    presence: web::Data<PresenceService>,
+    publisher: web::Data<CalendarEventPublisher>,
+) -> HttpResponse {
+    let calendar_id = path.into_inner();
+
+    let actor_id = match claims.user_id() {
+        Ok(id) => id,
+        Err(e) => return e.error_response(),
+    };
+    let cal = match load_calendar_any_owner(pool.get_ref(), calendar_id).await {
+        Ok(c) => c,
+        Err(e) => return e.error_response(),
+    };
+    if let Err(e) = authz.assert_can(actor_id, &cal, Action::ItemMutate).await {
+        return e.error_response();
+    }
+    let user = match user_mapper.get_user_by_id(actor_id).await {
+        Ok(u) => u,
+        Err(e) => return e.error_response(),
+    };
+    let viewers = match presence.heartbeat(calendar_id, actor_id, &user.username).await {
+        Ok(v) => v,
+        Err(e) => return e.error_response(),
+    };
+    let _ = publisher
+        .publish_presence(calendar_id, viewers)
+        .await
+        .map_err(|e| log::error!("publish_presence: {e}"));
+    HttpResponse::NoContent().finish()
 }

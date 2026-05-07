@@ -109,6 +109,15 @@ async fn main() -> ServerResult<()> {
 
     let calendar_event_publisher = CalendarEventPublisher::new(redis_pubsub.clone());
 
+    let presence_service = server::services::presence::PresenceService::new(
+        &settings.redis.host,
+        settings.redis.port,
+        &settings.redis.password,
+        u64::from(settings.sharing.presence_ttl_seconds),
+    )
+    .await
+    .expect("Failed to initialize PresenceService");
+
     let cached_anilist = CachedAnilist::new(anilist, cache.clone(), &settings.cache);
 
     // Dedicated pool for ICS export + frozen blob services. Cheap (Arc-backed)
@@ -171,6 +180,7 @@ async fn main() -> ServerResult<()> {
         invitation_service,
         redis_pubsub,
         calendar_event_publisher,
+        presence_service,
     )?
     .await?)
 }

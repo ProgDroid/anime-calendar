@@ -124,6 +124,7 @@ pub fn start(
     invitation_service: crate::services::invitation_service::InvitationService,
     redis_pubsub: crate::redis_pubsub::RedisPubSub,
     calendar_event_publisher: CalendarEventPublisher,
+    presence_service: crate::services::presence::PresenceService,
 ) -> ServerResult<Server> {
     let level_filter = match LevelFilter::from_str(&config.log_level) {
         Ok(filter) => filter,
@@ -245,6 +246,7 @@ pub fn start(
             .app_data(web::Data::new(sharing_config.clone()))
             .app_data(web::Data::new(redis_pubsub.clone()))
             .app_data(web::Data::new(calendar_event_publisher.clone()))
+            .app_data(web::Data::new(presence_service.clone()))
             .service(public_config::get)
             .service(item::get)
             .service(items::get)
@@ -288,6 +290,7 @@ pub fn start(
             .service(crate::controllers::sharing::preview_invitation)
             .service(crate::controllers::sharing::accept_invitation)
             .service(crate::controllers::sharing::decline_invitation)
+            .service(crate::controllers::sharing::presence_heartbeat)
     })
     .bind(format!("{host}:{port}"))?
     .run())
