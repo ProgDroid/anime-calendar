@@ -172,7 +172,7 @@ mod tests {
     use crate::mappers::calendar_invitation::CalendarInvitationMapper;
     use chrono::{Duration, Utc};
 
-    async fn seed_user(pool: &sqlx::PgPool) -> i32 {
+    async fn seed_user(conn: &mut sqlx::PgConnection) -> i32 {
         let n: u64 = rand::random();
         sqlx::query_scalar::<_, i32>(
             "INSERT INTO users (username, email, password_hash) \
@@ -180,12 +180,12 @@ mod tests {
         )
         .bind(format!("sharingtest_{n}"))
         .bind(format!("sharingtest_{n}@example.com"))
-        .fetch_one(pool)
+        .fetch_one(&mut *conn)
         .await
         .unwrap()
     }
 
-    async fn seed_calendar(pool: &sqlx::PgPool, user_id: i32, name: &str) -> i32 {
+    async fn seed_calendar(conn: &mut sqlx::PgConnection, user_id: i32, name: &str) -> i32 {
         let n: u64 = rand::random();
         sqlx::query_scalar::<_, i32>(
             "INSERT INTO calendars (name, language, user_id, subscription_token) \
@@ -194,7 +194,7 @@ mod tests {
         .bind(name)
         .bind(user_id)
         .bind(format!("tok-restore-{n}"))
-        .fetch_one(pool)
+        .fetch_one(&mut *conn)
         .await
         .unwrap()
     }
@@ -206,50 +206,46 @@ mod tests {
     ///   `calendar_id`, `user_id`, and `calendar_name`.
     #[tokio::test]
     async fn upgrade_restores_editors_and_invites() {
-        let pool = crate::test_helpers::test_pool().await;
+        let mut tx = crate::test_helpers::test_tx().await;
 
         // Seed owner with 2 calendars.
-        let owner_id = seed_user(&pool).await;
-        let cal_a = seed_calendar(&pool, owner_id, "Calendar Alpha").await;
-        let cal_b = seed_calendar(&pool, owner_id, "Calendar Beta").await;
+        let owner_id = seed_user(&mut tx).await;
+        let cal_a = seed_calendar(&mut tx, owner_id, "Calendar Alpha").await;
+        let cal_b = seed_calendar(&mut tx, owner_id, "Calendar Beta").await;
 
         // Seed 2 editors per calendar.
-        let editor_a1 = seed_user(&pool).await;
-        let editor_a2 = seed_user(&pool).await;
-        let editor_b1 = seed_user(&pool).await;
-        let editor_b2 = seed_user(&pool).await;
+        let editor_a1 = seed_user(&mut tx).await;
+        let editor_a2 = seed_user(&mut tx).await;
+        let editor_b1 = seed_user(&mut tx).await;
+        let editor_b2 = seed_user(&mut tx).await;
 
         let inv_expires = (Utc::now() + Duration::days(7)).naive_utc();
 
         // Insert active editors then suspend them all.
-        let mut conn = pool.acquire().await.unwrap();
-        CalendarEditorMapper::upsert_active_in_tx(&mut conn, cal_a, editor_a1).await.unwrap();
-        CalendarEditorMapper::upsert_active_in_tx(&mut conn, cal_a, editor_a2).await.unwrap();
-        CalendarEditorMapper::upsert_active_in_tx(&mut conn, cal_b, editor_b1).await.unwrap();
-        CalendarEditorMapper::upsert_active_in_tx(&mut conn, cal_b, editor_b2).await.unwrap();
-        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut conn, cal_a).await.unwrap();
-        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut conn, cal_b).await.unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_a, editor_a1).await.unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_a, editor_a2).await.unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_b, editor_b1).await.unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_b, editor_b2).await.unwrap();
+        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut *tx, cal_a).await.unwrap();
+        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut *tx, cal_b).await.unwrap();
 
         // Seed 1 suspended invitation per calendar.
         let na: u64 = rand::random();
         CalendarInvitationMapper::create_in_tx(
-            &mut conn, cal_a, owner_id,
+            &mut *tx, cal_a, owner_id,
             &format!("inv_a_{na}@example.com"), &format!("hash_a_{na}"), inv_expires,
         ).await.unwrap();
-        CalendarInvitationMapper::suspend_pending_for_calendar_in_tx(&mut conn, cal_a).await.unwrap();
+        CalendarInvitationMapper::suspend_pending_for_calendar_in_tx(&mut *tx, cal_a).await.unwrap();
 
         let nb: u64 = rand::random();
         CalendarInvitationMapper::create_in_tx(
-            &mut conn, cal_b, owner_id,
+            &mut *tx, cal_b, owner_id,
             &format!("inv_b_{nb}@example.com"), &format!("hash_b_{nb}"), inv_expires,
         ).await.unwrap();
-        CalendarInvitationMapper::suspend_pending_for_calendar_in_tx(&mut conn, cal_b).await.unwrap();
-        drop(conn);
+        CalendarInvitationMapper::suspend_pending_for_calendar_in_tx(&mut *tx, cal_b).await.unwrap();
 
-        // Act: restore inside a transaction, then commit.
-        let mut tx = pool.begin().await.unwrap();
-        let restored = restore_owner_sharing_in_tx(&mut tx, owner_id).await.unwrap();
-        tx.commit().await.unwrap();
+        // Act: call the function under test using the same transaction connection.
+        let restored = restore_owner_sharing_in_tx(&mut *tx, owner_id).await.unwrap();
 
         // Assert: all editors are now active with suspended_at = NULL.
         let active_a: i64 = sqlx::query_scalar(
@@ -257,7 +253,7 @@ mod tests {
              WHERE calendar_id = $1 AND active = true AND suspended_at IS NULL",
         )
         .bind(cal_a)
-        .fetch_one(&pool)
+        .fetch_one(&mut *tx)
         .await
         .unwrap();
         assert_eq!(active_a, 2, "cal_a: 2 active editors after restore");
@@ -267,7 +263,7 @@ mod tests {
              WHERE calendar_id = $1 AND active = true AND suspended_at IS NULL",
         )
         .bind(cal_b)
-        .fetch_one(&pool)
+        .fetch_one(&mut *tx)
         .await
         .unwrap();
         assert_eq!(active_b, 2, "cal_b: 2 active editors after restore");
@@ -278,7 +274,7 @@ mod tests {
              WHERE calendar_id = $1 AND status = 'pending'",
         )
         .bind(cal_a)
-        .fetch_one(&pool)
+        .fetch_one(&mut *tx)
         .await
         .unwrap();
         assert_eq!(pending_a, 1, "cal_a: 1 pending invitation after restore");
@@ -288,7 +284,7 @@ mod tests {
              WHERE calendar_id = $1 AND status = 'pending'",
         )
         .bind(cal_b)
-        .fetch_one(&pool)
+        .fetch_one(&mut *tx)
         .await
         .unwrap();
         assert_eq!(pending_b, 1, "cal_b: 1 pending invitation after restore");
@@ -311,28 +307,7 @@ mod tests {
 
         assert_eq!(pairs, expected, "restored records must match all editors");
 
-        // Cleanup.
-        sqlx::query("DELETE FROM calendar_invitations WHERE calendar_id = ANY($1)")
-            .bind(&[cal_a, cal_b] as &[i32])
-            .execute(&pool)
-            .await
-            .unwrap();
-        sqlx::query("DELETE FROM calendar_editors WHERE calendar_id = ANY($1)")
-            .bind(&[cal_a, cal_b] as &[i32])
-            .execute(&pool)
-            .await
-            .unwrap();
-        for uid in [editor_a1, editor_a2, editor_b1, editor_b2, owner_id] {
-            sqlx::query("DELETE FROM calendars WHERE user_id = $1")
-                .bind(uid)
-                .execute(&pool)
-                .await
-                .unwrap();
-            sqlx::query("DELETE FROM users WHERE id = $1")
-                .bind(uid)
-                .execute(&pool)
-                .await
-                .unwrap();
-        }
+        // tx drops here and rolls back automatically — no manual cleanup needed.
+        tx.rollback().await.unwrap();
     }
 }
