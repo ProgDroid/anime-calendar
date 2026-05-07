@@ -497,8 +497,6 @@ impl InvitationService {
 mod tests {
     use super::*;
 
-    use crate::entity::calendar::{Calendar, Language};
-
     /// Helpers aren't enough to build the full live SMTP/Pool service in a
     /// unit test, so the rich integration coverage lives in
     /// `controllers::sharing::tests`. The tests here pin pure logic that
