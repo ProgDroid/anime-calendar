@@ -75,7 +75,7 @@ EXPOSE 8080
 # --fail  → curl exits non-zero on HTTP 4xx/5xx, so the HEALTHCHECK reflects
 #            backend liveness, not just TCP openness.
 # Phase 3 follow-up: add a dedicated /health endpoint reporting DB+Redis state.
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
     CMD curl --fail --silent --show-error http://localhost:8080/public-config || exit 1
 
 # tini is the ENTRYPOINT so it becomes PID 1 and proxies signals to ./server.
