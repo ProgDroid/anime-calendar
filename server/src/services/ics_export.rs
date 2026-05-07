@@ -276,7 +276,8 @@ fn render_common_calendar(
         .collect();
 
     let mut ics = Ics::new();
-    let mut ics = ics.name(&calendar.name);
+    let sanitized_name = sanitize_name_for_line_protocol(&calendar.name);
+    let mut ics = ics.name(&sanitized_name);
     for event in events {
         ics = ics.push(event);
     }
@@ -770,5 +771,38 @@ mod tests {
         // The whole output is a valid minimal calendar (starts and ends correctly).
         assert!(out.starts_with("BEGIN:VCALENDAR\r\n"));
         assert!(out.ends_with("END:VCALENDAR\r\n"));
+    }
+
+    // ─── render_common_calendar CRLF-injection guard (H-1 follow-up) ─────────
+
+    #[test]
+    fn render_common_calendar_injection_does_not_add_second_vevent() {
+        // Simulate a calendar whose `name` field contains a CRLF-injected ICS
+        // block. The `icalendar` crate's `.name()` builder handles RFC 5545
+        // value-level escaping (commas, semicolons, backslashes) but does NOT
+        // strip CR/LF — so without sanitization `X-WR-CALNAME` would contain
+        // injected lines that calendar parsers treat as real property lines.
+        let mut cal = synthetic_calendar(1_700_000_000);
+        cal.name = "Evil\r\nBEGIN:VEVENT\r\nSUMMARY:Injected\r\nEND:VEVENT\r\nX-WR-CALNAME:"
+            .to_owned();
+
+        let out = format!("{}", render_common_calendar(&cal, "allday", &[]));
+
+        // Critical invariant: no standalone BEGIN:VEVENT injected by the name.
+        // The real calendar item contributes exactly one BEGIN:VEVENT; a second
+        // one would mean the injection succeeded.
+        let vevent_count = out.split("\r\n").filter(|l| *l == "BEGIN:VEVENT").count();
+        assert_eq!(
+            vevent_count,
+            1,
+            "expected exactly 1 BEGIN:VEVENT (the real event); \
+             injection guard failed:\n{out}"
+        );
+
+        // The sanitized name prefix should still appear in the output.
+        assert!(
+            out.contains("Evil"),
+            "Sanitized calendar name prefix should appear:\n{out}"
+        );
     }
 }
