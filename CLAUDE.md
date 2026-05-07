@@ -92,6 +92,7 @@ Pin all third-party GitHub Actions to commit hashes, not tags:
 - When adding translatable text, add the key to **both** `en.json` and `pt.json`
 - Translation key naming: hierarchical, e.g. `auth.login.title` — top-level namespaces: `app`, `auth`, `calendar`, `calendars`, `userDetails`, `userSettings`, `errors`
 - Design-system primitives in `components/ui/` use `tailwind-variants` (`tv()`) for variant→class mapping at the top of each component file. Use OKLCH tokens (`bg-bg-1`, `text-fg-2`, `bg-accent-1`, etc.) over DaisyUI semantic colors when writing new UI.
+- **Text vs surface accent/danger tokens**: For accent/danger *text* on neutral backgrounds use `text-accent-1-text` and `text-danger-text` (AA 4.5:1 in both themes). Reserve bare `bg-accent-1`, `border-danger`, etc. for *surfaces* (button bg, badge bg, card border). Bare `text-accent-1` / `text-danger` fail contrast for body text in light theme.
 - The `<UiBannerFade>` mask string is locked verbatim by a vitest contract test — do not edit it without updating the lock test and confirming the change is intentional.
 - "Server-wins" reconcile call sites must guard on auth state when the upstream fetcher fabricates defaults for unauth users (see `useTheme` reconcile in `main.ts`). Otherwise the unauth defaults will silently clobber `localStorage`.
 - Auth guard lives in `router/index.ts` `beforeEach` — settings fetched on non-public navigations only

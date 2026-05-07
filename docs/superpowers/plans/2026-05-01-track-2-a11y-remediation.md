@@ -2,7 +2,7 @@
 
 **Date filed:** 2026-05-01
 **Source audit:** `docs/superpowers/plans/2026-05-01-track-2-a11y-audit.md`
-**Status:** Pending — to be picked up in a later session
+**Status:** Done (2026-05-01) — All 6 batches landed; merged to `main` as commit `504516a`. Test count 267 / 49 files passing. Live axe verified 0 contrast / link-in-text-block violations on `/login` across 5 accents × 2 themes. Authenticated-route sweep deferred to `2026-05-01-track-2-a11y-authenticated-sweep.md`.
 
 This plan turns the WCAG 2.1 AA audit findings into actionable batches. Address in batch order; each batch is independently shippable.
 

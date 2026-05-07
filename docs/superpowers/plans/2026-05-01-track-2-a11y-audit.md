@@ -1,5 +1,7 @@
 # Track 2 — WCAG 2.1 AA Audit
 
+> **Status: Done (2026-05-01)** — Findings driven into `2026-05-01-track-2-a11y-remediation.md`, which merged to `main` as `504516a`. Live axe re-verification confirmed zero contrast / link-in-text-block violations across 5 accents × 2 themes on `/login` at 375×812. Authenticated-route sweep deferred to `2026-05-01-track-2-a11y-authenticated-sweep.md`.
+
 **Date:** 2026-05-01
 **Method:** Static source audit of `frontend/src/components/**` + token-level contrast estimation against `frontend/src/assets/tokens.css` + ARIA/semantic review of every Track-2 surface.
 
