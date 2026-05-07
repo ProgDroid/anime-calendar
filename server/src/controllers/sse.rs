@@ -70,8 +70,13 @@ pub async fn calendar_events(
     let viewers: Vec<Viewer> = presence.list(calendar_id).await.unwrap_or_default();
 
     let initial_meta = json!({ "type": "meta_snapshot", "v": meta_version }).to_string();
-    let initial_presence = serde_json::to_string(&CalendarEvent::Presence { viewers })
-        .unwrap_or_default();
+    let initial_presence = match serde_json::to_string(&CalendarEvent::Presence { viewers }) {
+        Ok(s) => s,
+        Err(e) => {
+            log::error!("sse: failed to serialise initial presence frame: {e}");
+            String::new()
+        }
+    };
 
     let stream = async_stream::stream! {
         yield Ok::<sse::Event, Infallible>(sse::Event::Data(sse::Data::new(initial_meta)));
@@ -97,7 +102,11 @@ pub async fn calendar_events(
                         yield Ok(sse::Event::Data(sse::Data::new(payload)));
                         break; // close stream after kick
                     }
-                    Err(_) => {}
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        log::warn!("sse: kick_rx lagged by {n} messages, closing stream as precaution");
+                        break;
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {}
                 },
                 _ = interval.tick() => {
                     yield Ok(sse::Event::Comment("ping".into()));
