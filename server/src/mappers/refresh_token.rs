@@ -40,7 +40,7 @@ impl RefreshTokenMapper {
     pub async fn replace_token(&self, user_id: i32, token_hash: &str) -> ServerResult<()> {
         crate::metrics::db::timed("refresh_token.replace_token", async {
             let mut tx = self.db.pool.begin().await?;
-            if let Err(e) = Self::replace_token_with(&mut tx, user_id, token_hash).await {
+            if let Err(e) = Self::replace_token_in_tx(&mut tx, user_id, token_hash).await {
                 tx.rollback().await?;
                 return Err(e);
             }
@@ -50,7 +50,7 @@ impl RefreshTokenMapper {
         .await
     }
 
-    pub(crate) async fn replace_token_with(
+    pub(crate) async fn replace_token_in_tx(
         conn: &mut sqlx::PgConnection,
         user_id: i32,
         token_hash: &str,
@@ -78,12 +78,12 @@ impl RefreshTokenMapper {
     /// Returns `Error::Unauthorised` if no valid token matches.
     pub async fn find_valid_token(&self, token_hash: &str) -> ServerResult<RefreshToken> {
         crate::metrics::db::timed("refresh_token.find_valid_token", async {
-            Self::find_valid_token_with(&mut *self.db.pool.acquire().await?, token_hash).await
+            Self::find_valid_token_in_tx(&mut *self.db.pool.acquire().await?, token_hash).await
         })
         .await
     }
 
-    pub(crate) async fn find_valid_token_with(
+    pub(crate) async fn find_valid_token_in_tx(
         conn: &mut sqlx::PgConnection,
         token_hash: &str,
     ) -> ServerResult<RefreshToken> {
@@ -119,7 +119,7 @@ impl RefreshTokenMapper {
         crate::metrics::db::timed("refresh_token.rotate_token", async {
             let mut tx = self.db.pool.begin().await?;
             if let Err(e) =
-                Self::rotate_token_with(&mut tx, old_token_id, user_id, new_token_hash).await
+                Self::rotate_token_in_tx(&mut tx, old_token_id, user_id, new_token_hash).await
             {
                 tx.rollback().await?;
                 return Err(e);
@@ -130,7 +130,7 @@ impl RefreshTokenMapper {
         .await
     }
 
-    pub(crate) async fn rotate_token_with(
+    pub(crate) async fn rotate_token_in_tx(
         conn: &mut sqlx::PgConnection,
         old_token_id: i32,
         user_id: i32,
@@ -162,13 +162,13 @@ impl RefreshTokenMapper {
     /// Returns an error if the database query fails.
     pub async fn find_user_id_for_used_token(&self, token_hash: &str) -> ServerResult<Option<i32>> {
         crate::metrics::db::timed("refresh_token.find_used_token", async {
-            Self::find_user_id_for_used_token_with(&mut *self.db.pool.acquire().await?, token_hash)
+            Self::find_user_id_for_used_token_in_tx(&mut *self.db.pool.acquire().await?, token_hash)
                 .await
         })
         .await
     }
 
-    pub(crate) async fn find_user_id_for_used_token_with(
+    pub(crate) async fn find_user_id_for_used_token_in_tx(
         conn: &mut sqlx::PgConnection,
         token_hash: &str,
     ) -> ServerResult<Option<i32>> {
@@ -187,12 +187,12 @@ impl RefreshTokenMapper {
     /// Returns an error if the query fails.
     pub async fn invalidate_all_for_user(&self, user_id: i32) -> ServerResult<()> {
         crate::metrics::db::timed("refresh_token.invalidate_all", async {
-            Self::invalidate_all_for_user_with(&mut *self.db.pool.acquire().await?, user_id).await
+            Self::invalidate_all_for_user_in_tx(&mut *self.db.pool.acquire().await?, user_id).await
         })
         .await
     }
 
-    pub(crate) async fn invalidate_all_for_user_with(
+    pub(crate) async fn invalidate_all_for_user_in_tx(
         conn: &mut sqlx::PgConnection,
         user_id: i32,
     ) -> ServerResult<()> {
@@ -234,10 +234,10 @@ mod tests {
         let user_id = seed_user(&mut tx).await;
         let raw = "raw_token_abc";
         let h = hash(raw);
-        RefreshTokenMapper::replace_token_with(&mut tx, user_id, &h)
+        RefreshTokenMapper::replace_token_in_tx(&mut tx, user_id, &h)
             .await
             .unwrap();
-        let tok = RefreshTokenMapper::find_valid_token_with(&mut tx, &h)
+        let tok = RefreshTokenMapper::find_valid_token_in_tx(&mut tx, &h)
             .await
             .unwrap();
         assert_eq!(tok.user_id, user_id);
@@ -250,19 +250,19 @@ mod tests {
         let user_id = seed_user(&mut tx).await;
         let h1 = hash("first_token");
         let h2 = hash("second_token");
-        RefreshTokenMapper::replace_token_with(&mut tx, user_id, &h1)
+        RefreshTokenMapper::replace_token_in_tx(&mut tx, user_id, &h1)
             .await
             .unwrap();
-        RefreshTokenMapper::replace_token_with(&mut tx, user_id, &h2)
+        RefreshTokenMapper::replace_token_in_tx(&mut tx, user_id, &h2)
             .await
             .unwrap();
         assert!(
-            RefreshTokenMapper::find_valid_token_with(&mut tx, &h1)
+            RefreshTokenMapper::find_valid_token_in_tx(&mut tx, &h1)
                 .await
                 .is_err()
         );
         assert!(
-            RefreshTokenMapper::find_valid_token_with(&mut tx, &h2)
+            RefreshTokenMapper::find_valid_token_in_tx(&mut tx, &h2)
                 .await
                 .is_ok()
         );
@@ -274,25 +274,25 @@ mod tests {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = seed_user(&mut tx).await;
         let h1 = hash("first_token");
-        RefreshTokenMapper::replace_token_with(&mut tx, user_id, &h1)
+        RefreshTokenMapper::replace_token_in_tx(&mut tx, user_id, &h1)
             .await
             .unwrap();
-        let old = RefreshTokenMapper::find_valid_token_with(&mut tx, &h1)
+        let old = RefreshTokenMapper::find_valid_token_in_tx(&mut tx, &h1)
             .await
             .unwrap();
 
         let h2 = hash("rotated_token");
-        RefreshTokenMapper::rotate_token_with(&mut tx, old.id, user_id, &h2)
+        RefreshTokenMapper::rotate_token_in_tx(&mut tx, old.id, user_id, &h2)
             .await
             .unwrap();
 
         assert!(
-            RefreshTokenMapper::find_valid_token_with(&mut tx, &h1)
+            RefreshTokenMapper::find_valid_token_in_tx(&mut tx, &h1)
                 .await
                 .is_err()
         );
         assert!(
-            RefreshTokenMapper::find_valid_token_with(&mut tx, &h2)
+            RefreshTokenMapper::find_valid_token_in_tx(&mut tx, &h2)
                 .await
                 .is_ok()
         );
@@ -304,14 +304,14 @@ mod tests {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = seed_user(&mut tx).await;
         let h = hash("some_token");
-        RefreshTokenMapper::replace_token_with(&mut tx, user_id, &h)
+        RefreshTokenMapper::replace_token_in_tx(&mut tx, user_id, &h)
             .await
             .unwrap();
-        RefreshTokenMapper::invalidate_all_for_user_with(&mut tx, user_id)
+        RefreshTokenMapper::invalidate_all_for_user_in_tx(&mut tx, user_id)
             .await
             .unwrap();
         assert!(
-            RefreshTokenMapper::find_valid_token_with(&mut tx, &h)
+            RefreshTokenMapper::find_valid_token_in_tx(&mut tx, &h)
                 .await
                 .is_err()
         );
@@ -325,24 +325,24 @@ mod tests {
         let h1 = hash("original_token");
         let h2 = hash("rotated_token");
 
-        RefreshTokenMapper::replace_token_with(&mut tx, user_id, &h1)
+        RefreshTokenMapper::replace_token_in_tx(&mut tx, user_id, &h1)
             .await
             .unwrap();
-        let old = RefreshTokenMapper::find_valid_token_with(&mut tx, &h1)
+        let old = RefreshTokenMapper::find_valid_token_in_tx(&mut tx, &h1)
             .await
             .unwrap();
-        RefreshTokenMapper::rotate_token_with(&mut tx, old.id, user_id, &h2)
+        RefreshTokenMapper::rotate_token_in_tx(&mut tx, old.id, user_id, &h2)
             .await
             .unwrap();
 
         // h1 is now used — find_user_id_for_used_token must return its user_id.
-        let found = RefreshTokenMapper::find_user_id_for_used_token_with(&mut tx, &h1)
+        let found = RefreshTokenMapper::find_user_id_for_used_token_in_tx(&mut tx, &h1)
             .await
             .unwrap();
         assert_eq!(found, Some(user_id));
 
         // h2 is still valid — must not be returned as a used token.
-        let not_used = RefreshTokenMapper::find_user_id_for_used_token_with(&mut tx, &h2)
+        let not_used = RefreshTokenMapper::find_user_id_for_used_token_in_tx(&mut tx, &h2)
             .await
             .unwrap();
         assert_eq!(not_used, None);
@@ -353,7 +353,7 @@ mod tests {
     #[tokio::test]
     async fn missing_token_returns_unauthorised() {
         let mut tx = crate::test_helpers::test_tx().await;
-        let result = RefreshTokenMapper::find_valid_token_with(&mut tx, "nonexistent_hash").await;
+        let result = RefreshTokenMapper::find_valid_token_in_tx(&mut tx, "nonexistent_hash").await;
         assert!(matches!(result, Err(Error::Unauthorised)));
         tx.rollback().await.unwrap();
     }

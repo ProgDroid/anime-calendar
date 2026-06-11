@@ -43,12 +43,12 @@ impl CalendarMapper {
     /// Returns an error if the query fails
     pub async fn get_calendar_by_id(&self, id: i32, user_id: i32) -> ServerResult<Calendar> {
         crate::metrics::db::timed("calendar.get_by_id", async {
-            Self::get_calendar_by_id_with(&mut *self.db.pool.acquire().await?, id, user_id).await
+            Self::get_calendar_by_id_in_tx(&mut *self.db.pool.acquire().await?, id, user_id).await
         })
         .await
     }
 
-    pub(crate) async fn get_calendar_by_id_with(
+    pub(crate) async fn get_calendar_by_id_in_tx(
         conn: &mut sqlx::PgConnection,
         id: i32,
         user_id: i32,
@@ -101,12 +101,12 @@ impl CalendarMapper {
     /// Returns an error if the query fails or the token is not found
     pub async fn get_calendar_by_token(&self, token: &str) -> ServerResult<Calendar> {
         crate::metrics::db::timed("calendar.get_by_token", async {
-            Self::get_calendar_by_token_with(&mut *self.db.pool.acquire().await?, token).await
+            Self::get_calendar_by_token_in_tx(&mut *self.db.pool.acquire().await?, token).await
         })
         .await
     }
 
-    pub(crate) async fn get_calendar_by_token_with(
+    pub(crate) async fn get_calendar_by_token_in_tx(
         conn: &mut sqlx::PgConnection,
         token: &str,
     ) -> ServerResult<Calendar> {
@@ -166,7 +166,7 @@ impl CalendarMapper {
         page_size: usize,
     ) -> ServerResult<(Vec<(Calendar, Vec<i32>, i64)>, usize)> {
         crate::metrics::db::timed("calendar.list_paginated", async {
-            Self::get_calendars_by_user_paginated_with(
+            Self::get_calendars_by_user_paginated_in_tx(
                 &mut *self.db.pool.acquire().await?,
                 user_id,
                 page,
@@ -182,7 +182,7 @@ impl CalendarMapper {
         clippy::cast_possible_truncation,
         clippy::cast_sign_loss
     )]
-    pub(crate) async fn get_calendars_by_user_paginated_with(
+    pub(crate) async fn get_calendars_by_user_paginated_in_tx(
         conn: &mut sqlx::PgConnection,
         user_id: i32,
         page: usize,
@@ -277,7 +277,7 @@ impl CalendarMapper {
     ///
     /// # Errors
     /// Returns an error if the query fails.
-    pub(crate) async fn list_shared_with_user_with(
+    pub(crate) async fn list_shared_with_user_in_tx(
         conn: &mut sqlx::PgConnection,
         user_id: i32,
     ) -> ServerResult<Vec<(Calendar, CalendarOwnerInfo, Vec<i32>)>> {
@@ -359,7 +359,7 @@ impl CalendarMapper {
         user_id: i32,
     ) -> ServerResult<Vec<(Calendar, CalendarOwnerInfo, Vec<i32>)>> {
         crate::metrics::db::timed("calendar.list_shared_with_user", async {
-            Self::list_shared_with_user_with(
+            Self::list_shared_with_user_in_tx(
                 &mut *self.db.pool.acquire().await?,
                 user_id,
             )
@@ -517,12 +517,12 @@ impl CalendarMapper {
     /// or does not belong to `user_id`.
     pub async fn delete_calendar(&self, id: i32, user_id: i32) -> ServerResult<String> {
         crate::metrics::db::timed("calendar.delete", async {
-            Self::delete_calendar_with(&mut *self.db.pool.acquire().await?, id, user_id).await
+            Self::delete_calendar_in_tx(&mut *self.db.pool.acquire().await?, id, user_id).await
         })
         .await
     }
 
-    pub(crate) async fn delete_calendar_with(
+    pub(crate) async fn delete_calendar_in_tx(
         conn: &mut sqlx::PgConnection,
         id: i32,
         user_id: i32,
@@ -547,7 +547,7 @@ impl CalendarMapper {
     /// Returns `Error::NotFound` when no matching non-deleted calendar exists.
     pub async fn get_by_id_any_owner(&self, calendar_id: i32) -> ServerResult<Calendar> {
         crate::metrics::db::timed("calendar.get_by_id_any_owner", async {
-            Self::get_by_id_any_owner_with(&mut *self.db.pool.acquire().await?, calendar_id).await
+            Self::get_by_id_any_owner_in_tx(&mut *self.db.pool.acquire().await?, calendar_id).await
         })
         .await
     }
@@ -557,7 +557,7 @@ impl CalendarMapper {
     pub async fn add_item_idempotent(&self, calendar_id: i32, item_id: i32) -> ServerResult<bool> {
         crate::metrics::db::timed("calendar.add_item_idempotent", async {
             let mut conn = self.db.pool.acquire().await?;
-            Self::add_item_idempotent_with(&mut conn, calendar_id, item_id).await
+            Self::add_item_idempotent_in_tx(&mut conn, calendar_id, item_id).await
         })
         .await
     }
@@ -571,7 +571,7 @@ impl CalendarMapper {
     ) -> ServerResult<bool> {
         crate::metrics::db::timed("calendar.remove_item_idempotent", async {
             let mut conn = self.db.pool.acquire().await?;
-            Self::remove_item_idempotent_with(&mut conn, calendar_id, item_id).await
+            Self::remove_item_idempotent_in_tx(&mut conn, calendar_id, item_id).await
         })
         .await
     }
@@ -586,7 +586,7 @@ impl CalendarMapper {
     ///
     /// # Errors
     /// Returns `Error::NotFound` when no matching non-deleted calendar exists.
-    pub(crate) async fn get_by_id_any_owner_with(
+    pub(crate) async fn get_by_id_any_owner_in_tx(
         conn: &mut sqlx::PgConnection,
         calendar_id: i32,
     ) -> ServerResult<Calendar> {
@@ -623,17 +623,32 @@ impl CalendarMapper {
         })
     }
 
-    pub(crate) async fn save_calendar_with(
+    /// Pool-bound wrapper around [`Self::get_by_id_any_owner_in_tx`] for call
+    /// sites that hold a `PgPool` (the sharing / SSE controllers) rather than a
+    /// `CalendarMapper` instance. Keeps the owner-agnostic fetch SQL in the
+    /// mapper layer — it was previously duplicated in `controllers::sharing`.
+    ///
+    /// # Errors
+    /// Returns `Error::NotFound` when no matching non-deleted calendar exists,
+    /// or a database error if the query or connection acquisition fails.
+    pub(crate) async fn get_by_id_any_owner_from_pool(
+        pool: &sqlx::PgPool,
+        calendar_id: i32,
+    ) -> ServerResult<Calendar> {
+        Self::get_by_id_any_owner_in_tx(&mut *pool.acquire().await?, calendar_id).await
+    }
+
+    pub(crate) async fn save_calendar_in_tx(
         conn: &mut sqlx::PgConnection,
         calendar: Calendar,
     ) -> ServerResult<Calendar> {
         match calendar.id {
-            0 => Self::insert_calendar_with(conn, calendar).await,
-            _ => Self::update_calendar_with(conn, calendar).await,
+            0 => Self::insert_calendar_in_tx(conn, calendar).await,
+            _ => Self::update_calendar_in_tx(conn, calendar).await,
         }
     }
 
-    pub(crate) async fn insert_calendar_with(
+    pub(crate) async fn insert_calendar_in_tx(
         conn: &mut sqlx::PgConnection,
         calendar: Calendar,
     ) -> ServerResult<Calendar> {
@@ -649,7 +664,7 @@ impl CalendarMapper {
         .fetch_one(&mut *conn)
         .await?;
 
-        Self::update_calendar_items_with(conn, inserted_calendar.id, calendar.item_ids.clone())
+        Self::update_calendar_items_in_tx(conn, inserted_calendar.id, calendar.item_ids.clone())
             .await?;
 
         Ok(Calendar {
@@ -667,7 +682,7 @@ impl CalendarMapper {
         })
     }
 
-    async fn update_calendar_with(
+    async fn update_calendar_in_tx(
         conn: &mut sqlx::PgConnection,
         calendar: Calendar,
     ) -> ServerResult<Calendar> {
@@ -695,7 +710,7 @@ impl CalendarMapper {
         .fetch_one(&mut *conn)
         .await?;
 
-        Self::update_calendar_items_with(conn, updated_calendar.id, calendar.item_ids.clone())
+        Self::update_calendar_items_in_tx(conn, updated_calendar.id, calendar.item_ids.clone())
             .await?;
 
         Ok(Calendar {
@@ -713,7 +728,7 @@ impl CalendarMapper {
         })
     }
 
-    pub(crate) async fn add_item_idempotent_with(
+    pub(crate) async fn add_item_idempotent_in_tx(
         conn: &mut sqlx::PgConnection,
         calendar_id: i32,
         item_id: i32,
@@ -728,7 +743,7 @@ impl CalendarMapper {
         Ok(r.rows_affected() > 0)
     }
 
-    pub(crate) async fn remove_item_idempotent_with(
+    pub(crate) async fn remove_item_idempotent_in_tx(
         conn: &mut sqlx::PgConnection,
         calendar_id: i32,
         item_id: i32,
@@ -743,7 +758,7 @@ impl CalendarMapper {
         Ok(r.rows_affected() > 0)
     }
 
-    async fn update_calendar_items_with(
+    async fn update_calendar_items_in_tx(
         conn: &mut sqlx::PgConnection,
         calendar_id: i32,
         item_ids: Vec<i32>,
@@ -811,7 +826,7 @@ mod tests {
     async fn insert_calendar_returns_calendar_with_43_char_token() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let cal = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         assert!(cal.id > 0);
@@ -825,10 +840,10 @@ mod tests {
     async fn get_calendar_by_id_finds_inserted() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
-        let fetched = CalendarMapper::get_calendar_by_id_with(&mut tx, inserted.id, user_id)
+        let fetched = CalendarMapper::get_calendar_by_id_in_tx(&mut tx, inserted.id, user_id)
             .await
             .unwrap();
         assert_eq!(fetched.id, inserted.id);
@@ -840,11 +855,11 @@ mod tests {
     async fn get_calendar_by_id_wrong_user_returns_error() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         assert!(
-            CalendarMapper::get_calendar_by_id_with(&mut tx, inserted.id, i32::MAX)
+            CalendarMapper::get_calendar_by_id_in_tx(&mut tx, inserted.id, i32::MAX)
                 .await
                 .is_err()
         );
@@ -855,11 +870,11 @@ mod tests {
     async fn get_calendar_by_token_finds_inserted() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         let fetched =
-            CalendarMapper::get_calendar_by_token_with(&mut tx, &inserted.subscription_token)
+            CalendarMapper::get_calendar_by_token_in_tx(&mut tx, &inserted.subscription_token)
                 .await
                 .unwrap();
         assert_eq!(fetched.id, inserted.id);
@@ -870,7 +885,7 @@ mod tests {
     async fn update_calendar_changes_name_and_language() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         let to_update = Calendar {
@@ -880,7 +895,7 @@ mod tests {
             item_ids: vec![],
             ..inserted.clone()
         };
-        let updated = CalendarMapper::update_calendar_with(&mut tx, to_update)
+        let updated = CalendarMapper::update_calendar_in_tx(&mut tx, to_update)
             .await
             .unwrap();
         assert_eq!(updated.name, "Renamed");
@@ -892,7 +907,7 @@ mod tests {
     async fn insert_calendar_starts_at_meta_version_one() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         assert_eq!(inserted.meta_version, 1);
@@ -903,7 +918,7 @@ mod tests {
     async fn update_calendar_bumps_meta_version_when_name_changes() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         assert_eq!(inserted.meta_version, 1);
@@ -912,7 +927,7 @@ mod tests {
             name: "Renamed".to_string(),
             ..inserted.clone()
         };
-        let updated = CalendarMapper::update_calendar_with(&mut tx, to_update)
+        let updated = CalendarMapper::update_calendar_in_tx(&mut tx, to_update)
             .await
             .unwrap();
         assert_eq!(updated.meta_version, 2);
@@ -924,7 +939,7 @@ mod tests {
     async fn update_calendar_bumps_meta_version_when_language_changes() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
 
@@ -932,7 +947,7 @@ mod tests {
             language: Language::Native,
             ..inserted.clone()
         };
-        let updated = CalendarMapper::update_calendar_with(&mut tx, to_update)
+        let updated = CalendarMapper::update_calendar_in_tx(&mut tx, to_update)
             .await
             .unwrap();
         assert_eq!(updated.meta_version, 2);
@@ -943,7 +958,7 @@ mod tests {
     async fn update_calendar_bumps_meta_version_when_event_style_changes() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
 
@@ -951,7 +966,7 @@ mod tests {
             event_style: "all_day".to_owned(),
             ..inserted.clone()
         };
-        let updated = CalendarMapper::update_calendar_with(&mut tx, to_update)
+        let updated = CalendarMapper::update_calendar_in_tx(&mut tx, to_update)
             .await
             .unwrap();
         assert_eq!(updated.meta_version, 2);
@@ -962,11 +977,11 @@ mod tests {
     async fn update_calendar_no_op_does_not_bump_meta_version() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
 
-        let updated = CalendarMapper::update_calendar_with(&mut tx, inserted.clone())
+        let updated = CalendarMapper::update_calendar_in_tx(&mut tx, inserted.clone())
             .await
             .unwrap();
         assert_eq!(updated.meta_version, inserted.meta_version);
@@ -981,10 +996,10 @@ mod tests {
             item_ids: vec![101, 202, 303],
             ..new_calendar(user_id)
         };
-        let saved = CalendarMapper::save_calendar_with(&mut tx, cal)
+        let saved = CalendarMapper::save_calendar_in_tx(&mut tx, cal)
             .await
             .unwrap();
-        let fetched = CalendarMapper::get_calendar_by_id_with(&mut tx, saved.id, user_id)
+        let fetched = CalendarMapper::get_calendar_by_id_in_tx(&mut tx, saved.id, user_id)
             .await
             .unwrap();
         let mut ids = fetched.item_ids;
@@ -997,19 +1012,19 @@ mod tests {
     async fn delete_calendar_soft_deletes_so_lookup_fails() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
-        CalendarMapper::delete_calendar_with(&mut tx, inserted.id, user_id)
+        CalendarMapper::delete_calendar_in_tx(&mut tx, inserted.id, user_id)
             .await
             .unwrap();
         assert!(
-            CalendarMapper::get_calendar_by_id_with(&mut tx, inserted.id, user_id)
+            CalendarMapper::get_calendar_by_id_in_tx(&mut tx, inserted.id, user_id)
                 .await
                 .is_err()
         );
         assert!(
-            CalendarMapper::get_calendar_by_token_with(&mut tx, &inserted.subscription_token)
+            CalendarMapper::get_calendar_by_token_in_tx(&mut tx, &inserted.subscription_token)
                 .await
                 .is_err()
         );
@@ -1020,10 +1035,10 @@ mod tests {
     async fn delete_calendar_returns_subscription_token() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
-        let token = CalendarMapper::delete_calendar_with(&mut tx, inserted.id, user_id)
+        let token = CalendarMapper::delete_calendar_in_tx(&mut tx, inserted.id, user_id)
             .await
             .unwrap();
         assert_eq!(token, inserted.subscription_token);
@@ -1038,10 +1053,10 @@ mod tests {
             item_ids: vec![42, 43],
             ..new_calendar(user_id)
         };
-        let inserted = CalendarMapper::save_calendar_with(&mut tx, cal)
+        let inserted = CalendarMapper::save_calendar_in_tx(&mut tx, cal)
             .await
             .unwrap();
-        CalendarMapper::delete_calendar_with(&mut tx, inserted.id, user_id)
+        CalendarMapper::delete_calendar_in_tx(&mut tx, inserted.id, user_id)
             .await
             .unwrap();
         let count: i64 =
@@ -1061,11 +1076,11 @@ mod tests {
     async fn delete_calendar_wrong_user_returns_not_found() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
         assert!(
-            CalendarMapper::delete_calendar_with(&mut tx, inserted.id, i32::MAX)
+            CalendarMapper::delete_calendar_in_tx(&mut tx, inserted.id, i32::MAX)
                 .await
                 .is_err()
         );
@@ -1076,10 +1091,10 @@ mod tests {
     async fn get_calendars_paginated_returns_all_active() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
-        CalendarMapper::insert_calendar_with(
+        CalendarMapper::insert_calendar_in_tx(
             &mut tx,
             Calendar {
                 name: "Second".to_string(),
@@ -1089,7 +1104,7 @@ mod tests {
         .await
         .unwrap();
         let (cals, total) =
-            CalendarMapper::get_calendars_by_user_paginated_with(&mut tx, user_id, 1, 10)
+            CalendarMapper::get_calendars_by_user_paginated_in_tx(&mut tx, user_id, 1, 10)
                 .await
                 .unwrap();
         assert_eq!(total, 2);
@@ -1101,7 +1116,7 @@ mod tests {
     async fn get_calendars_paginated_returns_recent_item_ids_most_recent_first() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(
+        let inserted = CalendarMapper::insert_calendar_in_tx(
             &mut tx,
             Calendar {
                 item_ids: vec![],
@@ -1123,7 +1138,7 @@ mod tests {
             .unwrap();
         }
         let (cals, _) =
-            CalendarMapper::get_calendars_by_user_paginated_with(&mut tx, user_id, 1, 10)
+            CalendarMapper::get_calendars_by_user_paginated_in_tx(&mut tx, user_id, 1, 10)
                 .await
                 .unwrap();
         assert_eq!(cals.len(), 1);
@@ -1137,7 +1152,7 @@ mod tests {
     async fn get_calendars_paginated_returns_empty_recent_item_ids_for_empty_calendar() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        CalendarMapper::insert_calendar_with(
+        CalendarMapper::insert_calendar_in_tx(
             &mut tx,
             Calendar {
                 item_ids: vec![],
@@ -1147,7 +1162,7 @@ mod tests {
         .await
         .unwrap();
         let (cals, _) =
-            CalendarMapper::get_calendars_by_user_paginated_with(&mut tx, user_id, 1, 10)
+            CalendarMapper::get_calendars_by_user_paginated_in_tx(&mut tx, user_id, 1, 10)
                 .await
                 .unwrap();
         assert_eq!(cals.len(), 1);
@@ -1161,14 +1176,14 @@ mod tests {
     async fn get_calendars_paginated_excludes_deleted() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let inserted = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let inserted = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
-        CalendarMapper::delete_calendar_with(&mut tx, inserted.id, user_id)
+        CalendarMapper::delete_calendar_in_tx(&mut tx, inserted.id, user_id)
             .await
             .unwrap();
         let (cals, total) =
-            CalendarMapper::get_calendars_by_user_paginated_with(&mut tx, user_id, 1, 10)
+            CalendarMapper::get_calendars_by_user_paginated_in_tx(&mut tx, user_id, 1, 10)
                 .await
                 .unwrap();
         assert_eq!(total, 0);
@@ -1184,7 +1199,7 @@ mod tests {
         let owner_id = create_test_user(&mut tx).await;
         let editor_a = create_test_user(&mut tx).await;
         let editor_b = create_test_user(&mut tx).await;
-        let cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(owner_id))
+        let cal = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(owner_id))
             .await
             .unwrap();
         CalendarEditorMapper::upsert_active_in_tx(&mut tx, cal.id, editor_a)
@@ -1195,7 +1210,7 @@ mod tests {
             .unwrap();
 
         let (cals, _) =
-            CalendarMapper::get_calendars_by_user_paginated_with(&mut tx, owner_id, 1, 10)
+            CalendarMapper::get_calendars_by_user_paginated_in_tx(&mut tx, owner_id, 1, 10)
                 .await
                 .unwrap();
         assert_eq!(cals.len(), 1);
@@ -1221,14 +1236,14 @@ mod tests {
         .unwrap();
 
         // Owner has 2 calendars; editor is active on cal_a only.
-        let cal_a = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(owner_id))
+        let cal_a = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(owner_id))
             .await
             .unwrap();
-        let _cal_b = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(owner_id))
+        let _cal_b = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(owner_id))
             .await
             .unwrap();
         // `other_id` also has a calendar — must NOT show up for the editor either.
-        let _cal_other = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(other_id))
+        let _cal_other = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(other_id))
             .await
             .unwrap();
 
@@ -1236,7 +1251,7 @@ mod tests {
             .await
             .unwrap();
 
-        let shared = CalendarMapper::list_shared_with_user_with(&mut tx, editor_id)
+        let shared = CalendarMapper::list_shared_with_user_in_tx(&mut tx, editor_id)
             .await
             .unwrap();
         assert_eq!(shared.len(), 1, "only cal_a (active editor) shows");
@@ -1254,7 +1269,7 @@ mod tests {
         let mut tx = crate::test_helpers::test_tx().await;
         let owner_id = create_test_user(&mut tx).await;
         let editor_id = create_test_user(&mut tx).await;
-        let cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(owner_id))
+        let cal = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(owner_id))
             .await
             .unwrap();
         CalendarEditorMapper::upsert_active_in_tx(&mut tx, cal.id, editor_id)
@@ -1264,7 +1279,7 @@ mod tests {
             .await
             .unwrap();
 
-        let shared = CalendarMapper::list_shared_with_user_with(&mut tx, editor_id)
+        let shared = CalendarMapper::list_shared_with_user_in_tx(&mut tx, editor_id)
             .await
             .unwrap();
         assert!(shared.is_empty(), "suspended editor row should not appear");
@@ -1275,11 +1290,11 @@ mod tests {
     async fn list_shared_with_user_excludes_owners_own_calendars() {
         let mut tx = crate::test_helpers::test_tx().await;
         let owner_id = create_test_user(&mut tx).await;
-        let _cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(owner_id))
+        let _cal = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(owner_id))
             .await
             .unwrap();
 
-        let shared = CalendarMapper::list_shared_with_user_with(&mut tx, owner_id)
+        let shared = CalendarMapper::list_shared_with_user_in_tx(&mut tx, owner_id)
             .await
             .unwrap();
         assert!(shared.is_empty(), "owners do not appear in their own shared list");
@@ -1290,16 +1305,16 @@ mod tests {
     async fn add_item_idempotent_second_call_returns_affected_false() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let cal = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
 
-        let first = CalendarMapper::add_item_idempotent_with(&mut tx, cal.id, 42)
+        let first = CalendarMapper::add_item_idempotent_in_tx(&mut tx, cal.id, 42)
             .await
             .unwrap();
         assert!(first, "first insert should report affected=true");
 
-        let second = CalendarMapper::add_item_idempotent_with(&mut tx, cal.id, 42)
+        let second = CalendarMapper::add_item_idempotent_in_tx(&mut tx, cal.id, 42)
             .await
             .unwrap();
         assert!(!second, "duplicate insert should report affected=false");
@@ -1311,11 +1326,11 @@ mod tests {
     async fn remove_item_idempotent_missing_returns_affected_false() {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = create_test_user(&mut tx).await;
-        let cal = CalendarMapper::insert_calendar_with(&mut tx, new_calendar(user_id))
+        let cal = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(user_id))
             .await
             .unwrap();
 
-        let result = CalendarMapper::remove_item_idempotent_with(&mut tx, cal.id, 9999)
+        let result = CalendarMapper::remove_item_idempotent_in_tx(&mut tx, cal.id, 9999)
             .await
             .unwrap();
         assert!(!result, "removing a non-existent item should report affected=false");

@@ -11,7 +11,7 @@
 //! #[tokio::test]
 //! async fn my_test() {
 //!     let mut tx = test_tx().await;
-//!     let user = UserMapper::create_user_with(&mut *tx, "alice", "a@b.com", None).await.unwrap();
+//!     let user = UserMapper::create_user_in_tx(&mut *tx, "alice", "a@b.com", None).await.unwrap();
 //!     // assertions ...
 //!     tx.rollback().await.unwrap(); // always roll back — no data persists
 //! }

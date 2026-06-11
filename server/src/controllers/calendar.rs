@@ -674,7 +674,7 @@ async fn put(
     // forward-compatible spine, not the gate.
     if !is_create {
         let existing =
-            match CalendarMapper::get_calendar_by_id_with(&mut tx, calendar_entity.id, user.id)
+            match CalendarMapper::get_calendar_by_id_in_tx(&mut tx, calendar_entity.id, user.id)
                 .await
             {
                 Ok(c) => c,
@@ -689,7 +689,7 @@ async fn put(
 
     // Save calendar via _with helpers so the write participates in the
     // locked transaction.
-    let calendar = match CalendarMapper::save_calendar_with(&mut tx, calendar_entity).await {
+    let calendar = match CalendarMapper::save_calendar_in_tx(&mut tx, calendar_entity).await {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -1144,7 +1144,7 @@ pub async fn add_item(
         return e.error_response();
     }
     let affected =
-        match CalendarMapper::add_item_idempotent_with(&mut tx, calendar_id, body.item_id).await {
+        match CalendarMapper::add_item_idempotent_in_tx(&mut tx, calendar_id, body.item_id).await {
             Ok(a) => a,
             Err(e) => return e.error_response(),
         };

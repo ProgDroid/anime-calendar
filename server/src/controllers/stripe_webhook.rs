@@ -366,9 +366,9 @@ async fn handle_subscription_deleted(
     sub: &stripe_shared::Subscription,
 ) -> Result<(FrozenAction, Vec<KickRecord>, Vec<RestoredEditor>), String> {
     let sub_id = sub.id.as_str();
-    let existing = SubscriptionMapper::find_by_stripe_id_with(&mut *tx, sub_id)
+    let existing = SubscriptionMapper::find_by_stripe_id_in_tx(&mut *tx, sub_id)
         .await
-        .map_err(|e| format!("find_by_stripe_id_with failed: {e}"))?;
+        .map_err(|e| format!("find_by_stripe_id_in_tx failed: {e}"))?;
     let Some(row) = existing else {
         warn!("stripe webhook: subscription.deleted for unknown stripe_subscription_id {sub_id}");
         return Ok((FrozenAction::None, vec![], vec![]));
@@ -397,7 +397,9 @@ async fn handle_subscription_deleted(
     let action = transition_action(user_id, old_tier, new_tier);
     let kicks = if matches!(action, FrozenAction::Regenerate(_)) {
         // Paid→Free: suspend sharing for all owned calendars.
-        suspend_owner_sharing_in_tx(&mut *tx, user_id).await?
+        suspend_owner_sharing_in_tx(&mut *tx, user_id)
+            .await
+            .map_err(|e| e.to_string())?
     } else {
         vec![]
     };
@@ -485,13 +487,17 @@ async fn upsert_subscription(
     let action = transition_action(user_id, old_tier, new_tier);
     let kicks = if matches!(action, FrozenAction::Regenerate(_)) {
         // Paid→Free: suspend sharing for all owned calendars.
-        suspend_owner_sharing_in_tx(&mut *tx, user_id).await?
+        suspend_owner_sharing_in_tx(&mut *tx, user_id)
+            .await
+            .map_err(|e| e.to_string())?
     } else {
         vec![]
     };
     let restored = if matches!(action, FrozenAction::Clear(_)) {
         // Free→Paid: restore suspended editors and invitations for all owned calendars.
-        restore_owner_sharing_in_tx(&mut *tx, user_id).await?
+        restore_owner_sharing_in_tx(&mut *tx, user_id)
+            .await
+            .map_err(|e| e.to_string())?
     } else {
         vec![]
     };
@@ -574,9 +580,9 @@ async fn handle_subscription_paused(
     sub: &stripe_shared::Subscription,
 ) -> Result<(FrozenAction, Vec<KickRecord>, Vec<RestoredEditor>), String> {
     let sub_id = sub.id.as_str();
-    let existing = SubscriptionMapper::find_by_stripe_id_with(&mut *tx, sub_id)
+    let existing = SubscriptionMapper::find_by_stripe_id_in_tx(&mut *tx, sub_id)
         .await
-        .map_err(|e| format!("find_by_stripe_id_with failed: {e}"))?;
+        .map_err(|e| format!("find_by_stripe_id_in_tx failed: {e}"))?;
     let Some(row) = existing else {
         warn!("stripe webhook: subscription.paused for unknown stripe_subscription_id {sub_id}");
         return Ok((FrozenAction::None, vec![], vec![]));
@@ -601,7 +607,9 @@ async fn handle_subscription_paused(
         .map_err(|e| format!("effective_tier_in_tx (new) failed: {e}"))?;
     let action = transition_action(user_id, old_tier, new_tier);
     let kicks = if matches!(action, FrozenAction::Regenerate(_)) {
-        suspend_owner_sharing_in_tx(&mut *tx, user_id).await?
+        suspend_owner_sharing_in_tx(&mut *tx, user_id)
+            .await
+            .map_err(|e| e.to_string())?
     } else {
         vec![]
     };
@@ -647,7 +655,9 @@ async fn handle_customer_deleted(
         .map_err(|e| format!("effective_tier_in_tx (new) failed: {e}"))?;
     let action = transition_action(user_id, old_tier, new_tier);
     let kicks = if matches!(action, FrozenAction::Regenerate(_)) {
-        suspend_owner_sharing_in_tx(&mut *tx, user_id).await?
+        suspend_owner_sharing_in_tx(&mut *tx, user_id)
+            .await
+            .map_err(|e| e.to_string())?
     } else {
         vec![]
     };

@@ -169,7 +169,7 @@ mod tests {
 
     async fn create_test_user(conn: &mut sqlx::PgConnection) -> i32 {
         let n: u64 = rand::random();
-        UserMapper::create_user_with(
+        UserMapper::create_user_in_tx(
             conn,
             &format!("authz_{n}"),
             &format!("authz_{n}@example.com"),
@@ -181,7 +181,7 @@ mod tests {
     }
 
     async fn create_test_calendar(conn: &mut sqlx::PgConnection, owner_id: i32) -> Calendar {
-        CalendarMapper::insert_calendar_with(
+        CalendarMapper::insert_calendar_in_tx(
             conn,
             Calendar {
                 id: 0,

@@ -115,7 +115,7 @@ impl EntitlementService {
         conn: &mut sqlx::PgConnection,
         user_id: i32,
     ) -> ServerResult<Tier> {
-        let sub = SubscriptionMapper::find_active_for_user_with(conn, user_id).await?;
+        let sub = SubscriptionMapper::find_active_for_user_in_tx(conn, user_id).await?;
         Ok(sub.as_ref().map_or(Tier::Free, |s| {
             Tier::from_str(&s.tier).unwrap_or(Tier::Free)
         }))

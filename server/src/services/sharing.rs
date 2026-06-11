@@ -5,6 +5,7 @@
 //! needs to import from each other — the inverted-dependency would otherwise
 //! couple controllers → services in the wrong direction.
 
+use crate::ServerResult;
 use crate::mappers::calendar_editor::CalendarEditorMapper;
 use crate::mappers::calendar_invitation::CalendarInvitationMapper;
 
@@ -42,19 +43,18 @@ pub struct RestoredEditor {
 /// after detecting a Free→Paid transition.
 ///
 /// # Errors
-/// Returns the underlying sqlx error wrapped in a `String`.
+/// Returns `Error::Database` if any query fails.
 pub async fn restore_owner_sharing_in_tx(
     tx: &mut sqlx::PgConnection,
     owner_id: i32,
-) -> Result<Vec<RestoredEditor>, String> {
+) -> ServerResult<Vec<RestoredEditor>> {
     // Fetch all calendar IDs + names owned by this user.
     let calendars = sqlx::query!(
         "SELECT id, name FROM calendars WHERE user_id = $1",
         owner_id
     )
     .fetch_all(&mut *tx)
-    .await
-    .map_err(|e| format!("fetch calendars for owner failed: {e}"))?;
+    .await?;
 
     let mut restored_editors: Vec<RestoredEditor> = Vec::new();
 
@@ -69,28 +69,14 @@ pub async fn restore_owner_sharing_in_tx(
             calendar_id,
         )
         .fetch_all(&mut *tx)
-        .await
-        .map_err(|e| {
-            format!(
-                "list suspended editors for cal {calendar_id} failed: {e}"
-            )
-        })?;
+        .await?;
 
         // Restore suspended editors.
-        CalendarEditorMapper::restore_for_calendar_in_tx(&mut *tx, calendar_id)
-            .await
-            .map_err(|e| {
-                format!("restore_for_calendar_in_tx for cal {calendar_id} failed: {e}")
-            })?;
+        CalendarEditorMapper::restore_for_calendar_in_tx(&mut *tx, calendar_id).await?;
 
         // Restore suspended invitations.
         CalendarInvitationMapper::restore_suspended_for_calendar_in_tx(&mut *tx, calendar_id)
-            .await
-            .map_err(|e| {
-                format!(
-                    "restore_suspended_for_calendar_in_tx for cal {calendar_id} failed: {e}"
-                )
-            })?;
+            .await?;
 
         // Collect restored-editor records for email sending post-commit.
         for user_id in suspended_user_ids {
@@ -115,43 +101,30 @@ pub async fn restore_owner_sharing_in_tx(
 /// after detecting a Paid→Free transition.
 ///
 /// # Errors
-/// Returns the underlying sqlx error wrapped in a `String`.
+/// Returns `Error::Database` if any query fails.
 pub async fn suspend_owner_sharing_in_tx(
     tx: &mut sqlx::PgConnection,
     owner_id: i32,
-) -> Result<Vec<KickRecord>, String> {
+) -> ServerResult<Vec<KickRecord>> {
     // Fetch all calendar IDs owned by this user.
     let calendar_ids: Vec<i32> = sqlx::query_scalar!(
         "SELECT id FROM calendars WHERE user_id = $1",
         owner_id
     )
     .fetch_all(&mut *tx)
-    .await
-    .map_err(|e| format!("fetch calendars for owner failed: {e}"))?;
+    .await?;
 
     let mut kick_records: Vec<KickRecord> = Vec::new();
 
     for calendar_id in calendar_ids {
         // Capture active editors BEFORE suspending so we know who to kick.
-        let active_editors = CalendarEditorMapper::list_active_in_tx(&mut *tx, calendar_id)
-            .await
-            .map_err(|e| format!("list_active_in_tx for cal {calendar_id} failed: {e}"))?;
+        let active_editors = CalendarEditorMapper::list_active_in_tx(&mut *tx, calendar_id).await?;
 
         // Suspend active editors.
-        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut *tx, calendar_id)
-            .await
-            .map_err(|e| {
-                format!("suspend_for_calendar_in_tx for cal {calendar_id} failed: {e}")
-            })?;
+        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut *tx, calendar_id).await?;
 
         // Suspend pending invitations.
-        CalendarInvitationMapper::suspend_pending_for_calendar_in_tx(&mut *tx, calendar_id)
-            .await
-            .map_err(|e| {
-                format!(
-                    "suspend_pending_for_calendar_in_tx for cal {calendar_id} failed: {e}"
-                )
-            })?;
+        CalendarInvitationMapper::suspend_pending_for_calendar_in_tx(&mut *tx, calendar_id).await?;
 
         // Collect kick records for every editor that was active.
         for editor in active_editors {

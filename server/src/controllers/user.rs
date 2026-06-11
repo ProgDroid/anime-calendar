@@ -284,7 +284,7 @@ pub async fn delete_user(
 
     // Block deletion if the user has an active Stripe subscription (AUDIT.md C-1).
     // The user must cancel via the Stripe portal before the account can be removed.
-    match SubscriptionMapper::find_active_for_user_with(&mut tx, user_id_inner).await {
+    match SubscriptionMapper::find_active_for_user_in_tx(&mut tx, user_id_inner).await {
         Ok(Some(_)) => {
             let _ = tx.rollback().await;
             return Error::Conflict {
@@ -302,7 +302,7 @@ pub async fn delete_user(
 
     // Invalidate all refresh tokens so existing sessions are kicked immediately.
     if let Err(e) =
-        RefreshTokenMapper::invalidate_all_for_user_with(&mut tx, user_id_inner).await
+        RefreshTokenMapper::invalidate_all_for_user_in_tx(&mut tx, user_id_inner).await
     {
         error!("Failed to invalidate refresh tokens for user {user_id_inner}: {e}");
         let _ = tx.rollback().await;
@@ -310,7 +310,7 @@ pub async fn delete_user(
     }
 
     // Soft-delete the user and cascade to their calendars.
-    if let Err(e) = UserMapper::delete_user_with(&mut tx, user_id_inner).await {
+    if let Err(e) = UserMapper::delete_user_in_tx(&mut tx, user_id_inner).await {
         error!("Failed to soft-delete user {user_id_inner}: {e}");
         let _ = tx.rollback().await;
         return HttpResponse::InternalServerError().finish();

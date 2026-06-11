@@ -272,7 +272,7 @@ impl InvitationService {
         .await?
         .ok_or(Error::InvalidRequest)?;
 
-        let user = crate::mappers::user::UserMapper::get_user_by_id_with(&mut tx, actor_id).await?;
+        let user = crate::mappers::user::UserMapper::get_user_by_id_in_tx(&mut tx, actor_id).await?;
         if !user.email.eq_ignore_ascii_case(&inv.invitee_email) {
             return Err(Error::InvalidRequest);
         }
@@ -313,7 +313,7 @@ impl InvitationService {
         .await?
         .ok_or(Error::InvalidRequest)?;
 
-        let user = crate::mappers::user::UserMapper::get_user_by_id_with(&mut tx, actor_id).await?;
+        let user = crate::mappers::user::UserMapper::get_user_by_id_in_tx(&mut tx, actor_id).await?;
         if !user.email.eq_ignore_ascii_case(&inv.invitee_email) {
             return Err(Error::InvalidRequest);
         }
@@ -475,7 +475,7 @@ impl InvitationService {
         .await?
         .ok_or(Error::InvalidRequest)?;
 
-        let owner = crate::mappers::user::UserMapper::get_user_by_id_with(&mut tx, cal_row.user_id)
+        let owner = crate::mappers::user::UserMapper::get_user_by_id_in_tx(&mut tx, cal_row.user_id)
             .await
             .map_err(|_| Error::InvalidRequest)?;
 

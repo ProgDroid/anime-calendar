@@ -55,12 +55,12 @@ impl SubscriptionMapper {
     /// Returns an error if the database query fails.
     pub async fn find_active_for_user(&self, user_id: i32) -> ServerResult<Option<Subscription>> {
         crate::metrics::db::timed("subscription.find_active_for_user", async {
-            Self::find_active_for_user_with(&mut *self.db.pool.acquire().await?, user_id).await
+            Self::find_active_for_user_in_tx(&mut *self.db.pool.acquire().await?, user_id).await
         })
         .await
     }
 
-    pub(crate) async fn find_active_for_user_with(
+    pub(crate) async fn find_active_for_user_in_tx(
         conn: &mut sqlx::PgConnection,
         user_id: i32,
     ) -> ServerResult<Option<Subscription>> {
@@ -92,7 +92,7 @@ impl SubscriptionMapper {
         stripe_subscription_id: &str,
     ) -> ServerResult<Option<Subscription>> {
         crate::metrics::db::timed("subscription.find_by_stripe_id", async {
-            Self::find_by_stripe_id_with(
+            Self::find_by_stripe_id_in_tx(
                 &mut *self.db.pool.acquire().await?,
                 stripe_subscription_id,
             )
@@ -101,7 +101,7 @@ impl SubscriptionMapper {
         .await
     }
 
-    pub(crate) async fn find_by_stripe_id_with(
+    pub(crate) async fn find_by_stripe_id_in_tx(
         conn: &mut sqlx::PgConnection,
         stripe_subscription_id: &str,
     ) -> ServerResult<Option<Subscription>> {
@@ -476,7 +476,7 @@ mod tests {
         let user_id = seed_user(&mut tx).await;
         insert_subscription(&mut tx, user_id, "active", 14).await;
 
-        let sub = SubscriptionMapper::find_active_for_user_with(&mut tx, user_id)
+        let sub = SubscriptionMapper::find_active_for_user_in_tx(&mut tx, user_id)
             .await
             .unwrap();
         assert!(sub.is_some());
@@ -493,7 +493,7 @@ mod tests {
         let user_id = seed_user(&mut tx).await;
         insert_subscription(&mut tx, user_id, "trialing", 7).await;
 
-        let sub = SubscriptionMapper::find_active_for_user_with(&mut tx, user_id)
+        let sub = SubscriptionMapper::find_active_for_user_in_tx(&mut tx, user_id)
             .await
             .unwrap();
         assert!(sub.is_some());
@@ -507,7 +507,7 @@ mod tests {
         let user_id = seed_user(&mut tx).await;
         insert_subscription(&mut tx, user_id, "past_due", 3).await;
 
-        let sub = SubscriptionMapper::find_active_for_user_with(&mut tx, user_id)
+        let sub = SubscriptionMapper::find_active_for_user_in_tx(&mut tx, user_id)
             .await
             .unwrap();
         assert!(sub.is_some());
@@ -521,7 +521,7 @@ mod tests {
         let user_id = seed_user(&mut tx).await;
         insert_subscription(&mut tx, user_id, "canceled", 14).await;
 
-        let sub = SubscriptionMapper::find_active_for_user_with(&mut tx, user_id)
+        let sub = SubscriptionMapper::find_active_for_user_in_tx(&mut tx, user_id)
             .await
             .unwrap();
         assert!(sub.is_none());
@@ -535,7 +535,7 @@ mod tests {
         // active status but period_end in the past.
         insert_subscription(&mut tx, user_id, "active", -1).await;
 
-        let sub = SubscriptionMapper::find_active_for_user_with(&mut tx, user_id)
+        let sub = SubscriptionMapper::find_active_for_user_in_tx(&mut tx, user_id)
             .await
             .unwrap();
         assert!(sub.is_none());
@@ -547,7 +547,7 @@ mod tests {
         let mut tx = crate::test_helpers::test_tx().await;
         let user_id = seed_user(&mut tx).await;
 
-        let sub = SubscriptionMapper::find_active_for_user_with(&mut tx, user_id)
+        let sub = SubscriptionMapper::find_active_for_user_in_tx(&mut tx, user_id)
             .await
             .unwrap();
         assert!(sub.is_none());
@@ -686,13 +686,13 @@ mod tests {
         .await
         .unwrap();
 
-        let sub = SubscriptionMapper::find_by_stripe_id_with(&mut tx, "sub_known")
+        let sub = SubscriptionMapper::find_by_stripe_id_in_tx(&mut tx, "sub_known")
             .await
             .unwrap();
         assert!(sub.is_some());
         assert_eq!(sub.unwrap().user_id, user_id);
 
-        let none = SubscriptionMapper::find_by_stripe_id_with(&mut tx, "sub_missing")
+        let none = SubscriptionMapper::find_by_stripe_id_in_tx(&mut tx, "sub_missing")
             .await
             .unwrap();
         assert!(none.is_none());

@@ -18,6 +18,7 @@ use utoipa::ToSchema;
 use crate::config::server::SharingConfig;
 use crate::entity::calendar_invitation::CalendarInvitation;
 use crate::error::Error;
+use crate::mappers::calendar::CalendarMapper;
 use crate::mappers::calendar_editor::CalendarEditorMapper;
 use crate::mappers::calendar_invitation::CalendarInvitationMapper;
 use crate::mappers::user::UserMapper;
@@ -65,47 +66,6 @@ const fn ok_json() -> EmptyOk {
     EmptyOk { ok: true }
 }
 
-/// Resolve a calendar by id, treating "row missing" as `404 NotFound` and
-/// every other failure as the underlying error. Used by every owner-side
-/// route below.
-pub(crate) async fn load_calendar_any_owner(
-    pool: &sqlx::PgPool,
-    id: i32,
-) -> Result<crate::entity::calendar::Calendar, Error> {
-    use crate::entity::calendar::Language;
-    let row = sqlx::query!(
-        "SELECT id, language as \"language: Language\", name, subscription_token, user_id,
-                created_at, updated_at, event_style, frozen_subscribe_ics, meta_version
-         FROM calendars
-         WHERE id = $1 AND deleted_at IS NULL",
-        id,
-    )
-    .fetch_optional(pool)
-    .await?
-    .ok_or(Error::NotFound)?;
-
-    let item_ids: Vec<i32> = sqlx::query_scalar!(
-        "SELECT item_id FROM calendar_items WHERE calendar_id = $1",
-        id,
-    )
-    .fetch_all(pool)
-    .await?;
-
-    Ok(crate::entity::calendar::Calendar {
-        id: row.id,
-        item_ids,
-        language: row.language,
-        name: row.name,
-        subscription_token: row.subscription_token,
-        user_id: row.user_id,
-        created_at: row.created_at,
-        updated_at: row.updated_at,
-        event_style: row.event_style,
-        frozen_subscribe_ics: row.frozen_subscribe_ics,
-        meta_version: row.meta_version,
-    })
-}
-
 // ────────────────────────────────────────────────────────────────────────────
 // Owner-side routes
 // ────────────────────────────────────────────────────────────────────────────
@@ -145,7 +105,7 @@ pub async fn create_invitation(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match load_calendar_any_owner(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -194,7 +154,7 @@ pub async fn revoke_invitation(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match load_calendar_any_owner(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -239,7 +199,7 @@ pub async fn resend_invitation(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match load_calendar_any_owner(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -286,7 +246,7 @@ pub async fn list_members(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match load_calendar_any_owner(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -365,7 +325,7 @@ pub async fn remove_editor(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match load_calendar_any_owner(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -585,7 +545,7 @@ pub async fn presence_heartbeat(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match load_calendar_any_owner(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };

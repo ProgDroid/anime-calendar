@@ -264,7 +264,7 @@ async fn apply_sharing_side_effects(owner_id: i32, deps: &SharingDeps) {
     let kicks = match suspend_owner_sharing_in_tx(&mut tx, owner_id).await {
         Ok(k) => k,
         Err(e) => {
-            error!("reconcile: suspend_owner_sharing_in_tx failed for user {owner_id}: {e}");
+            error!("reconcile: suspend_owner_sharing_in_tx failed for user {owner_id}: {e:?}");
             let _ = tx.rollback().await;
             return;
         }
@@ -326,7 +326,7 @@ async fn apply_restore_sharing_side_effects(owner_id: i32, deps: &SharingDeps) {
     let restored = match restore_owner_sharing_in_tx(&mut tx, owner_id).await {
         Ok(r) => r,
         Err(e) => {
-            error!("reconcile: restore_owner_sharing_in_tx failed for user {owner_id}: {e}");
+            error!("reconcile: restore_owner_sharing_in_tx failed for user {owner_id}: {e:?}");
             let _ = tx.rollback().await;
             return;
         }

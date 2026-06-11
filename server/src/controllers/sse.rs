@@ -18,7 +18,7 @@ use serde_json::json;
 
 use crate::{
     config::server::SharingConfig,
-    controllers::sharing::load_calendar_any_owner,
+    mappers::calendar::CalendarMapper,
     error::Error,
     middleware::auth::Claims,
     redis_pubsub::RedisPubSub,
@@ -58,7 +58,7 @@ pub async fn calendar_events(
     let actor_id = claims.user_id()?;
 
     // Load calendar and authorize.
-    let cal = load_calendar_any_owner(pool.get_ref(), calendar_id).await?;
+    let cal = CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await?;
     authz.assert_can(actor_id, &cal, Action::ItemMutate).await?;
 
     // Acquire a per-user SSE connection slot before subscribing to broadcast
