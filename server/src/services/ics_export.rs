@@ -7,13 +7,13 @@ use icalendar::{Alarm, Calendar as Ics, Component as _, Event, EventLike as _};
 use log::debug;
 use sqlx::PgPool;
 
+use crate::ServerResult;
 use crate::entity::calendar::{Calendar as CalendarEntity, Language as LanguageEntity};
 use crate::entity::subscription::Tier;
 use crate::error::Error;
 use crate::mappers::user_settings::UserSettingsMapper;
 use crate::services::cached_anilist::CachedAnilist;
 use crate::services::entitlement::EntitlementService;
-use crate::ServerResult;
 
 /// Defense-in-depth cap on per-event VALARMs. Settings validation already
 /// rejects writes with more than 5 entries, but the renderer enforces the
@@ -241,7 +241,12 @@ fn render_common_calendar(
                         episode.episode,
                         episode.airing_at.to_int()
                     );
-                    let summary = format!(
+                    // Sanitize the AniList-sourced title before it reaches the
+                    // SUMMARY and VALARM DESCRIPTION lines. The icalendar crate
+                    // escapes RFC 5545 value specials (commas, semicolons,
+                    // backslashes) but does NOT strip CR/LF — so a title
+                    // containing newlines could inject ICS lines (CR-1).
+                    let summary = sanitize_name_for_line_protocol(&format!(
                         "{} - Episode {}",
                         match calendar.language {
                             Language::English => item.title.english.clone(),
@@ -249,7 +254,7 @@ fn render_common_calendar(
                             Language::Native => item.title.native.clone(),
                         },
                         episode.episode
-                    );
+                    ));
                     let mut event = Event::new();
 
                     let airing_secs = episode.airing_at.to_int() as i64;
@@ -471,10 +476,7 @@ mod tests {
     #[test]
     fn pro_three_offsets_emits_three_valarms() {
         let cal = synthetic_calendar(1_700_000_000);
-        let out = format!(
-            "{}",
-            render_common_calendar(&cal, "timed", &[30, 60, 1440])
-        );
+        let out = format!("{}", render_common_calendar(&cal, "timed", &[30, 60, 1440]));
         assert_eq!(
             out.matches("BEGIN:VALARM").count(),
             3,
@@ -501,10 +503,7 @@ mod tests {
     fn pro_zero_offsets_emits_zero_valarms() {
         let cal = synthetic_calendar(1_700_000_000);
         let out = format!("{}", render_common_calendar(&cal, "timed", &[]));
-        assert!(
-            !out.contains("BEGIN:VALARM"),
-            "expected no VALARMs:\n{out}"
-        );
+        assert!(!out.contains("BEGIN:VALARM"), "expected no VALARMs:\n{out}");
     }
 
     #[test]
@@ -693,7 +692,10 @@ mod tests {
 
     #[test]
     fn sanitize_passthrough_clean_name() {
-        assert_eq!(sanitize_name_for_line_protocol("My Calendar"), "My Calendar");
+        assert_eq!(
+            sanitize_name_for_line_protocol("My Calendar"),
+            "My Calendar"
+        );
     }
 
     #[test]
@@ -713,7 +715,10 @@ mod tests {
     #[allow(clippy::case_sensitive_file_extension_comparisons)]
     fn filename_strips_double_quote() {
         let out = build_attachment_filename("My \"Calendar\"");
-        assert!(!out.contains('"'), "output must not contain double-quote: {out}");
+        assert!(
+            !out.contains('"'),
+            "output must not contain double-quote: {out}"
+        );
         assert!(out.ends_with(".ics"), "output must end with .ics: {out}");
     }
 
@@ -721,7 +726,10 @@ mod tests {
     #[allow(clippy::case_sensitive_file_extension_comparisons)]
     fn filename_strips_backslash() {
         let out = build_attachment_filename("My\\Cal");
-        assert!(!out.contains('\\'), "output must not contain backslash: {out}");
+        assert!(
+            !out.contains('\\'),
+            "output must not contain backslash: {out}"
+        );
         assert!(out.ends_with(".ics"), "output must end with .ics: {out}");
     }
 
@@ -755,9 +763,7 @@ mod tests {
         // A real injection would appear as a CRLF-terminated line starting
         // with "BEGIN:VEVENT". After sanitization the output has exactly one
         // line per `\r\n`, none of which is a bare `BEGIN:VEVENT`.
-        let line_starts_vevent = out
-            .split("\r\n")
-            .any(|line| line.trim() == "BEGIN:VEVENT");
+        let line_starts_vevent = out.split("\r\n").any(|line| line.trim() == "BEGIN:VEVENT");
         assert!(
             !line_starts_vevent,
             "ICS output must not contain a standalone BEGIN:VEVENT line:\n{out}"
@@ -783,8 +789,8 @@ mod tests {
         // strip CR/LF — so without sanitization `X-WR-CALNAME` would contain
         // injected lines that calendar parsers treat as real property lines.
         let mut cal = synthetic_calendar(1_700_000_000);
-        cal.name = "Evil\r\nBEGIN:VEVENT\r\nSUMMARY:Injected\r\nEND:VEVENT\r\nX-WR-CALNAME:"
-            .to_owned();
+        cal.name =
+            "Evil\r\nBEGIN:VEVENT\r\nSUMMARY:Injected\r\nEND:VEVENT\r\nX-WR-CALNAME:".to_owned();
 
         let out = format!("{}", render_common_calendar(&cal, "allday", &[]));
 
@@ -793,8 +799,7 @@ mod tests {
         // one would mean the injection succeeded.
         let vevent_count = out.split("\r\n").filter(|l| *l == "BEGIN:VEVENT").count();
         assert_eq!(
-            vevent_count,
-            1,
+            vevent_count, 1,
             "expected exactly 1 BEGIN:VEVENT (the real event); \
              injection guard failed:\n{out}"
         );
@@ -803,6 +808,32 @@ mod tests {
         assert!(
             out.contains("Evil"),
             "Sanitized calendar name prefix should appear:\n{out}"
+        );
+    }
+
+    #[test]
+    fn render_common_calendar_item_title_crlf_does_not_inject() {
+        // An AniList-sourced title containing CRLF must not inject ICS lines
+        // into SUMMARY or the VALARM DESCRIPTION (CR-1). Without sanitization a
+        // newline in the title would break out of the SUMMARY value line and a
+        // crafted title could forge a second event.
+        let mut cal = synthetic_calendar(1_700_000_000);
+        cal.items[0].title.english =
+            "Evil\r\nBEGIN:VEVENT\r\nSUMMARY:Injected\r\nEND:VEVENT".to_owned();
+
+        // Offset [30] also routes the title into the VALARM DESCRIPTION.
+        let out = format!("{}", render_common_calendar(&cal, "timed", &[30]));
+
+        // Exactly one real VEVENT — a second would mean the title injected one.
+        let vevent_count = out.split("\r\n").filter(|l| *l == "BEGIN:VEVENT").count();
+        assert_eq!(
+            vevent_count, 1,
+            "title CRLF injected a second VEVENT:\n{out}"
+        );
+        // The sanitized title prefix still appears in the SUMMARY.
+        assert!(
+            out.contains("Evil"),
+            "sanitized title prefix missing:\n{out}"
         );
     }
 }
