@@ -1,7 +1,7 @@
 use chrono::NaiveDateTime;
 use serde::Serialize;
 
-use crate::{redis_pubsub::RedisPubSub, ServerResult};
+use crate::{ServerResult, redis_pubsub::RedisPubSub};
 
 /// Events published over the SSE / Redis Pub-Sub channel for a calendar.
 ///
@@ -15,18 +15,25 @@ use crate::{redis_pubsub::RedisPubSub, ServerResult};
 /// The frontend self-echo filter that suppresses events originating from the
 /// current user compares `frame.actor` to the authenticated user's id. Using
 /// the username here breaks that filter silently.
+///
+/// `ItemAdded` / `ItemRemoved` additionally carry a `display` field: the
+/// actor's human username (falling back to the numeric id string if the user
+/// row can't be loaded). `display` is for rendering toasts; `actor` remains the
+/// numeric id used by the self-echo filter. Do not conflate them.
 #[derive(Debug, Clone, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum CalendarEvent {
     ItemAdded {
         media_id: i32,
         actor: String,
+        display: String,
         v: i32,
         at: NaiveDateTime,
     },
     ItemRemoved {
         media_id: i32,
         actor: String,
+        display: String,
         v: i32,
         at: NaiveDateTime,
     },
@@ -134,6 +141,7 @@ mod tests {
                 CalendarEvent::ItemAdded {
                     media_id: 1,
                     actor: actor.into(),
+                    display: "Alice".into(),
                     v: 1,
                     at,
                 },
@@ -143,6 +151,7 @@ mod tests {
                 CalendarEvent::ItemRemoved {
                     media_id: 1,
                     actor: actor.into(),
+                    display: "Alice".into(),
                     v: 1,
                     at,
                 },

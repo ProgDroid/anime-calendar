@@ -1076,7 +1076,9 @@ pub struct AddItemRequest {
 /// Add a single item to a calendar. Owner and active editors may call this.
 /// The show-cap entitlement check applies only to the calendar owner
 /// (owner-funded model: the owner's quota gates additions regardless of who
-/// makes the request).
+/// makes the request). The cap-check + insert run inside a per-owner
+/// advisory-locked transaction so concurrent additions can't both pass the
+/// cap and exceed it (H-3).
 #[utoipa::path(
     post,
     path = "/calendars/{id}/items",
@@ -1094,6 +1096,7 @@ pub struct AddItemRequest {
     security(("bearer_auth" = []))
 )]
 #[post("/calendars/{id}/items")]
+#[allow(clippy::too_many_arguments)]
 pub async fn add_item(
     path: web::Path<i32>,
     body: web::Json<AddItemRequest>,
@@ -1103,6 +1106,8 @@ pub async fn add_item(
     entitlement: web::Data<EntitlementService>,
     cache: web::Data<Cache>,
     publisher: web::Data<CalendarEventPublisher>,
+    pool: web::Data<sqlx::PgPool>,
+    users: web::Data<UserMapper>,
 ) -> HttpResponse {
     let calendar_id = path.into_inner();
     let actor_id = match claims.user_id() {
@@ -1116,38 +1121,60 @@ pub async fn add_item(
     if let Err(e) = authz.assert_can(actor_id, &cal, Action::ItemMutate).await {
         return e.error_response();
     }
-    // Show-cap only applies to the owner (owner-funded model).
+
+    // Advisory-locked transaction: serialise the cap-check + insert against
+    // concurrent additions counting toward the same owner's quota (H-3).
+    let mut tx = match pool.begin().await {
+        Ok(tx) => tx,
+        Err(e) => return Error::Database(e).error_response(),
+    };
+    if let Err(e) = sqlx::query!("SELECT pg_advisory_xact_lock($1)", i64::from(cal.user_id))
+        .execute(&mut *tx)
+        .await
+    {
+        return Error::Database(e).error_response();
+    }
+    // Show-cap only applies to the owner (owner-funded model). The in-tx
+    // variant observes the locked, pre-insert state authoritatively.
     if actor_id == cal.user_id
         && let Err(e) = entitlement
-            .assert_can_add_show(actor_id, body.item_id)
+            .assert_can_add_show_in_tx(&mut tx, actor_id, body.item_id)
             .await
     {
         return e.error_response();
     }
-    match calendars
-        .add_item_idempotent(calendar_id, body.item_id)
-        .await
-    {
-        Ok(affected) => {
-            let _ = cache.invalidate_calendar(calendar_id).await;
-            let _ = cache.invalidate_user_paged_calendars(cal.user_id).await;
-            let _ = cache.invalidate_subscription(&cal.subscription_token).await;
-            let _ = publisher
-                .publish_calendar(
-                    calendar_id,
-                    &CalendarEvent::ItemAdded {
-                        media_id: body.item_id,
-                        actor: actor_id.to_string(),
-                        v: cal.meta_version,
-                        at: chrono::Utc::now().naive_utc(),
-                    },
-                )
-                .await
-                .map_err(|e| log::error!("publish ItemAdded: {e}"));
-            HttpResponse::Ok().json(serde_json::json!({ "affected": affected }))
-        }
-        Err(e) => e.error_response(),
+    let affected =
+        match CalendarMapper::add_item_idempotent_with(&mut tx, calendar_id, body.item_id).await {
+            Ok(a) => a,
+            Err(e) => return e.error_response(),
+        };
+    if let Err(e) = tx.commit().await {
+        return Error::Database(e).error_response();
     }
+
+    let _ = cache.invalidate_calendar(calendar_id).await;
+    let _ = cache.invalidate_user_paged_calendars(cal.user_id).await;
+    let _ = cache.invalidate_subscription(&cal.subscription_token).await;
+    let display = users
+        .get_user_by_id(actor_id)
+        .await
+        .ok()
+        .map(|u| u.username)
+        .unwrap_or_else(|| actor_id.to_string());
+    let _ = publisher
+        .publish_calendar(
+            calendar_id,
+            &CalendarEvent::ItemAdded {
+                media_id: body.item_id,
+                actor: actor_id.to_string(),
+                display,
+                v: cal.meta_version,
+                at: chrono::Utc::now().naive_utc(),
+            },
+        )
+        .await
+        .map_err(|e| log::error!("publish ItemAdded: {e}"));
+    HttpResponse::Ok().json(serde_json::json!({ "affected": affected }))
 }
 
 /// Remove a single item from a calendar. Owner and active editors may call this.
@@ -1177,6 +1204,7 @@ pub async fn remove_item(
     calendars: web::Data<CalendarMapper>,
     cache: web::Data<Cache>,
     publisher: web::Data<CalendarEventPublisher>,
+    users: web::Data<UserMapper>,
 ) -> HttpResponse {
     let (calendar_id, item_id) = path.into_inner();
     let actor_id = match claims.user_id() {
@@ -1195,12 +1223,19 @@ pub async fn remove_item(
             let _ = cache.invalidate_calendar(calendar_id).await;
             let _ = cache.invalidate_user_paged_calendars(cal.user_id).await;
             let _ = cache.invalidate_subscription(&cal.subscription_token).await;
+            let display = users
+                .get_user_by_id(actor_id)
+                .await
+                .ok()
+                .map(|u| u.username)
+                .unwrap_or_else(|| actor_id.to_string());
             let _ = publisher
                 .publish_calendar(
                     calendar_id,
                     &CalendarEvent::ItemRemoved {
                         media_id: item_id,
                         actor: actor_id.to_string(),
+                        display,
                         v: cal.meta_version,
                         at: chrono::Utc::now().naive_utc(),
                     },
@@ -2203,6 +2238,8 @@ mod integration_tests {
         web::Data<EntitlementService>,
         web::Data<Cache>,
         web::Data<CalendarEventPublisher>,
+        web::Data<sqlx::PgPool>,
+        web::Data<UserMapper>,
     ) {
         let entitlement = EntitlementService::new(
             SubscriptionMapper::from_pool(pool.clone()),
@@ -2220,12 +2257,14 @@ mod integration_tests {
             web::Data::new(entitlement),
             web::Data::new(Cache::for_tests().await),
             publisher,
+            web::Data::new(pool.clone()),
+            web::Data::new(UserMapper::from_pool(pool)),
         )
     }
 
     macro_rules! item_app {
         ($pool:expr, $limits:expr) => {{
-            let (sa, cm, ent, ch, pub_) = build_item_app_services($pool, $limits).await;
+            let (sa, cm, ent, ch, pub_, pp, um) = build_item_app_services($pool, $limits).await;
             test::init_service(
                 App::new()
                     .app_data(sa)
@@ -2233,6 +2272,8 @@ mod integration_tests {
                     .app_data(ent)
                     .app_data(ch)
                     .app_data(pub_)
+                    .app_data(pp)
+                    .app_data(um)
                     .app_data(jwt_data())
                     .service(add_item)
                     .service(remove_item),
@@ -2322,5 +2363,50 @@ mod integration_tests {
 
         cleanup_user(&pool, owner.id).await;
         cleanup_user(&pool, outsider.id).await;
+    }
+
+    #[tokio::test]
+    async fn owner_at_show_cap_cannot_add_new_item_returns_402() {
+        let pool = crate::test_helpers::test_pool().await;
+        let owner = seed_user(&pool).await;
+        let (cal_id, _) = seed_calendar(&pool, owner.id, "Capped Cal").await;
+        // Fill the owner to the show cap (2 distinct shows).
+        for item in [10_i32, 20_i32] {
+            sqlx::query("INSERT INTO calendar_items (calendar_id, item_id) VALUES ($1, $2)")
+                .bind(cal_id)
+                .bind(item)
+                .execute(&pool)
+                .await
+                .unwrap();
+        }
+
+        let app = item_app!(pool.clone(), &limits(5, 2));
+        // New (untracked) item at cap → 402.
+        let req = test::TestRequest::post()
+            .uri(&format!("/calendars/{cal_id}/items"))
+            .insert_header(("Cookie", format!("auth_token={}", owner.token)))
+            .set_json(serde_json::json!({ "item_id": 99 }))
+            .to_request();
+        let resp = test::call_service(&app, req).await;
+        assert_eq!(
+            resp.status(),
+            StatusCode::PAYMENT_REQUIRED,
+            "owner at show cap adding a new item should get 402"
+        );
+
+        // Already-tracked item at cap → 200 (idempotent, not a new show).
+        let req2 = test::TestRequest::post()
+            .uri(&format!("/calendars/{cal_id}/items"))
+            .insert_header(("Cookie", format!("auth_token={}", owner.token)))
+            .set_json(serde_json::json!({ "item_id": 10 }))
+            .to_request();
+        let resp2 = test::call_service(&app, req2).await;
+        assert_eq!(
+            resp2.status(),
+            StatusCode::OK,
+            "re-adding an already-tracked item at cap should succeed"
+        );
+
+        cleanup_user(&pool, owner.id).await;
     }
 }
