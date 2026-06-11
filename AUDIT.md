@@ -466,4 +466,16 @@ Sequence step 1 closed across 5 commits on `main`:
 
 Verification (sequential): `cargo deny check advisories` ok · `cargo test -p server --lib` 358/358 · clippy no new warnings · `npm run test:unit` 479/479 · lint + build clean · `npm run test:e2e` **39/39** (was 33/39).
 
-Remaining from the follow-up sequence: step 2 (F2-1 trusted-proxy rate-limit keying, F2-8 `email_verified`, F2-4/F2-13 SSE+heartbeat recovery, F2-9 settings-cache invalidation, F2-3/F2-6 AniList perPage + status handling), step 3 (shared editor composable, docket H-3, F2-10), step 4 backlog.
+Remaining from the follow-up sequence: step 3 (shared editor composable, docket H-3, F2-10), step 4 backlog.
+
+## Step 2 status (2026-06-11 — fully shipped)
+
+7 findings closed across 5 commits on `main`:
+
+- **F2-8** (`523114a`): Google OAuth rejects tokens whose email is not verified (`email_verified != Some(true)` or missing email → `Error::Unauthorised`); payload conversion extracted to a testable helper, 4 unit tests.
+- **F2-1** (`d63f90e`): rate limiter keys on the rightmost `X-Forwarded-For` entry when the new `trust_proxy_header` config flag is set (default false; `config.docker.toml.dist` sets true — **the live production config must add it too**). Peer-IP fallback retained; missing-peer 500 body genericised; 3 new tests.
+- **F2-3 + F2-6 + F2-20** (`a0b7475`): AniList `get_items` pins `perPage: 50` and chunks id batches (>25 ids no longer silently truncated); new generic `execute<Q>()` handles HTTP status — 429 with short `Retry-After` retries once, else typed `RateLimited`/`HttpStatus` errors; payload logs demoted to debug. Server clamps `GET /calendars` `page`/`page_size` (page=0 previously underflowed the OFFSET computation).
+- **F2-9** (`8763669`): all three login paths invalidate the localStorage settings cache, closing the cross-user leak after cookie-expiry session ends.
+- **F2-4 + F2-13** (`08e4f6c`): EventSource `onerror` → backoff reconnect (1s→30s) with authed `GET /user` ping to drive the 401-refresh interceptor; dead session stops cleanly. Heartbeat moved from bare axios to the `api` instance. `MockEventSource` extended; 5 new tests.
+
+Verification (sequential): `cargo test --workspace --lib` 365/365 · clippy clean in touched files · `npm run test:unit` 484/484 · lint + build clean · `npm run test:e2e` 39/39.
