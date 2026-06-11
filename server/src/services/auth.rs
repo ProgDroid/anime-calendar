@@ -118,9 +118,12 @@ fn hash(data: &[u8]) -> String {
 pub fn verify_token<T: AsRef<[u8]>>(token: &str, jwt_secret: T) -> ServerResult<Claims> {
     use crate::middleware::auth::{AUD, ISS};
     let decoding_key = DecodingKey::from_secret(jwt_secret.as_ref());
-    let mut validation = jsonwebtoken::Validation::default();
+    // Pin the algorithm explicitly and require all issued registered claims
+    // (M-1) — mirrors the middleware extractor's validation contract.
+    let mut validation = jsonwebtoken::Validation::new(jsonwebtoken::Algorithm::HS256);
     validation.set_issuer(&[ISS]);
     validation.set_audience(&[AUD]);
+    validation.set_required_spec_claims(&["exp", "sub", "iss", "aud"]);
     let token_data = jsonwebtoken::decode::<Claims>(token, &decoding_key, &validation)?;
     Ok(token_data.claims)
 }

@@ -1,7 +1,7 @@
 use crate::config::server::JwtSecret;
 use crate::error::Error;
 use actix_web::{FromRequest, HttpRequest, dev::Payload};
-use jsonwebtoken::{DecodingKey, Validation, decode};
+use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use serde::{Deserialize, Serialize};
 use std::future::Future;
 use std::pin::Pin;
@@ -44,9 +44,14 @@ impl FromRequest for Claims {
 
             let secret = jwt_secret.expose_secret().as_bytes();
             let decoding_key = DecodingKey::from_secret(secret);
-            let mut validation = Validation::default();
+            // Pin the algorithm explicitly (no alg-confusion via a forged
+            // header) and require all issued registered claims to be present
+            // (M-1). All tokens are HS256 with sub/exp/iss/aud (see
+            // `generate_token`).
+            let mut validation = Validation::new(Algorithm::HS256);
             validation.set_issuer(&[ISS]);
             validation.set_audience(&[AUD]);
+            validation.set_required_spec_claims(&["exp", "sub", "iss", "aud"]);
 
             let token_data = decode::<Self>(&token, &decoding_key, &validation)
                 .map_err(|_| Error::Unauthorised)?;
