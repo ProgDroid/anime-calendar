@@ -102,6 +102,14 @@ describe('Router navigation guard', () => {
     expect(router.currentRoute.value.path).toBe('/my-calendars')
   })
 
+  it('authenticated user navigating to /login is redirected to /my-calendars', async () => {
+    mockAuth(true)
+    mockSettings({ theme_preference: 'light', accent_preference: 'iris', language_preference: 'pt' })
+    const router = makeRouter()
+    await router.push('/login')
+    expect(router.currentRoute.value.path).toBe('/my-calendars')
+  })
+
   it('unauthenticated user can access public /login route', async () => {
     mockAuth(false)
     mockSettings({ theme_preference: 'dark', accent_preference: 'coral', language_preference: 'en' })
