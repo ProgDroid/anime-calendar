@@ -10,3 +10,7 @@ log = "0.4"
 reqwest = { version = "0.12", features = ["json"] }
 serde = "1"
 thiserror = "2.0"
+# Only the timer is used (Retry-After backoff in client::execute); the
+# runtime itself is provided by the consuming binary, as reqwest already
+# assumes.
+tokio = { version = "1", features = ["time"] }

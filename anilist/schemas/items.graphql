@@ -68,5 +68,5 @@ type Page {
 
 type Query {
     "Find media by IDs"
-    Page: Page!
+    Page(page: Int, perPage: Int): Page!
 }

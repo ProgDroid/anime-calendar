@@ -7,10 +7,7 @@ use crate::{
         subscription::Tier,
     },
     error::Error,
-    mappers::{
-        calendar::CalendarMapper,
-        subscription::SubscriptionMapper, user::UserMapper,
-    },
+    mappers::{calendar::CalendarMapper, subscription::SubscriptionMapper, user::UserMapper},
     middleware::auth::Claims,
     services::{
         cached_anilist::CachedAnilist,
@@ -54,13 +51,16 @@ fn count_airing(
         .count()
 }
 
-
 /// Dedup the union of item ids across owned + shared rows for a single
 /// batched Anilist fetch. Pure helper kept separate so `get_calendars` stays
 /// under the per-fn line limit.
 fn collect_unique_anilist_ids(
     owned: &[(CalendarEntity, Vec<i32>, i64)],
-    shared: &[(CalendarEntity, crate::entity::calendar::CalendarOwnerInfo, Vec<i32>)],
+    shared: &[(
+        CalendarEntity,
+        crate::entity::calendar::CalendarOwnerInfo,
+        Vec<i32>,
+    )],
 ) -> Vec<Id> {
     let mut unique_ids: Vec<Id> = Vec::new();
     let mut seen: std::collections::HashSet<u64> = std::collections::HashSet::new();
@@ -256,21 +256,30 @@ mod validate_name_tests {
     fn name_with_cr_fails() {
         let result = req("Bad\rName").validate_name();
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Calendar name cannot contain line breaks");
+        assert_eq!(
+            result.unwrap_err(),
+            "Calendar name cannot contain line breaks"
+        );
     }
 
     #[test]
     fn name_with_lf_fails() {
         let result = req("Bad\nName").validate_name();
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Calendar name cannot contain line breaks");
+        assert_eq!(
+            result.unwrap_err(),
+            "Calendar name cannot contain line breaks"
+        );
     }
 
     #[test]
     fn name_with_crlf_fails() {
         let result = req("Bad\r\nName").validate_name();
         assert!(result.is_err());
-        assert_eq!(result.unwrap_err(), "Calendar name cannot contain line breaks");
+        assert_eq!(
+            result.unwrap_err(),
+            "Calendar name cannot contain line breaks"
+        );
     }
 
     #[test]
@@ -343,6 +352,25 @@ pub struct PaginationParams {
     pub page: usize,
     #[serde(default = "default_page_size")]
     pub page_size: usize,
+}
+
+impl PaginationParams {
+    /// `page_size` is client-supplied: unclamped it inflates both the SQL
+    /// LIMIT and the `AniList` id batch fanned out per page.
+    pub const MAX_PAGE_SIZE: usize = 50;
+
+    /// `page_size` clamped to `1..=MAX_PAGE_SIZE`.
+    #[must_use]
+    pub fn clamped_page_size(&self) -> usize {
+        self.page_size.clamp(1, Self::MAX_PAGE_SIZE)
+    }
+
+    /// `page` clamped to at least 1 — the mapper computes the SQL OFFSET as
+    /// `(page - 1) * page_size`, which underflows on a client-supplied 0.
+    #[must_use]
+    pub const fn clamped_page(&self) -> usize {
+        if self.page == 0 { 1 } else { self.page }
+    }
 }
 
 const fn default_page() -> usize {
@@ -583,9 +611,7 @@ async fn put(
     // Fast-path tier check (outside lock). Best-effort: short-circuits
     // obviously-blocked requests cheaply. The authoritative re-check runs
     // inside the advisory-locked transaction below.
-    if is_create
-        && let Err(e) = entitlement.assert_can_create_calendar(user.id).await
-    {
+    if is_create && let Err(e) = entitlement.assert_can_create_calendar(user.id).await {
         return e.error_response();
     }
     for &item_id in &item_ids {
@@ -647,16 +673,13 @@ async fn put(
     // non-owner gets NotFound from the load — assert_can_in_tx is the
     // forward-compatible spine, not the gate.
     if !is_create {
-        let existing = match CalendarMapper::get_calendar_by_id_with(
-            &mut tx,
-            calendar_entity.id,
-            user.id,
-        )
-        .await
-        {
-            Ok(c) => c,
-            Err(e) => return e.error_response(),
-        };
+        let existing =
+            match CalendarMapper::get_calendar_by_id_with(&mut tx, calendar_entity.id, user.id)
+                .await
+            {
+                Ok(c) => c,
+                Err(e) => return e.error_response(),
+            };
         if let Err(e) =
             SharingAuthz::assert_can_in_tx(&mut tx, user.id, &existing, Action::MetaMutate).await
         {
@@ -771,7 +794,6 @@ pub struct PaginationInfo {
     total_pages: usize,
 }
 
-
 /// Owner projection on `shared_with_me` entries. `display` mirrors
 /// `users.username` today; a richer profile column may replace it later.
 /// `avatar` is always `null` until that column lands.
@@ -842,8 +864,10 @@ async fn get_calendars(
     // on `owned` bounds the worst-case Anilist batch on Pro power users;
     // `shared_with_me` is naturally bounded by per-calendar editor cap ×
     // accepted invitations and stays flat.
+    let page = params.clamped_page();
+    let page_size = params.clamped_page_size();
     let (owned_rows, total_count) = match calendar_mapper
-        .get_calendars_by_user_paginated(user.id, params.page, params.page_size)
+        .get_calendars_by_user_paginated(user.id, page, page_size)
         .await
     {
         Ok(pair) => pair,
@@ -871,13 +895,13 @@ async fn get_calendars(
     let owned_results = build_owned_page(owned_rows, &schedules_by_id, now_secs);
     let shared_results = build_shared_page(shared_rows, &schedules_by_id, now_secs);
 
-    let total_pages = total_count.div_ceil(params.page_size);
+    let total_pages = total_count.div_ceil(page_size);
     let response = CalendarsResponse {
         owned: PaginatedResponse {
             data: owned_results,
             pagination: PaginationInfo {
-                page: params.page,
-                page_size: params.page_size,
+                page,
+                page_size,
                 total: total_count,
                 total_pages,
             },
@@ -890,12 +914,7 @@ async fn get_calendars(
     // Editor-mutation endpoints land in Phase 2 and will need to additionally
     // invalidate the affected user's key set (their `shared_with_me` view
     // changes when they're added/removed/suspended on a calendar).
-    let cache_key = crate::cache::generate_paginated_key(
-        user.id,
-        "calendars",
-        params.page,
-        params.page_size,
-    );
+    let cache_key = crate::cache::generate_paginated_key(user.id, "calendars", page, page_size);
     let cache_ttl = CACHE_TTL_SEARCH;
 
     match cache
@@ -944,7 +963,10 @@ async fn get_calendar(
     };
 
     // Gate: owner or active editor passes; outsider gets Forbidden.
-    if let Err(e) = authz.assert_can(actor_id, &calendar, Action::ItemMutate).await {
+    if let Err(e) = authz
+        .assert_can(actor_id, &calendar, Action::ItemMutate)
+        .await
+    {
         return e.error_response();
     }
 
@@ -990,7 +1012,6 @@ async fn get_calendar(
     }
 }
 
-
 #[utoipa::path(
     delete,
     path = "/calendars/{id}",
@@ -1022,7 +1043,10 @@ async fn delete_calendar(
     // Route through SharingAuthz so editor support drops in cleanly in
     // Phase 2. The lookup itself still filters by owner for now —
     // assert_can is the spine, not the gate.
-    let existing = match calendar_mapper.get_calendar_by_id(*id as i32, user.id).await {
+    let existing = match calendar_mapper
+        .get_calendar_by_id(*id as i32, user.id)
+        .await
+    {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -1043,7 +1067,6 @@ async fn delete_calendar(
         Err(e) => e.error_response(),
     }
 }
-
 
 #[derive(serde::Deserialize, utoipa::ToSchema)]
 pub struct AddItemRequest {
@@ -1095,11 +1118,16 @@ pub async fn add_item(
     }
     // Show-cap only applies to the owner (owner-funded model).
     if actor_id == cal.user_id
-        && let Err(e) = entitlement.assert_can_add_show(actor_id, body.item_id).await
+        && let Err(e) = entitlement
+            .assert_can_add_show(actor_id, body.item_id)
+            .await
     {
         return e.error_response();
     }
-    match calendars.add_item_idempotent(calendar_id, body.item_id).await {
+    match calendars
+        .add_item_idempotent(calendar_id, body.item_id)
+        .await
+    {
         Ok(affected) => {
             let _ = cache.invalidate_calendar(calendar_id).await;
             let _ = cache.invalidate_user_paged_calendars(cal.user_id).await;
@@ -1307,8 +1335,7 @@ mod integration_tests {
             CalendarEditorMapper::from_pool(pool.clone()),
             entitlement.clone(),
         );
-        let publisher =
-            web::Data::new(CalendarEventPublisher::new(RedisPubSub::for_tests().await));
+        let publisher = web::Data::new(CalendarEventPublisher::new(RedisPubSub::for_tests().await));
         (
             web::Data::new(UserMapper::from_pool(pool.clone())),
             web::Data::new(CalendarMapper::from_pool(pool.clone())),
@@ -1347,8 +1374,7 @@ mod integration_tests {
 
     macro_rules! put_app {
         ($pool:expr, $limits:expr) => {{
-            let (um, cm, ca, ch, ent, fi, pp, sa, pub_) =
-                build_put_services($pool, $limits).await;
+            let (um, cm, ca, ch, ent, fi, pp, sa, pub_) = build_put_services($pool, $limits).await;
             test::init_service(
                 App::new()
                     .app_data(um)
@@ -1505,11 +1531,13 @@ mod integration_tests {
         let user = seed_user(&pool).await;
         // Seed a calendar containing 2 items so the user is at the show cap.
         let (cal_id, _) = seed_calendar(&pool, user.id, "Existing").await;
-        sqlx::query("INSERT INTO calendar_items (calendar_id, item_id) VALUES ($1, 1001), ($1, 1002)")
-            .bind(cal_id)
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT INTO calendar_items (calendar_id, item_id) VALUES ($1, 1001), ($1, 1002)",
+        )
+        .bind(cal_id)
+        .execute(&pool)
+        .await
+        .unwrap();
 
         let app = put_app!(pool.clone(), &limits(5, 2));
         // Try to update the same calendar with a brand-new item id 9999 — over cap.
@@ -1537,11 +1565,13 @@ mod integration_tests {
         let pool = crate::test_helpers::test_pool().await;
         let user = seed_user(&pool).await;
         let (cal_id, _) = seed_calendar(&pool, user.id, "Existing").await;
-        sqlx::query("INSERT INTO calendar_items (calendar_id, item_id) VALUES ($1, 1001), ($1, 1002)")
-            .bind(cal_id)
-            .execute(&pool)
-            .await
-            .unwrap();
+        sqlx::query(
+            "INSERT INTO calendar_items (calendar_id, item_id) VALUES ($1, 1001), ($1, 1002)",
+        )
+        .bind(cal_id)
+        .execute(&pool)
+        .await
+        .unwrap();
 
         let app = put_app!(pool.clone(), &limits(5, 2));
         // Re-PUT same calendar with the same item ids — idempotent, should pass.
@@ -1842,10 +1872,8 @@ mod integration_tests {
             ShowCountService::new(pool.clone()),
             &limits(3, 25),
         );
-        let sharing_authz = SharingAuthz::new(
-            CalendarEditorMapper::from_pool(pool.clone()),
-            entitlement,
-        );
+        let sharing_authz =
+            SharingAuthz::new(CalendarEditorMapper::from_pool(pool.clone()), entitlement);
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool.clone())))
@@ -1872,10 +1900,8 @@ mod integration_tests {
             ShowCountService::new(pool.clone()),
             &limits(3, 25),
         );
-        let sharing_authz = SharingAuthz::new(
-            CalendarEditorMapper::from_pool(pool.clone()),
-            entitlement,
-        );
+        let sharing_authz =
+            SharingAuthz::new(CalendarEditorMapper::from_pool(pool.clone()), entitlement);
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(CalendarMapper::from_pool(pool.clone())))
@@ -1910,10 +1936,8 @@ mod integration_tests {
             ShowCountService::new(pool.clone()),
             &limits(3, 25),
         );
-        let sharing_authz = SharingAuthz::new(
-            CalendarEditorMapper::from_pool(pool.clone()),
-            entitlement,
-        );
+        let sharing_authz =
+            SharingAuthz::new(CalendarEditorMapper::from_pool(pool.clone()), entitlement);
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -1940,10 +1964,8 @@ mod integration_tests {
             ShowCountService::new(pool.clone()),
             &limits(3, 25),
         );
-        let sharing_authz = SharingAuthz::new(
-            CalendarEditorMapper::from_pool(pool.clone()),
-            entitlement,
-        );
+        let sharing_authz =
+            SharingAuthz::new(CalendarEditorMapper::from_pool(pool.clone()), entitlement);
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -1972,10 +1994,8 @@ mod integration_tests {
             ShowCountService::new(pool.clone()),
             &limits(3, 25),
         );
-        let sharing_authz = SharingAuthz::new(
-            CalendarEditorMapper::from_pool(pool.clone()),
-            entitlement,
-        );
+        let sharing_authz =
+            SharingAuthz::new(CalendarEditorMapper::from_pool(pool.clone()), entitlement);
         let app = test::init_service(
             App::new()
                 .app_data(web::Data::new(UserMapper::from_pool(pool.clone())))
@@ -1992,7 +2012,6 @@ mod integration_tests {
             StatusCode::UNAUTHORIZED
         );
     }
-
 
     // ─── GET /calendars/subscribe/{token} (Phase 1.3 tier branching) ─────────
 
@@ -2194,8 +2213,7 @@ mod integration_tests {
             CalendarEditorMapper::from_pool(pool.clone()),
             entitlement.clone(),
         );
-        let publisher =
-            web::Data::new(CalendarEventPublisher::new(RedisPubSub::for_tests().await));
+        let publisher = web::Data::new(CalendarEventPublisher::new(RedisPubSub::for_tests().await));
         (
             web::Data::new(sharing_authz),
             web::Data::new(CalendarMapper::from_pool(pool.clone())),
@@ -2241,7 +2259,11 @@ mod integration_tests {
             .set_json(serde_json::json!({ "item_id": 42 }))
             .to_request();
         let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), StatusCode::OK, "editor should be able to add item");
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "editor should be able to add item"
+        );
         let body: serde_json::Value = test::read_body_json(resp).await;
         assert_eq!(body["affected"], true);
 
@@ -2263,7 +2285,11 @@ mod integration_tests {
             .set_json(serde_json::json!({ "item_id": 42 }))
             .to_request();
         let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), StatusCode::FORBIDDEN, "outsider should get 403");
+        assert_eq!(
+            resp.status(),
+            StatusCode::FORBIDDEN,
+            "outsider should get 403"
+        );
 
         cleanup_user(&pool, owner.id).await;
         cleanup_user(&pool, outsider.id).await;
@@ -2288,7 +2314,11 @@ mod integration_tests {
             .insert_header(("Cookie", format!("auth_token={}", outsider.token)))
             .to_request();
         let resp = test::call_service(&app, req).await;
-        assert_eq!(resp.status(), StatusCode::FORBIDDEN, "outsider should get 403 on DELETE");
+        assert_eq!(
+            resp.status(),
+            StatusCode::FORBIDDEN,
+            "outsider should get 403 on DELETE"
+        );
 
         cleanup_user(&pool, owner.id).await;
         cleanup_user(&pool, outsider.id).await;

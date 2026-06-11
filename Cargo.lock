@@ -330,6 +330,7 @@ dependencies = [
  "reqwest",
  "serde",
  "thiserror 2.0.16",
+ "tokio",
 ]
 
 [[package]]
