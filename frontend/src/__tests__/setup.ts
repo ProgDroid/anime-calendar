@@ -22,13 +22,22 @@ console.warn = (...args: unknown[]) => {
 // components can be mounted in jsdom without a real server connection.
 
 export class MockEventSource {
+  // Mirror the real EventSource readyState constants — production code
+  // compares against `EventSource.CLOSED`, which resolves to this class in
+  // the test environment.
+  static readonly CONNECTING = 0
+  static readonly OPEN = 1
+  static readonly CLOSED = 2
   static lastInstance: MockEventSource
   static instances: MockEventSource[] = []
   url: string
   withCredentials: boolean
   closed = false
+  readyState: number = MockEventSource.CONNECTING
   private listeners: Record<string, Array<(e: MessageEvent) => void>> = {}
   onmessage: ((e: MessageEvent) => void) | null = null
+  onopen: ((e: Event) => void) | null = null
+  onerror: ((e: Event) => void) | null = null
 
   constructor(url: string, opts?: { withCredentials?: boolean }) {
     this.url = url
@@ -39,12 +48,20 @@ export class MockEventSource {
 
   close() {
     this.closed = true
+    this.readyState = MockEventSource.CLOSED
   }
 
   emit(name: string, data: string) {
     const e = { data } as MessageEvent
     if (name === 'message' && this.onmessage) this.onmessage(e)
     ;(this.listeners[name] ?? []).forEach((l) => l(e))
+  }
+
+  /** Simulate a fatal connection failure (non-200 response): the browser
+   *  sets readyState to CLOSED and fires `error` with no native retry. */
+  failFatally() {
+    this.readyState = MockEventSource.CLOSED
+    this.onerror?.(new Event('error'))
   }
 
   addEventListener(name: string, listener: (e: MessageEvent) => void) {
