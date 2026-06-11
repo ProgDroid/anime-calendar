@@ -11,11 +11,8 @@ use server::{
         user_settings::UserSettingsMapper,
     },
     services::{
-        cached_anilist::CachedAnilist,
-        calendar_events::CalendarEventPublisher,
-        email::EmailService,
-        entitlement::EntitlementService,
-        sharing_authz::SharingAuthz,
+        cached_anilist::CachedAnilist, calendar_events::CalendarEventPublisher,
+        email::EmailService, entitlement::EntitlementService, sharing_authz::SharingAuthz,
     },
 };
 use stripe::Client as StripeClient;
@@ -51,8 +48,7 @@ async fn main() -> ServerResult<()> {
     let show_count_pool = server::mappers::database::Database::new(db_config.clone())
         .await?
         .pool;
-    let show_count_service =
-        server::services::show_count::ShowCountService::new(show_count_pool);
+    let show_count_service = server::services::show_count::ShowCountService::new(show_count_pool);
     let entitlement_service = EntitlementService::new(
         subscription_mapper.clone(),
         show_count_service.clone(),
@@ -158,8 +154,9 @@ async fn main() -> ServerResult<()> {
     let frozen_ics =
         server::services::frozen_ics::FrozenIcsService::new(ics_pool, ics_export.clone());
 
-    // Dedicated pool for the PUT /calendar advisory-locked transaction.
-    // Cheap (Arc-backed) and keeps the controller independent of any single
+    // Dedicated pool backing the advisory-locked transactions in both
+    // PUT /calendar and POST /calendars/{id}/items (add_item). Cheap
+    // (Arc-backed) and keeps the controller independent of any single
     // mapper's lifetime.
     let controller_pool = server::mappers::database::Database::new(db_config.clone())
         .await?

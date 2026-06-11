@@ -191,6 +191,21 @@ mod tests {
                 "{name}: actor must serialize as the exact string passed in"
             );
         }
+
+        // The `display` field on item events must be emitted in the wire
+        // payload — guards against a future `#[serde(skip)]` regression.
+        let added = serde_json::to_string(&CalendarEvent::ItemAdded {
+            media_id: 1,
+            actor: actor.into(),
+            display: "Alice".into(),
+            v: 1,
+            at,
+        })
+        .expect("serialize");
+        assert!(
+            added.contains("\"display\":\"Alice\""),
+            "ItemAdded must serialize display: got {added}"
+        );
     }
 
     /// Asserts that backend-initiated events use the "system" sentinel.
