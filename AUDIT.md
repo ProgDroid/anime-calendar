@@ -494,3 +494,17 @@ Two items deferred to the backlog (Step 4):
 - **F2-32 (LOW, test infra)** — the full `npm run test:unit` run is order-flaky: `ResetPasswordPage.spec.ts` (and previously `SubscriptionTab`) fail intermittently with `vi.mocked(...).mockResolvedValue is not a function`, a cross-file `vi.mock('axios')` registry leak (the documented `feedback_vue_router_mock_leaks_across_workers` class). Both pass in isolation; a clean full run is 485/485. Pre-existing; not introduced by Step 3 (which never mocks `axios`). Root-cause fix is per-file mock isolation / `vi.resetModules` discipline — its own task.
 
 Remaining from the follow-up sequence: step 4 backlog (H-16/17/18, M-*, CR-1, L-*, F2 LOWs incl. the two above).
+
+## Step 4 — security + cheap HIGH wins batch (2026-06-11 — fully shipped)
+
+6 findings closed across 4 commits on `main`. Implemented directly (small prescribed fixes), TDD where testable, then an adversarial security review (Approved). Backend suite 370/370 · zero new clippy warnings in touched files.
+
+- **M-2 + M-3 + F2-18** (`a555b2c`): `Error::error_response()` now redacts the three variants whose `Display` interpolates an internal detail string — `Stripe`, `EmailError`, `Redis`. Each logs the full detail server-side (`log::error!`) and returns a stable generic code (`stripe_error` / `email_error` / `internal_error`) instead of leaking SMTP / Stripe / Redis internals to clients. Full enum audit (in the review) confirmed no other interpolated variant leaks via the `self.to_string()` fallback; the `#[from]` variants all have static Display strings. 3 leak-assertion tests.
+- **M-1** (`f54d2b7`): JWT validation in both the `Claims` `FromRequest` extractor and `services::auth::verify_token` pins the algorithm explicitly (`Validation::new(Algorithm::HS256)`, no alg-confusion) and requires all issued registered claims (`set_required_spec_claims(&["exp","sub","iss","aud"])`). `generate_token` is the sole issuer and emits all four, so no valid token regresses.
+- **CR-1** (`ba79c75`): the per-episode `summary` (AniList item title) is wrapped in `sanitize_name_for_line_protocol` before flowing into both `event.summary()` and the VALARM `Alarm::display()` DESCRIPTION — closing the last CR/LF injection vector in `render_common_calendar` (the calendar name was already sanitized in the H-1 follow-up). New injection-guard test on the item title.
+- **H-16** (`58f00ea`): explicit `operation_id = "get_item"` on the bare `item.rs::get` handler; review confirmed no collision with existing operation ids.
+
+New backlog item surfaced by the review:
+- **F2-33 (LOW, semantics)** — `Error::CannotHashPassword` and `Error::CannotGenerateAuthToken` map to `400 Bad Request` in `error.rs::status_code`, but they are server-side crypto failures and should be `500`. No leak (static Display); pre-existing. Fix would move both arms to the `INTERNAL_SERVER_ERROR` group (verify no register/login test asserts 400 on these paths first).
+
+Remaining step 4 backlog: H-17 (`_with`→`_in_tx` mapper rename), H-18 (email send-fn extraction), the M-29/M-30 quality items, F2 perf/DB cleanup (F2-22/23/24/25), F2-28 frontend store hygiene, F2-31/F2-32/F2-33, and the L-* nits.
