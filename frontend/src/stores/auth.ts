@@ -48,6 +48,10 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await api.post('/login', { email, password })
       user.value = response.data.username
       userId.value = response.data.user_id
+      // A previous session that ended without an explicit logout (cookie
+      // expiry, 401 redirect) leaves the old user's settings cached in
+      // localStorage for up to 30 minutes — never serve them to this login.
+      invalidateSettingsCache()
       return response.data
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -76,6 +80,8 @@ export const useAuthStore = defineStore('auth', () => {
       // Backend issues the auth cookie; set local state
       user.value = response.data.username
       userId.value = response.data.user_id
+      // See login(): never serve a previous session's cached settings.
+      invalidateSettingsCache()
       return response.data.username as string
     } catch (err) {
       if (axios.isAxiosError(err)) {
@@ -96,6 +102,8 @@ export const useAuthStore = defineStore('auth', () => {
       // Non-sensitive display data only — no auth token in localStorage
       localStorage.setItem('name', userData)
       localStorage.setItem('avatar', avatarUrl)
+      // See login(): never serve a previous session's cached settings.
+      invalidateSettingsCache()
       return response.data
     } catch (err) {
       if (axios.isAxiosError(err)) {
