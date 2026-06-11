@@ -8,7 +8,9 @@ const PREVIEW = {
   item_count: 12,
   masked_email: 'e***@t***.com',
 }
-const MOCK_USER = { id: 1, username: 'editor', email: 'editor@test.com' }
+// Shape must match the real GET /api/user response: auth.ts reads
+// `username` and `user_id` (not `id`).
+const MOCK_USER = { user_id: 1, username: 'editor', email: 'editor@test.com' }
 
 test.describe('Invite landing page', () => {
   test('shows invalid state when token is not found', async ({ page }) => {
@@ -34,13 +36,20 @@ test.describe('Invite landing page', () => {
     await page.goto(`/invite/${TOKEN}`)
     await expect(page.locator('[data-testid="invite-unauth"]')).toBeVisible()
 
-    // Sign-in and sign-up links must carry the redirect query param.
+    // H-10: sign-in/sign-up are buttons that stash the token in
+    // sessionStorage and navigate to a plain /login or /register URL —
+    // the token must never appear in the query string (Referer/history leak).
     const signIn = page.locator('[data-testid="invite-sign-in"]')
     const signUp = page.locator('[data-testid="invite-sign-up"]')
     await expect(signIn).toBeVisible()
     await expect(signUp).toBeVisible()
-    await expect(signIn).toHaveAttribute('href', `/login?redirect=/invite/${TOKEN}`)
-    await expect(signUp).toHaveAttribute('href', `/register?redirect=/invite/${TOKEN}`)
+
+    await signIn.click()
+    await expect(page).toHaveURL('/login')
+    expect(new URL(page.url()).search).toBe('')
+    expect(
+      await page.evaluate(() => sessionStorage.getItem('pendingInviteToken')),
+    ).toBe(TOKEN)
   })
 
   test('shows ready state when user is logged in', async ({ page }) => {
@@ -74,22 +83,23 @@ test.describe('Invite landing page', () => {
         body: JSON.stringify(MOCK_USER),
       }),
     )
-    await page.route(`**/api/invitations/${TOKEN}`, (route) => {
-      if (route.request().method() === 'POST') {
-        // accept() POST → 403
-        return route.fulfill({
-          status: 403,
-          contentType: 'application/json',
-          body: '{"error":"email mismatch"}',
-        })
-      }
-      // GET preview → success
-      return route.fulfill({
+    // GET preview → success. NB: this glob does NOT match the /accept
+    // sub-path, which needs its own stub below.
+    await page.route(`**/api/invitations/${TOKEN}`, (route) =>
+      route.fulfill({
         status: 200,
         contentType: 'application/json',
         body: JSON.stringify(PREVIEW),
-      })
-    })
+      }),
+    )
+    // accept() POSTs to /invitations/{token}/accept → 403 email mismatch.
+    await page.route(`**/api/invitations/${TOKEN}/accept`, (route) =>
+      route.fulfill({
+        status: 403,
+        contentType: 'application/json',
+        body: '{"error":"email mismatch"}',
+      }),
+    )
 
     await page.goto(`/invite/${TOKEN}`)
     await expect(page.locator('[data-testid="invite-ready"]')).toBeVisible()

@@ -2,7 +2,9 @@ import { test, expect } from './fixtures'
 
 const CALENDAR_ID = 1
 
-const MOCK_USER = { id: 99, username: 'editor', email: 'editor@test.com' }
+// Shape must match the real GET /api/user response: auth.ts reads
+// `username` and `user_id` (not `id`).
+const MOCK_USER = { user_id: 99, username: 'editor', email: 'editor@test.com' }
 
 const MOCK_SETTINGS = {
   theme_preference: 'dark',
@@ -116,12 +118,11 @@ test('editor is kicked and redirected to /my-calendars when owner downgrades', a
   // Navigate to the calendar editor as the logged-in editor.
   await page.goto(`/calendar/${CALENDAR_ID}`)
 
-  // The editor panel heading is the most stable post-mount marker on desktop.
-  // Wait for the page to be mounted before the SSE frame is processed.
-  await expect(page.locator('[data-testid="editor-items-list"]')).toBeVisible({ timeout: 5_000 })
-
-  // After the SSE kick frame fires the component calls router.push('/my-calendars').
-  await page.waitForURL('**/my-calendars', { timeout: 8_000 })
+  // Do NOT assert an intermediate editor marker here: the stubbed SSE body
+  // delivers the kick frame instantly on mount, so the component can redirect
+  // before the editor finishes rendering — asserting the editor UI races the
+  // very redirect under test. The redirect IS the contract.
+  await page.waitForURL('**/my-calendars', { timeout: 10_000 })
 
   // Verify we landed on the My Calendars page (shared-with-me section visible).
   await expect(page).toHaveURL(/\/my-calendars/)
