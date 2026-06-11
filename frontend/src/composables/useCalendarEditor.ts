@@ -166,9 +166,16 @@ export function useCalendarEditor() {
   // ── Submit ──────────────────────────────────────────────────────────────────
   const finishSuccess = (name: string) => {
     toastService.success(t('calendar.updateSuccess', { name }))
+    // Cancel any pending debounced draft write before clearing the slot, so a
+    // late timer can't re-persist an empty draft after clearDraft() (which would
+    // clobber an existing calendar's items on the next visit).
+    if (draftTimer !== null) {
+      clearTimeout(draftTimer)
+      draftTimer = null
+    }
+    clearDraft()
     calendarName.value = ''
     itemsInCalendar.value = []
-    clearDraft()
     router.push('/my-calendars')
   }
 
@@ -360,6 +367,5 @@ export function useCalendarEditor() {
     showCollisionBanner,
     reloadPage,
     recommendations,
-    calculateRecommendations,
   }
 }
