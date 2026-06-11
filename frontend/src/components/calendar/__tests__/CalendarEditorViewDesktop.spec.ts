@@ -7,6 +7,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { MockEventSource } from '@/__tests__/setup'
 import en from '@/locales/en.json'
 import pt from '@/locales/pt.json'
+import CalendarSettingsForm from '../CalendarSettingsForm.vue'
 
 vi.mock('@/config/api', () => ({
   default: {
@@ -77,6 +78,7 @@ describe('CalendarEditorViewDesktop', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
+    sessionStorage.clear()
   })
 
   async function mountView(calendarId = '42') {
@@ -114,6 +116,58 @@ describe('CalendarEditorViewDesktop', () => {
     )
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/my-calendars')
+    wrapper.unmount()
+  })
+
+  it('item_added toast shows the actor display name, not the numeric id', async () => {
+    const { wrapper } = await mountView()
+    const { toastService } = await import('@/services/toastService')
+    MockEventSource.lastInstance.emit(
+      'message',
+      JSON.stringify({
+        type: 'item_added',
+        media_id: 7,
+        actor: '2',
+        display: 'Alice',
+        v: 1,
+        at: '2026-01-01T00:00:00Z',
+      }),
+    )
+    await flushPromises()
+    expect(toastService.success).toHaveBeenCalledWith('Alice added an item')
+    wrapper.unmount()
+  })
+
+  it('overlays a saved draft for the matching calendar id', async () => {
+    sessionStorage.setItem(
+      'calendarDraft:42',
+      JSON.stringify({
+        calendarName: 'Draft Name',
+        calendarLanguage: 'english',
+        calendarEventStyle: 'timed',
+        itemsInCalendar: [],
+      }),
+    )
+    const { wrapper } = await mountView('42')
+    const form = wrapper.findComponent(CalendarSettingsForm)
+    expect(form.props('name')).toBe('Draft Name')
+    wrapper.unmount()
+  })
+
+  it('ignores a draft saved under a different calendar id', async () => {
+    sessionStorage.setItem(
+      'calendarDraft:99',
+      JSON.stringify({
+        calendarName: 'Other Draft',
+        calendarLanguage: 'english',
+        calendarEventStyle: 'timed',
+        itemsInCalendar: [],
+      }),
+    )
+    const { wrapper } = await mountView('42')
+    const form = wrapper.findComponent(CalendarSettingsForm)
+    // Server value ('Test Cal' from the api mock) — the 99-scoped draft is not applied.
+    expect(form.props('name')).toBe('Test Cal')
     wrapper.unmount()
   })
 })

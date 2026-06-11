@@ -1,7 +1,8 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import { useUserSettingsStore } from '@/stores/userSettingsStore'
-import { applySettings } from '@/services/applySettings'
+import { useTheme } from '@/composables/useTheme'
+import { i18n } from '@/plugins/i18n'
 
 // Lazy load components to improve performance
 const MyCalendarsPage = () => import('@/components/MyCalendarsPage.vue')
@@ -140,12 +141,18 @@ router.beforeEach(async (to, from, next) => {
   // initAuth() is idempotent — subsequent navigations return immediately.
   await authStore.initAuth()
 
-  // Fetch settings on authenticated routes only
-  if (!to.meta.public) {
+  // Reconcile theme/locale from the server only for authenticated users.
+  // fetchSettings() fabricates defaults for unauth users; applying those would
+  // clobber localStorage (feedback_unauth_default_reconcile). Route theme/accent
+  // through useTheme — the single source of truth — instead of mutating
+  // data-theme directly, which would desync the theme toggle.
+  if (!to.meta.public && authStore.isAuthenticated()) {
     const settings = await userSettingsStore.fetchSettings()
-    if (settings) {
-      applySettings(settings)
-    }
+    useTheme().reconcileFromServer({
+      theme_preference: settings.theme_preference,
+      accent_preference: settings.accent_preference,
+    })
+    i18n.global.locale.value = settings.language_preference
   }
 
   if (to.path === '/login' && authStore.isAuthenticated()) {

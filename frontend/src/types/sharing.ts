@@ -41,8 +41,8 @@ export interface Viewer {
 
 export type CalendarEvent =
   | { type: 'meta_snapshot'; v: number }
-  | { type: 'item_added'; media_id: number; actor: string; v: number; at: string }
-  | { type: 'item_removed'; media_id: number; actor: string; v: number; at: string }
+  | { type: 'item_added'; media_id: number; actor: string; display: string; v: number; at: string }
+  | { type: 'item_removed'; media_id: number; actor: string; display: string; v: number; at: string }
   | { type: 'meta_updated'; fields: string[]; actor: string; v: number; at: string }
   | { type: 'member_joined'; user_id: string; display: string; actor: string }
   | { type: 'member_left'; user_id: string; actor: string; reason: string }
