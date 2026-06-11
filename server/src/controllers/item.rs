@@ -6,6 +6,7 @@ use crate::services::cached_anilist::CachedAnilist;
 #[utoipa::path(
     get,
     path = "/item/{id}",
+    operation_id = "get_item",
     tag = "items",
     params(("id" = u64, Path, description = "Anilist media ID")),
     responses(
