@@ -8,6 +8,10 @@ compress = true
 # Keep true when running behind a TLS-terminating reverse proxy (the normal
 # docker-compose production case). Set to false only for local HTTP-only testing.
 cookie_secure = true
+# nginx fronts the backend in this topology, so every TCP connection arrives
+# from the proxy IP. Key the rate limiter on the rightmost X-Forwarded-For
+# entry (appended by nginx) or all clients share one rate-limit bucket.
+trust_proxy_header = true
 # Set to true only in development — exposes full API surface at /swagger-ui/
 enable_docs = false
 allowed_origins = ["http://localhost"]

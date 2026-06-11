@@ -4,6 +4,9 @@ use serde::Deserialize;
 
 const CONFIG_FILE: &str = "config.toml";
 
+// Config structs mirror the TOML surface 1:1; independent feature toggles are
+// genuinely independent bools, not a hidden state machine.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Deserialize, Clone)]
 pub struct Server {
     pub host: String,
@@ -17,6 +20,15 @@ pub struct Server {
     pub allowed_origins: Vec<String>,
     #[serde(default)]
     pub cookie_secure: bool,
+    /// When the server sits behind a trusted reverse proxy (nginx in the
+    /// shipped topology), every TCP connection arrives from the proxy's IP,
+    /// so per-peer rate limiting collapses into one shared bucket. Set this
+    /// to `true` to key the rate limiter on the rightmost `X-Forwarded-For`
+    /// entry (the hop appended by the proxy itself) instead. Leave `false`
+    /// when clients connect directly — a spoofed header must never pick the
+    /// bucket.
+    #[serde(default)]
+    pub trust_proxy_header: bool,
     #[serde(default = "default_app_base_url")]
     pub app_base_url: String,
     #[serde(default)]
@@ -68,6 +80,7 @@ impl Default for Server {
             compress: true,
             allowed_origins: default_allowed_origins(),
             cookie_secure: false,
+            trust_proxy_header: false,
             app_base_url: default_app_base_url(),
             smtp: SmtpConfig::default(),
             metrics: MetricsConfig::default(),

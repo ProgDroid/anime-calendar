@@ -3,16 +3,18 @@ use std::time::Duration;
 
 use actix_cors::Cors;
 use actix_web::{
+    App, HttpServer,
     dev::Server,
     middleware::{Compress, Condition, DefaultHeaders, Logger},
-    web, App, HttpServer,
+    web,
 };
 use env_logger::Builder;
-use log::{error, LevelFilter};
+use log::{LevelFilter, error};
 use utoipa::OpenApi as _;
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
+    ServerResult,
     cache::Cache,
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig, StripeConfig},
     controllers::{
@@ -33,7 +35,6 @@ use crate::{
         email::EmailService, entitlement::EntitlementService, frozen_ics::FrozenIcsService,
         ics_export::IcsExportService, show_count::ShowCountService,
     },
-    ServerResult,
 };
 use stripe::Client as StripeClient;
 
@@ -107,7 +108,11 @@ pub fn start(
         google_client_id: config.google_client_id,
     };
 
-    let rate_limit = crate::middleware::rate_limit::RateLimit::new(60, Duration::from_secs(1));
+    let rate_limit = crate::middleware::rate_limit::RateLimit::new(
+        60,
+        Duration::from_secs(1),
+        config.trust_proxy_header,
+    );
 
     let sse_connection_tracker = crate::services::sse_connection_tracker::SseConnectionTracker::new(
         sharing_config.sse_max_connections_per_user as usize,

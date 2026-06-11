@@ -6,6 +6,10 @@ google_client_secret = ""
 jwt_secret = ""
 compress = true
 cookie_secure = false
+# Key the rate limiter on the rightmost X-Forwarded-For entry instead of the
+# TCP peer. Set to true ONLY behind a trusted reverse proxy (nginx); when
+# clients connect directly a forged header must never pick the bucket.
+trust_proxy_header = false
 # Set to true only in development — exposes full API surface at /swagger-ui/
 enable_docs = false
 

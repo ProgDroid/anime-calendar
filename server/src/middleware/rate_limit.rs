@@ -41,18 +41,27 @@ use governor::{
 
 const WEBHOOK_EXEMPT_PATH: &str = "/stripe/webhook";
 
-/// Actix-web middleware that enforces a token-bucket rate limit per peer IP.
+/// Actix-web middleware that enforces a token-bucket rate limit per client IP.
 ///
 /// Build with [`RateLimit::new`] and attach via `.wrap(rate_limit)` on the
 /// `App`. The factory is cheaply `Clone`d per worker via the inner `Arc`.
 #[derive(Clone)]
 pub struct RateLimit {
     limiter: Arc<DefaultKeyedRateLimiter<IpAddr>>,
+    trust_proxy_header: bool,
 }
 
 impl RateLimit {
     /// Create a rate limiter allowing `burst` requests of capacity that
     /// replenishes at one request per `period`.
+    ///
+    /// `trust_proxy_header` selects the keying source. Behind the shipped
+    /// nginx proxy every connection's peer address IS the proxy, which would
+    /// collapse all clients into one shared bucket — pass `true` there so the
+    /// key comes from the rightmost `X-Forwarded-For` entry (the hop the
+    /// proxy itself appended; earlier entries are client-controlled and
+    /// spoofable). Pass `false` for direct-to-server deployments, where the
+    /// header cannot be trusted at all.
     ///
     /// Spawns a background tokio task that calls
     /// [`RateLimiter::retain_recent`] every 60 seconds to evict idle keys
@@ -63,7 +72,7 @@ impl RateLimit {
     /// # Panics
     /// Panics if `burst` is 0 or if `period` is zero (programming error).
     #[must_use]
-    pub fn new(burst: u32, period: Duration) -> Self {
+    pub fn new(burst: u32, period: Duration, trust_proxy_header: bool) -> Self {
         let quota = Quota::with_period(period)
             .expect("rate limit period must be > 0")
             .allow_burst(NonZeroU32::new(burst).expect("burst must be > 0"));
@@ -85,8 +94,34 @@ impl RateLimit {
             }
         });
 
-        Self { limiter }
+        Self {
+            limiter,
+            trust_proxy_header,
+        }
     }
+}
+
+/// Resolve the IP address a request should be rate-limited under.
+///
+/// With `trust_proxy_header` set, prefers the rightmost `X-Forwarded-For`
+/// entry — the one appended by our own proxy and therefore the only one a
+/// client cannot forge. Falls back to the TCP peer address when the header
+/// is absent or unparseable (e.g. health checks hitting the backend port
+/// directly inside the compose network).
+fn client_ip(req: &ServiceRequest, trust_proxy_header: bool) -> Option<IpAddr> {
+    if trust_proxy_header {
+        let forwarded = req
+            .headers()
+            .get("x-forwarded-for")
+            .and_then(|v| v.to_str().ok())
+            .and_then(|v| v.rsplit(',').next())
+            .map(str::trim)
+            .and_then(|ip| ip.parse::<IpAddr>().ok());
+        if let Some(ip) = forwarded {
+            return Some(ip);
+        }
+    }
+    req.peer_addr().map(|s| s.ip())
 }
 
 impl<S, B> Transform<S, ServiceRequest> for RateLimit
@@ -105,6 +140,7 @@ where
         ready(Ok(RateLimitMiddleware {
             service,
             limiter: Arc::clone(&self.limiter),
+            trust_proxy_header: self.trust_proxy_header,
         }))
     }
 }
@@ -112,6 +148,7 @@ where
 pub struct RateLimitMiddleware<S> {
     service: S,
     limiter: Arc<DefaultKeyedRateLimiter<IpAddr>>,
+    trust_proxy_header: bool,
 }
 
 impl<S, B> Service<ServiceRequest> for RateLimitMiddleware<S>
@@ -137,8 +174,8 @@ where
             return Box::pin(async move { fut.await.map(ServiceResponse::map_into_left_body) });
         }
 
-        // Extract peer IP, applying /56-prefix bucketing for IPv6.
-        let key = match req.peer_addr().map(|s| s.ip()) {
+        // Resolve the client IP, applying /56-prefix bucketing for IPv6.
+        let key = match client_ip(&req, self.trust_proxy_header) {
             Some(IpAddr::V4(v4)) => IpAddr::V4(v4),
             Some(IpAddr::V6(v6)) => {
                 let mut octets = v6.octets();
@@ -148,13 +185,11 @@ where
                 IpAddr::V6(Ipv6Addr::from(octets))
             }
             None => {
-                log::error!("rate_limit: could not extract peer IP from request");
+                log::error!("rate_limit: could not extract a client IP from request");
                 let resp = HttpResponse::InternalServerError()
                     .content_type("application/json")
-                    .body(r#"{"error":"could not extract peer IP"}"#);
-                return Box::pin(async move {
-                    Ok(req.into_response(resp).map_into_right_body())
-                });
+                    .body(r#"{"error":"internal server error"}"#);
+                return Box::pin(async move { Ok(req.into_response(resp).map_into_right_body()) });
             }
         };
 
@@ -216,7 +251,7 @@ mod tests {
     #[actix_web::test]
     async fn burst_of_60_all_allowed() {
         // Burst = 60, very slow replenishment (1000 s) so no refill during test.
-        let rl = RateLimit::new(60, Duration::from_secs(1000));
+        let rl = RateLimit::new(60, Duration::from_secs(1000), false);
         let app = test_app!(rl);
 
         for _ in 0..60 {
@@ -232,7 +267,7 @@ mod tests {
 
     #[actix_web::test]
     async fn over_burst_returns_429() {
-        let rl = RateLimit::new(60, Duration::from_secs(1000));
+        let rl = RateLimit::new(60, Duration::from_secs(1000), false);
         let app = test_app!(rl);
 
         // Exhaust the burst.
@@ -262,7 +297,7 @@ mod tests {
     #[actix_web::test]
     async fn webhook_path_always_allowed() {
         // Tiny burst of 2 — the webhook path should bypass this entirely.
-        let rl = RateLimit::new(2, Duration::from_secs(1000));
+        let rl = RateLimit::new(2, Duration::from_secs(1000), false);
         let app = test_app!(rl);
 
         // Send 100 requests to the webhook path from the same IP.
@@ -280,7 +315,7 @@ mod tests {
     #[actix_web::test]
     async fn per_ip_isolation() {
         // Burst = 1 — IP A can get 1 through; IP B should still get 1 through.
-        let rl = RateLimit::new(1, Duration::from_secs(1000));
+        let rl = RateLimit::new(1, Duration::from_secs(1000), false);
         let app = test_app!(rl);
 
         // Exhaust IP A's burst.
@@ -304,10 +339,86 @@ mod tests {
     }
 
     #[actix_web::test]
+    async fn xff_is_ignored_when_proxy_is_not_trusted() {
+        // trust_proxy_header = false: a client-supplied X-Forwarded-For must
+        // not let it hop buckets — keying stays on the TCP peer.
+        let rl = RateLimit::new(1, Duration::from_secs(1000), false);
+        let app = test_app!(rl);
+
+        let req = req_with_peer("/", "10.1.1.1:1000")
+            .insert_header(("X-Forwarded-For", "9.9.9.9"))
+            .to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+
+        // Same peer, different forged header → same bucket → limited.
+        let req = req_with_peer("/", "10.1.1.1:1000")
+            .insert_header(("X-Forwarded-For", "8.8.8.8"))
+            .to_request();
+        assert_eq!(
+            call_service(&app, req).await.status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "forged XFF must not split buckets when the proxy is untrusted"
+        );
+    }
+
+    #[actix_web::test]
+    async fn trusted_proxy_keys_on_rightmost_xff_entry() {
+        // trust_proxy_header = true: all requests share the proxy's peer IP;
+        // buckets must follow the rightmost (proxy-appended) XFF entry, and
+        // client-controlled earlier entries must be ignored.
+        let rl = RateLimit::new(1, Duration::from_secs(1000), true);
+        let app = test_app!(rl);
+
+        let req = req_with_peer("/", "172.18.0.2:80")
+            .insert_header(("X-Forwarded-For", "6.6.6.6, 1.1.1.1"))
+            .to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+
+        // Different forged left entry, same rightmost → same bucket.
+        let req = req_with_peer("/", "172.18.0.2:80")
+            .insert_header(("X-Forwarded-For", "7.7.7.7, 1.1.1.1"))
+            .to_request();
+        assert_eq!(
+            call_service(&app, req).await.status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "rightmost XFF entry must select the bucket"
+        );
+
+        // Different rightmost entry (another real client) → its own bucket,
+        // even though the TCP peer (the proxy) is identical.
+        let req = req_with_peer("/", "172.18.0.2:80")
+            .insert_header(("X-Forwarded-For", "6.6.6.6, 2.2.2.2"))
+            .to_request();
+        assert_eq!(
+            call_service(&app, req).await.status(),
+            StatusCode::OK,
+            "distinct clients behind the proxy must not share a bucket"
+        );
+    }
+
+    #[actix_web::test]
+    async fn trusted_proxy_falls_back_to_peer_without_header() {
+        // trust_proxy_header = true but no XFF (e.g. an in-network health
+        // check hitting the backend port directly): fall back to peer IP.
+        let rl = RateLimit::new(1, Duration::from_secs(1000), true);
+        let app = test_app!(rl);
+
+        let req = req_with_peer("/", "10.2.2.2:1000").to_request();
+        assert_eq!(call_service(&app, req).await.status(), StatusCode::OK);
+
+        let req = req_with_peer("/", "10.2.2.2:1000").to_request();
+        assert_eq!(
+            call_service(&app, req).await.status(),
+            StatusCode::TOO_MANY_REQUESTS,
+            "peer fallback must still rate-limit"
+        );
+    }
+
+    #[actix_web::test]
     async fn ipv6_56_prefix_bucketing() {
         // Two IPv6 addresses sharing the same /56 prefix (bytes 0-6 identical,
         // bytes 7-15 differ) should share a bucket.
-        let rl = RateLimit::new(1, Duration::from_secs(1000));
+        let rl = RateLimit::new(1, Duration::from_secs(1000), false);
         let app = test_app!(rl);
 
         // Address A: 2001:db8:1:2:3:4:5:6
