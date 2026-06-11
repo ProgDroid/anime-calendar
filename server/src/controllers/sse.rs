@@ -12,7 +12,7 @@
 
 use std::{convert::Infallible, time::Duration};
 
-use actix_web::{web, Responder};
+use actix_web::{Responder, web};
 use actix_web_lab::sse::{self, Sse};
 use serde_json::json;
 
@@ -70,9 +70,7 @@ pub async fn calendar_events(
 
     // Subscribe to the three channels before building initial frames.
     let mut cal_rx = pubsub.subscribe(&format!("cal:{calendar_id}")).await?;
-    let mut presence_rx = pubsub
-        .subscribe(&format!("presence:{calendar_id}"))
-        .await?;
+    let mut presence_rx = pubsub.subscribe(&format!("presence:{calendar_id}")).await?;
     let mut kick_rx = pubsub.subscribe(&format!("kick:{actor_id}")).await?;
 
     // Initial frames.
@@ -105,11 +103,22 @@ pub async fn calendar_events(
             tokio::select! {
                 msg = cal_rx.recv() => match msg {
                     Ok(payload) => yield Ok(sse::Event::Data(sse::Data::new(payload))),
-                    Err(_) => {} // lagged — skip and continue
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {} // skip and continue
+                    // Closed means the fan-out sender is gone: recv() would
+                    // resolve immediately on every select! iteration, spinning
+                    // this task at full CPU while delivering nothing.
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        log::warn!("sse: cal channel closed, ending stream for calendar {calendar_id}");
+                        break;
+                    }
                 },
                 msg = presence_rx.recv() => match msg {
                     Ok(payload) => yield Ok(sse::Event::Data(sse::Data::new(payload))),
-                    Err(_) => {}
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        log::warn!("sse: presence channel closed, ending stream for calendar {calendar_id}");
+                        break;
+                    }
                 },
                 msg = kick_rx.recv() => match msg {
                     Ok(payload) => {
@@ -120,7 +129,10 @@ pub async fn calendar_events(
                         log::warn!("sse: kick_rx lagged by {n} messages, closing stream as precaution");
                         break;
                     }
-                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {}
+                    Err(tokio::sync::broadcast::error::RecvError::Closed) => {
+                        log::warn!("sse: kick channel closed, ending stream as precaution");
+                        break;
+                    }
                 },
                 _ = interval.tick() => {
                     yield Ok(sse::Event::Comment("ping".into()));
