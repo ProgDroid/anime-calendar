@@ -94,6 +94,25 @@ impl ResponseError for Error {
                 "error": *reason,
             }));
         }
+        // Variants whose Display embeds an internal / third-party detail string.
+        // Log the full detail server-side, but return only a stable generic code
+        // so SMTP, Stripe, and Redis internals never reach the client
+        // (M-2, M-3, F2-18).
+        if let Self::EmailError(detail) = self {
+            log::error!("email send error: {detail}");
+            return HttpResponse::build(self.status_code())
+                .json(serde_json::json!({ "error": "email_error" }));
+        }
+        if let Self::Stripe(detail) = self {
+            log::error!("stripe error: {detail}");
+            return HttpResponse::build(self.status_code())
+                .json(serde_json::json!({ "error": "stripe_error" }));
+        }
+        if let Self::Redis(detail) = self {
+            log::error!("redis error: {detail}");
+            return HttpResponse::build(self.status_code())
+                .json(serde_json::json!({ "error": "internal_error" }));
+        }
         HttpResponse::build(self.status_code()).json(serde_json::json!({
             "error": self.to_string()
         }))
@@ -157,7 +176,6 @@ mod tests {
         assert!(json.get("reason").is_none());
     }
 
-
     #[tokio::test]
     async fn conflict_returns_409_with_reason_as_error() {
         let err = Error::Conflict {
@@ -178,5 +196,47 @@ mod tests {
         let bytes = actix_web::body::to_bytes(resp.into_body()).await.unwrap();
         let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
         assert_eq!(json["error"], "rate_limited");
+    }
+
+    #[tokio::test]
+    async fn stripe_error_returns_generic_code_without_leaking_detail() {
+        let err = Error::Stripe("No such customer: cus_SECRET123 (price_1abc)".to_owned());
+        assert_eq!(err.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+        let resp = err.error_response();
+        let bytes = actix_web::body::to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"], "stripe_error");
+        assert!(
+            !json.to_string().contains("cus_SECRET123"),
+            "Stripe internal detail leaked to client: {json}"
+        );
+    }
+
+    #[tokio::test]
+    async fn email_error_returns_generic_code_without_leaking_detail() {
+        let err = Error::EmailError("smtp connect failed: relay.internal:587 timed out".to_owned());
+        assert_eq!(err.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+        let resp = err.error_response();
+        let bytes = actix_web::body::to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"], "email_error");
+        assert!(
+            !json.to_string().contains("relay.internal"),
+            "SMTP internal detail leaked to client: {json}"
+        );
+    }
+
+    #[tokio::test]
+    async fn redis_error_returns_generic_code_without_leaking_detail() {
+        let err = Error::Redis("connection refused: 10.0.0.5:6379".to_owned());
+        assert_eq!(err.status_code(), StatusCode::INTERNAL_SERVER_ERROR);
+        let resp = err.error_response();
+        let bytes = actix_web::body::to_bytes(resp.into_body()).await.unwrap();
+        let json: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(json["error"], "internal_error");
+        assert!(
+            !json.to_string().contains("10.0.0.5"),
+            "Redis internal detail leaked to client: {json}"
+        );
     }
 }
