@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import axios from 'axios'
@@ -23,6 +23,19 @@ const errorMessage = ref('')
 const success = ref(false)
 const newPasswordVisible = ref(false)
 const confirmPasswordVisible = ref(false)
+
+// Stored so an unmount within the redirect window cancels the timer. Without
+// this, the orphaned setTimeout fires router.push on a torn-down router — in
+// Vitest's reused fork process that surfaces as a cross-file "reading 'push'"
+// unhandled error that fails whichever spec is running at the time.
+let redirectTimer: number | null = null
+
+function clearRedirect() {
+  if (redirectTimer !== null) {
+    window.clearTimeout(redirectTimer)
+    redirectTimer = null
+  }
+}
 
 onMounted(() => {
   const q = route.query.token
@@ -49,7 +62,7 @@ async function handleSubmit(e: Event) {
       new_password: newPassword.value,
     })
     success.value = true
-    setTimeout(() => router.push('/login'), 2000)
+    redirectTimer = window.setTimeout(() => router.push('/login'), 2000)
   } catch (err) {
     if (axios.isAxiosError(err) && err.response?.status === 400) {
       errorMessage.value = t('auth.resetPassword.invalidToken')
@@ -60,6 +73,8 @@ async function handleSubmit(e: Event) {
     loading.value = false
   }
 }
+
+onBeforeUnmount(clearRedirect)
 </script>
 
 <template>

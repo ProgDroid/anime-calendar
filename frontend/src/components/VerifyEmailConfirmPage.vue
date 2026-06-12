@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { useAuthStore } from '@/stores/auth'
@@ -15,6 +15,19 @@ const authStore = useAuthStore()
 
 const status = ref<'verifying' | 'success' | 'error'>('verifying')
 
+// Stored so an unmount within the redirect window cancels the timer. Without
+// this, the orphaned setTimeout fires router.push on a torn-down router — in
+// Vitest's reused fork process that surfaces as a cross-file "reading 'push'"
+// unhandled error that fails whichever spec is running at the time.
+let redirectTimer: number | null = null
+
+function clearRedirect() {
+  if (redirectTimer !== null) {
+    window.clearTimeout(redirectTimer)
+    redirectTimer = null
+  }
+}
+
 onMounted(async () => {
   const token = route.query.token as string | undefined
   if (!token) {
@@ -26,11 +39,13 @@ onMounted(async () => {
     await authStore.verifyEmail(token)
     status.value = 'success'
     // Brief pause so the user sees the success message, then redirect
-    setTimeout(() => router.push('/my-calendars'), 1500)
+    redirectTimer = window.setTimeout(() => router.push('/my-calendars'), 1500)
   } catch {
     status.value = 'error'
   }
 })
+
+onBeforeUnmount(clearRedirect)
 </script>
 
 <template>
