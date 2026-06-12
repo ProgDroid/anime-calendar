@@ -78,26 +78,29 @@ impl AnimeDataSource for CachedAnilist {
 
     #[allow(clippy::cast_possible_wrap)]
     async fn get_items(&self, ids: Vec<Id>) -> Vec<Item> {
-        // 1. Per-id cache check — both keys must hit.
+        // 1. Batch cache check — one MGET for meta keys, one for airing keys
+        //    (two round-trips total, not 2×N). Both keys must hit for an id to
+        //    count as cached; an MGET error degrades to refetch-all.
+        let meta_keys: Vec<String> = ids
+            .iter()
+            .map(|id| generate_item_meta_key(id.to_int() as i64))
+            .collect();
+        let airing_keys: Vec<String> = ids
+            .iter()
+            .map(|id| generate_item_airing_key(id.to_int() as i64))
+            .collect();
+        let meta: Vec<Option<Item>> = self.cache.mget(&meta_keys).await.unwrap_or_default();
+        let airing: Vec<Option<Item>> = self.cache.mget(&airing_keys).await.unwrap_or_default();
+
         let mut cached: HashMap<u64, Item> = HashMap::with_capacity(ids.len());
         let mut missing: Vec<Id> = Vec::new();
-        for id in &ids {
-            let id_int = id.to_int() as i64;
-            let meta: Option<Item> = self
-                .cache
-                .get(&generate_item_meta_key(id_int))
-                .await
-                .unwrap_or(None);
-            let airing: Option<Item> = self
-                .cache
-                .get(&generate_item_airing_key(id_int))
-                .await
-                .unwrap_or(None);
-            match (meta, airing) {
-                (Some(item), Some(_)) => {
-                    cached.insert(id.to_int(), item);
-                }
-                _ => missing.push(id.clone()),
+        for (i, id) in ids.iter().enumerate() {
+            let meta_hit = meta.get(i).and_then(Option::as_ref);
+            let airing_hit = airing.get(i).is_some_and(Option::is_some);
+            if let (Some(item), true) = (meta_hit, airing_hit) {
+                cached.insert(id.to_int(), item.clone());
+            } else {
+                missing.push(id.clone());
             }
         }
 
@@ -123,7 +126,9 @@ impl AnimeDataSource for CachedAnilist {
             .cache
             .cached_response(&key, self.search_ttl, || async {
                 Ok::<Vec<Item>, redis::RedisError>(
-                    self.inner.search_items(name.clone(), media_type.clone()).await,
+                    self.inner
+                        .search_items(name.clone(), media_type.clone())
+                        .await,
                 )
             })
             .await
@@ -214,22 +219,10 @@ mod tests {
         assert_eq!(items[1].id.to_int(), id_b.to_int());
 
         // Cleanup
-        cache
-            .delete(&generate_item_meta_key(a_int))
-            .await
-            .ok();
-        cache
-            .delete(&generate_item_airing_key(a_int))
-            .await
-            .ok();
-        cache
-            .delete(&generate_item_meta_key(b_int))
-            .await
-            .ok();
-        cache
-            .delete(&generate_item_airing_key(b_int))
-            .await
-            .ok();
+        cache.delete(&generate_item_meta_key(a_int)).await.ok();
+        cache.delete(&generate_item_airing_key(a_int)).await.ok();
+        cache.delete(&generate_item_meta_key(b_int)).await.ok();
+        cache.delete(&generate_item_airing_key(b_int)).await.ok();
     }
 
     /// Half-cached (only meta, no airing) — verify the adapter treats this
@@ -250,7 +243,9 @@ mod tests {
         let cache = Cache::for_tests().await;
         let cached = CachedAnilist::new(Anilist::default(), cache.clone(), &ttls());
 
-        let ids: Vec<Id> = (9_999_010..9_999_013).map(|i| Id::new(i).unwrap()).collect();
+        let ids: Vec<Id> = (9_999_010..9_999_013)
+            .map(|i| Id::new(i).unwrap())
+            .collect();
         for id in &ids {
             let id_int = id.to_int() as i64;
             let item = stub_item(id.clone());
@@ -274,14 +269,8 @@ mod tests {
 
         for id in &ids {
             let id_int = id.to_int() as i64;
-            cache
-                .delete(&generate_item_meta_key(id_int))
-                .await
-                .ok();
-            cache
-                .delete(&generate_item_airing_key(id_int))
-                .await
-                .ok();
+            cache.delete(&generate_item_meta_key(id_int)).await.ok();
+            cache.delete(&generate_item_airing_key(id_int)).await.ok();
         }
     }
 }

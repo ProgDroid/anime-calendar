@@ -75,6 +75,46 @@ impl Cache {
         )
     }
 
+    /// Batch GET. Returns one slot per input key, in the same order; `None`
+    /// for a miss or a value that fails to deserialise (matching `get`).
+    /// Single round-trip regardless of key count; empty input short-circuits
+    /// without touching Redis.
+    ///
+    /// # Errors
+    /// Fails if the Redis query fails.
+    pub async fn mget<T>(&self, keys: &[String]) -> RedisResult<Vec<Option<T>>>
+    where
+        T: DeserializeOwned,
+    {
+        use crate::metrics::names::{
+            CACHE_HITS_TOTAL, CACHE_MISSES_TOTAL, CACHE_OPERATION_DURATION_SECONDS, LABEL_OP,
+        };
+        if keys.is_empty() {
+            return Ok(Vec::new());
+        }
+        let start = std::time::Instant::now();
+        let mut conn = self.connection.clone();
+        let raw: Vec<Option<String>> = redis::cmd("MGET").arg(keys).query_async(&mut conn).await?;
+
+        metrics::histogram!(CACHE_OPERATION_DURATION_SECONDS, LABEL_OP => "mget")
+            .record(start.elapsed().as_secs_f64());
+
+        let mut out = Vec::with_capacity(raw.len());
+        for slot in raw {
+            match slot {
+                Some(v) => {
+                    metrics::counter!(CACHE_HITS_TOTAL).increment(1);
+                    out.push(serde_json::from_str(&v).ok());
+                }
+                None => {
+                    metrics::counter!(CACHE_MISSES_TOTAL).increment(1);
+                    out.push(None);
+                }
+            }
+        }
+        Ok(out)
+    }
+
     /// # Errors
     /// Fails if Redis query fails.
     pub async fn delete(&self, key: &str) -> RedisResult<()> {

@@ -614,10 +614,9 @@ async fn put(
     if is_create && let Err(e) = entitlement.assert_can_create_calendar(user.id).await {
         return e.error_response();
     }
-    for &item_id in &item_ids {
-        if let Err(e) = entitlement.assert_can_add_show(user.id, item_id).await {
-            return e.error_response();
-        }
+    // Tier is invariant across the batch — resolve once, not per item.
+    if let Err(e) = entitlement.assert_can_add_shows(user.id, &item_ids).await {
+        return e.error_response();
     }
 
     let calendar_entity = CalendarEntity {
@@ -659,13 +658,11 @@ async fn put(
     {
         return e.error_response();
     }
-    for item_id in &calendar_entity.item_ids {
-        if let Err(e) = entitlement
-            .assert_can_add_show_in_tx(&mut tx, user.id, *item_id)
-            .await
-        {
-            return e.error_response();
-        }
+    if let Err(e) = entitlement
+        .assert_can_add_shows_in_tx(&mut tx, user.id, &calendar_entity.item_ids)
+        .await
+    {
+        return e.error_response();
     }
 
     // Update path: route through SharingAuthz so editor support drops in

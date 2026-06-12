@@ -8,8 +8,6 @@ import { invalidateSettingsCache } from '@/services/userSettingsService'
 export const useAuthStore = defineStore('auth', () => {
   const user = ref('')
   const userId = ref<number | null>(null)
-  const name = ref('')
-  const user_avatar = ref('')
 
   let initPromise: Promise<void> | null = null
   let initialized = false
@@ -97,9 +95,10 @@ export const useAuthStore = defineStore('auth', () => {
       const { username: userData, avatar: avatarUrl, user_id: userIdValue } = response.data
       user.value = userData
       userId.value = userIdValue
-      name.value = userData
-      user_avatar.value = avatarUrl
-      // Non-sensitive display data only — no auth token in localStorage
+      // Non-sensitive display data only — no auth token in localStorage.
+      // ProfileTab reads these directly from localStorage for OAuth users
+      // (whose /user/details username is empty), so they are not mirrored
+      // into store refs.
       localStorage.setItem('name', userData)
       localStorage.setItem('avatar', avatarUrl)
       // See login(): never serve a previous session's cached settings.
@@ -121,8 +120,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
     user.value = ''
     userId.value = null
-    name.value = ''
-    user_avatar.value = ''
     initialized = false
     localStorage.removeItem('name')
     localStorage.removeItem('avatar')
@@ -139,8 +136,6 @@ export const useAuthStore = defineStore('auth', () => {
   return {
     user,
     userId,
-    user_avatar,
-    name,
     isAuthenticated,
     login,
     register,

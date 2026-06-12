@@ -92,7 +92,36 @@ impl EntitlementService {
         if matches!(self.effective_tier(user_id).await?, Tier::Paid) {
             return Ok(());
         }
-        if self.show_count.user_already_tracks(user_id, item_id).await? {
+        self.assert_free_show_cap(user_id, item_id).await
+    }
+
+    /// Cap-check a batch of items with a single tier resolution. Pro users
+    /// pass immediately; Free users are checked per item against the show
+    /// cap (idempotent for already-tracked items). Equivalent to calling
+    /// `assert_can_add_show` per item, but resolves the tier once instead of
+    /// once per item — the tier is invariant across the batch.
+    ///
+    /// # Errors
+    /// `Error::PaymentRequired { reason: Some("cap_shows") }` on the first
+    /// new item that would breach the free cap; database errors otherwise.
+    pub async fn assert_can_add_shows(&self, user_id: i32, item_ids: &[i32]) -> ServerResult<()> {
+        if item_ids.is_empty() || matches!(self.effective_tier(user_id).await?, Tier::Paid) {
+            return Ok(());
+        }
+        for &item_id in item_ids {
+            self.assert_free_show_cap(user_id, item_id).await?;
+        }
+        Ok(())
+    }
+
+    /// Free-tier show-cap check, tier already known to be Free. Idempotent:
+    /// an already-tracked item passes regardless of cap state.
+    async fn assert_free_show_cap(&self, user_id: i32, item_id: i32) -> ServerResult<()> {
+        if self
+            .show_count
+            .user_already_tracks(user_id, item_id)
+            .await?
+        {
             return Ok(()); // idempotent — already counted
         }
         let count = self.show_count.count_distinct_for_user(user_id).await?;
@@ -134,7 +163,10 @@ impl EntitlementService {
         conn: &mut sqlx::PgConnection,
         user_id: i32,
     ) -> ServerResult<()> {
-        if matches!(Self::effective_tier_in_tx(&mut *conn, user_id).await?, Tier::Paid) {
+        if matches!(
+            Self::effective_tier_in_tx(&mut *conn, user_id).await?,
+            Tier::Paid
+        ) {
             return Ok(());
         }
         let count = ShowCountService::count_calendars_for_user_in_tx(conn, user_id).await?;
@@ -161,9 +193,52 @@ impl EntitlementService {
         user_id: i32,
         item_id: i32,
     ) -> ServerResult<()> {
-        if matches!(Self::effective_tier_in_tx(&mut *conn, user_id).await?, Tier::Paid) {
+        if matches!(
+            Self::effective_tier_in_tx(&mut *conn, user_id).await?,
+            Tier::Paid
+        ) {
             return Ok(());
         }
+        self.assert_free_show_cap_in_tx(conn, user_id, item_id)
+            .await
+    }
+
+    /// In-transaction batch variant of `assert_can_add_shows`. Resolves the
+    /// tier once on the locked connection, then cap-checks each item — pair
+    /// with `pg_advisory_xact_lock` so the cap stays honest under concurrent
+    /// writers.
+    ///
+    /// # Errors
+    /// `Error::PaymentRequired { reason: Some("cap_shows") }` on the first
+    /// new item that would breach the free cap; database errors otherwise.
+    pub async fn assert_can_add_shows_in_tx(
+        &self,
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+        item_ids: &[i32],
+    ) -> ServerResult<()> {
+        if item_ids.is_empty()
+            || matches!(
+                Self::effective_tier_in_tx(&mut *conn, user_id).await?,
+                Tier::Paid
+            )
+        {
+            return Ok(());
+        }
+        for &item_id in item_ids {
+            self.assert_free_show_cap_in_tx(&mut *conn, user_id, item_id)
+                .await?;
+        }
+        Ok(())
+    }
+
+    /// In-transaction free-tier show-cap check, tier already known to be Free.
+    async fn assert_free_show_cap_in_tx(
+        &self,
+        conn: &mut sqlx::PgConnection,
+        user_id: i32,
+        item_id: i32,
+    ) -> ServerResult<()> {
         if ShowCountService::user_already_tracks_in_tx(&mut *conn, user_id, item_id).await? {
             return Ok(()); // idempotent — already counted
         }
@@ -181,8 +256,8 @@ impl EntitlementService {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::mappers::calendar::CalendarMapper;
     use crate::entity::calendar::Calendar;
+    use crate::mappers::calendar::CalendarMapper;
 
     async fn create_test_user(pool: &sqlx::PgPool) -> i32 {
         let n: u64 = rand::random();
@@ -528,6 +603,55 @@ mod tests {
 
         sqlx::query("DELETE FROM calendar_items WHERE calendar_id = $1")
             .bind(cal_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM calendars WHERE user_id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM users WHERE id = $1")
+            .bind(user_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn assert_can_add_shows_batch_blocks_free_passes_paid() {
+        let pool = crate::test_helpers::test_pool().await;
+        let user_id = create_test_user(&pool).await;
+        // Free user already at the cap of 2 distinct shows.
+        let cal_id = insert_calendar(&pool, user_id, vec![10, 20]).await;
+        let svc = build_service(&pool, &limits(3, 2));
+
+        // Empty batch always passes (no tier query needed).
+        svc.assert_can_add_shows(user_id, &[]).await.unwrap();
+
+        // Free at cap: a batch containing a new item is rejected on that item.
+        let err = svc
+            .assert_can_add_shows(user_id, &[10, 999])
+            .await
+            .unwrap_err();
+        match err {
+            Error::PaymentRequired { reason, .. } => assert_eq!(reason, Some("cap_shows")),
+            other => panic!("expected PaymentRequired, got {other:?}"),
+        }
+
+        // Upgrading to paid makes the same batch pass (tier resolved once).
+        make_paid(&pool, user_id).await;
+        svc.assert_can_add_shows(user_id, &[10, 999, 1000])
+            .await
+            .unwrap();
+
+        sqlx::query("DELETE FROM calendar_items WHERE calendar_id = $1")
+            .bind(cal_id)
+            .execute(&pool)
+            .await
+            .unwrap();
+        sqlx::query("DELETE FROM subscriptions WHERE user_id = $1")
+            .bind(user_id)
             .execute(&pool)
             .await
             .unwrap();

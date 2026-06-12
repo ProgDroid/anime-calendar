@@ -130,10 +130,13 @@ impl ResponseError for Error {
             | Self::UserAlreadyExists
             | Self::InvalidPassword
             | Self::InvalidResetToken
-            | Self::InvalidVerificationToken
-            | Self::CannotHashPassword(_)
-            | Self::CannotGenerateAuthToken(_) => StatusCode::BAD_REQUEST,
-            Self::Database(_)
+            | Self::InvalidVerificationToken => StatusCode::BAD_REQUEST,
+            // Server-side crypto failures (argon2 hashing / JWT signing) are
+            // internal faults, not client errors — they carry no caller-fixable
+            // detail and must not be advertised as 400 Bad Request.
+            Self::CannotHashPassword(_)
+            | Self::CannotGenerateAuthToken(_)
+            | Self::Database(_)
             | Self::Config(_)
             | Self::Server(_)
             | Self::EmailError(_)
