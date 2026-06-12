@@ -616,6 +616,47 @@ reconcile lock test) · `npm run test:unit` **485 passed (3× consecutive, now
 deterministic)** · `npm run build` clean · `npm run lint` 0/0 · `npm run test:e2e`
 **39 passed** (e2e `/public-config` stub extended with the new fields).
 
-Remaining backlog: the deep-LOW nits only — L-4 (JWT `iat`/`nbf`), L-5 (dedup
-three `Sha256→hex` helpers), L-8 (cache-key `:v1` versioning), L-15…L-20, and
-F2-32's sibling test-infra polish if any recurs.
+Remaining backlog: closed by Step 8 below.
+
+## Step 8 — final LOW/NIT cleanup (2026-06-12 — fully shipped)
+
+The tail of the docket. No `sqlx::query!` text changed, so no `.sqlx` regen.
+
+- **L-4** — `generate_token` now stamps `iat` + `nbf`; both extractor and
+  `verify_token` enable `validate_nbf` (default 60s leeway absorbs clock skew).
+  The new `Claims` fields are `#[serde(default)]` so tokens minted before the
+  change still decode during a rolling deploy, and `nbf`/`iat` are *not* added
+  to `set_required_spec_claims` for the same reason.
+- **L-5** — the three SHA-256→hex sites collapse to one: `controllers::auth::
+  hash_refresh_token` and the `refresh_token` test helper both delegate to the
+  canonical `services::auth::hash_token`; the now-unused `sha2` import in the
+  auth controller is dropped.
+- **L-8** — the `Item`-derived cache keys gain a `:v1` segment
+  (`item:meta:v1:{id}`, `item:airing:v1:{id}`) with a bump-convention comment, so
+  the next `Item` field-add invalidates stale blobs with a `v1→v2` bump instead
+  of a manual Redis flush. (One-time cold-start; no key-format test asserted it.)
+- **L-15** — new `services/logger.ts` is the single client-side `console.*`
+  chokepoint (gated on `import.meta.env.DEV`, silent in prod); `main.ts`,
+  `useTheme.ts`, and `CalendarScheduleView.vue` route through `logger.error`.
+- **L-16** — documented that Grafana `admin/admin` is acceptable only because the
+  port is loopback-bound, with a note to override the password for any
+  non-loopback exposure.
+- **L-17** — documented the deliberate `eprintln!`/`println!` exemption in the
+  `set_subscription` dev CLI (a CLI writes to stdout/stderr; the `log::error!`
+  server convention doesn't apply).
+- **L-19** — kept the reconcile 404 string-match (deliberate, now commented): a
+  typed async-stripe rc.5 error match would couple to crate internals for
+  marginal benefit and is hard to test without a live Stripe.
+- **L-18 / L-20** — no-ops: `redocly.yaml`'s `security-defined` disable already
+  carries its rationale (cross-refs M-28); `subscribe_token` lives in the URL
+  *path* (redacted by `redact_path`), verified safe. Acknowledged, no change.
+
+Verification (sequential): `cargo clippy -p server --lib --tests` **zero new
+warnings** (the 11 `sharing.rs` derefs are the documented pre-existing set) ·
+`cargo test -p server --lib` **373/373** · `npm run test:unit` **485/485** ·
+`npm run build` clean · `npm run lint` 0/0 · `npm run test:e2e` **39/39**.
+
+**The audit docket is now fully closed** — every CRITICAL, HIGH, MEDIUM, LOW, and
+NIT finding from the 2026-05-07 sweep and the 2026-06-11 follow-up is resolved,
+deferred-with-rationale (L-19), or acknowledged-as-safe (L-18, L-20). Genuinely
+new findings would need a fresh audit pass.
