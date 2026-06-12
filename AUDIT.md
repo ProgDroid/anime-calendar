@@ -535,3 +535,87 @@ Remaining backlog: F2 perf/DB cleanup (F2-22/23/24/25), F2-28 frontend store hyg
 Verification (sequential): `cargo test -p server --lib` **372 passed / 0 failed** (Redis up this run; the new batch test green) · `cargo clippy -p server --lib --tests` **zero new warnings** (the 11 `&mut *tx` derefs in `sharing.rs:198-221` are the documented pre-existing set) · `npm run test:unit` **485 passed** (81 files) · `npm run build` clean · `npm run lint` 0/0 · `npm run test:e2e` **39 passed**.
 
 Remaining backlog: F2-28 frontend store hygiene; F2-22's sibling perf items already done; F2-31 (lazy `display` lookup gated on `has_subscribers`), F2-32 (unit-suite `vi.mock('axios')` order-flake), the remaining M-* (M-6 resync-on-Lagged, M-9 reconcile multi-replica lock, M-10 i18n hardcoded limits, M-11 client_reference_id wire/remove, M-23 down migrations), and the L-* nits (L-4, L-5, L-8, L-11, L-13…L-20).
+
+## Step 7 — remaining-backlog batch (2026-06-12 — fully shipped)
+
+The last substantive docket items across four themes, verified BE then FE
+sequentially. No `sqlx::query!` text changed (the new advisory-lock /
+subscriber-count queries use the non-macro `sqlx::query[_scalar]` runtime form),
+so no `.sqlx` regeneration — sidesteps the dev-DB checksum drift again.
+
+**Backend robustness:**
+- **M-9** — the reconcile loop's per-tick `run_pass` is now wrapped by
+  `run_guarded_pass`, which takes a session-level `pg_try_advisory_lock` on a
+  dedicated connection (fixed sentinel key) before the pass and releases it
+  after. Multiple replicas contend for one lock; losers skip the tick, so no
+  double-billing of drift counters / parallel Stripe hammering. `run_pass` stays
+  unlocked so the parallel unit tests + one-shot CLI path don't contend on the
+  global key. New `SubscriptionMapper::pool()` accessor + a skip-while-locked
+  regression test.
+- **M-11** — removed the dead `client_reference_id` from Checkout creation. The
+  webhook resolves the user from `subscription_data.metadata.user_id` (+ a
+  customer-id lookup fallback); `client_reference_id` only rode on
+  `checkout.session.completed` (which we don't handle) and was never read.
+- **M-6** — SSE `cal`/`presence` `Lagged` arms now emit a precomputed
+  `{"type":"resync"}` frame instead of silently dropping; the editor's live-sync
+  watcher surfaces the non-destructive collision banner so the user reloads
+  rather than auto-clobbering unsaved edits. `kick`'s Lagged arm still breaks
+  (must-deliver). New `resync` variant in the `CalendarEvent` TS union.
+- **F2-31** — `add_item`/`remove_item` only run the actor-username DB lookup for
+  the `display` field when someone is actually watching: new
+  `RedisPubSub::channel_subscriber_count` (Redis `PUBSUB NUMSUB`, a fleet-wide
+  gate, vs local `receiver_count`) behind `CalendarEventPublisher::calendar_has_subscribers`
+  (fails open). Solo calendars (no subscribers) skip the round-trip.
+
+**Config-driven de-hardcode (M-10, L-11, F2-28d):**
+- `/public-config` now also returns `limits {free_calendar_limit, free_show_cap,
+  pro_max_reminders}` + `presence_heartbeat_seconds` (new `PublicLimits` struct,
+  deny-by-default surface preserved). **M-10:** the four named Free-cap locale
+  strings (`limitedCalendars`/`limitedShows` + `interrupt.description.cap_*`)
+  drop their baked-in numbers for `{count}`, interpolated from the config-derived
+  caps in `UpgradePage` + `UpgradeInterruptModalBody` (en + pt). **F2-28d:**
+  `usageStore`'s `FREE_CALENDAR_CAP`/`FREE_SHOW_CAP` are now derived from
+  `getPublicConfig().limits` (fallback to backend defaults for unit tests) — one
+  source feeds both cap *enforcement* and *display*, no display/enforcement
+  drift; dead `reset()` removed. **L-11:** `usePresence` heartbeat reads
+  `presenceHeartbeatSeconds` instead of a hardcoded `30_000`.
+- L-13/L-14 were already fixed (back-button `aria-hidden` glyph + footer `<nav>`
+  `aria-label` already present) — no change needed.
+
+**Frontend hygiene (F2-28):** dead `?session_id=` param dropped from
+`getMySubscription` (+ caller + spec); `UpgradeSuccessPage`'s 800 ms redirect
+`setTimeout` now tracked via `timer` (cancelled on unmount); stale-response
+guards (monotonic seq id) added to `useCalendarSearch.handleSearch` and
+`sharingStore.loadMembers`; write-only hardcoded-English `error` ref removed from
+`userSettingsStore`; `editorSelection` doc corrected (mobile-only, desktop
+doesn't consume it); `useTheme.init()` `storage` listener made attach-once via a
+module-level guard + stable named handler.
+
+**Test infra (F2-32):** root-caused the order-flaky `vi.mock('axios')` leak — the
+default vitest `threads` pool shares a worker's module cache, so two specs
+importing the same component (the duplicate `Forgot`/`ResetPasswordPage` smoke +
+functional specs) let the component evaluate once under the first spec's axios
+mock and the second's re-mock never rebound it (→ "axios.post called 0 times").
+Fix: `pool: 'forks'` + explicit `isolate: true` in `vitest.config.ts` for true
+per-file process isolation, plus a unified complete axios mock shape across all
+five mocking specs (so any residual leak can't strip `post` or swap the
+predicate). Full suite went from intermittently-failing to **485/485 across 3
+consecutive runs**.
+
+**M-23 (down migrations):** chose a documented rollback strategy over per-migration
+downs (the audit-approved path): new `docs/rollback-strategy.md` with the full
+21-migration inventory + reverse-safety table (5 flagged destructive), the
+PITR/backup recovery procedure, and the dev-DB checksum-drift constraint that
+makes a `.up/.down` rename actively harmful. CLAUDE.md points at it.
+
+Verification (sequential): `cargo check -p server --lib --tests` clean ·
+`cargo clippy -p server --lib --tests` **zero new warnings** (the 11 `&mut *tx`
+derefs in `sharing.rs:198-221` are the documented pre-existing set) ·
+`cargo test -p server --lib` **373 passed / 0 failed** (Redis up; +1 new
+reconcile lock test) · `npm run test:unit` **485 passed (3× consecutive, now
+deterministic)** · `npm run build` clean · `npm run lint` 0/0 · `npm run test:e2e`
+**39 passed** (e2e `/public-config` stub extended with the new fields).
+
+Remaining backlog: the deep-LOW nits only — L-4 (JWT `iat`/`nbf`), L-5 (dedup
+three `Sha256→hex` helpers), L-8 (cache-key `:v1` versioning), L-15…L-20, and
+F2-32's sibling test-infra polish if any recurs.
