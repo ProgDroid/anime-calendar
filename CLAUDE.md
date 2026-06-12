@@ -100,4 +100,4 @@ Pin all third-party GitHub Actions to commit hashes, not tags:
 - Pinia stores: `auth.ts` for auth state, `userSettingsStore.ts` for user preferences
 - Use `axios.isAxiosError(err)` when you need `err.response.status`; use bare `catch` (no binding) when the error value is never read
 - Deduplicate concurrent Pinia async actions with `ref<Promise<T> | null>` — return the in-flight promise if one exists
-- Debounce watchers that write to `sessionStorage`/`localStorage` — at least 1s timeout, cleared in `onBeforeUnmount`
+- Debounce watchers that write to `sessionStorage`/`localStorage` — at least 1s timeout, cleared in `onBeforeUnmount`. When clearing the slot on success/navigation (e.g. after a successful save before `router.push`), cancel the pending timer *before* `removeItem`, or a late fire re-persists stale/empty data over the cleared slot
