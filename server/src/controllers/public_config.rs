@@ -15,6 +15,23 @@ pub struct PublicConfig {
     /// credential JWTs in `oauth::google_oauth`. Sourced from `config.toml`
     /// at startup so the frontend Docker image can be environment-agnostic.
     pub google_client_id: String,
+    /// Free-tier caps + Pro ceiling, mirrored from `LimitsConfig` so the SPA
+    /// renders the real numbers (pricing copy, cap-interrupt modals) instead
+    /// of hardcoding them and silently drifting from the server (M-10).
+    pub limits: PublicLimits,
+    /// Presence heartbeat cadence (seconds), mirrored from `SharingConfig` so
+    /// the client's heartbeat timer tracks the server's TTL instead of a
+    /// hardcoded constant (L-11).
+    pub presence_heartbeat_seconds: u32,
+}
+
+/// Browser-facing projection of `LimitsConfig` (the entitlement caps the SPA
+/// needs to display). Numbers only — no behaviour, no secrets.
+#[derive(Clone, Deserialize, Serialize, ToSchema)]
+pub struct PublicLimits {
+    pub free_calendar_limit: u32,
+    pub free_show_cap: u32,
+    pub pro_max_reminders: u32,
 }
 
 #[utoipa::path(
@@ -42,6 +59,12 @@ mod tests {
             App::new()
                 .app_data(web::Data::new(PublicConfig {
                     google_client_id: "test-cid.apps.googleusercontent.com".to_owned(),
+                    limits: PublicLimits {
+                        free_calendar_limit: 3,
+                        free_show_cap: 25,
+                        pro_max_reminders: 5,
+                    },
+                    presence_heartbeat_seconds: 30,
                 }))
                 .service(get),
         )
@@ -61,5 +84,9 @@ mod tests {
 
         let body: PublicConfig = test::read_body_json(resp).await;
         assert_eq!(body.google_client_id, "test-cid.apps.googleusercontent.com");
+        assert_eq!(body.limits.free_calendar_limit, 3);
+        assert_eq!(body.limits.free_show_cap, 25);
+        assert_eq!(body.limits.pro_max_reminders, 5);
+        assert_eq!(body.presence_heartbeat_seconds, 30);
     }
 }

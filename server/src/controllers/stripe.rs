@@ -108,8 +108,12 @@ pub async fn create_checkout_session(
         .success_url(success_url.as_str())
         .cancel_url(cancel_url.as_str())
         .payment_method_collection(CreateCheckoutSessionPaymentMethodCollection::Always)
-        .subscription_data(subscription_data)
-        .client_reference_id(user.id.to_string());
+        .subscription_data(subscription_data);
+    // Note: no `client_reference_id` — the webhook resolves the user from
+    // `subscription_data.metadata.user_id` (stamped above, carried by every
+    // `customer.subscription.*`/`invoice.*` event) with a customer-id lookup
+    // fallback, so `client_reference_id` (only present on
+    // `checkout.session.completed`, which we don't handle) was dead (M-11).
 
     // Reuse an existing Stripe customer if the user is re-subscribing after
     // cancellation. Looking up the latest `stripe_customer_id` regardless of

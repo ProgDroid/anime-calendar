@@ -5,10 +5,14 @@
 //! `docs/superpowers/specs/2026-05-01-track-4-upgrade-flow-design.md` →
 //! "Reconcile loop (webhook safety net)" for the design.
 //!
-//! Multi-replica note: this loop is single-process safe. Multi-replica
-//! deployments need either `pg_try_advisory_lock` around the pass or an
-//! out-of-process scheduler (k8s `CronJob`). Deferred until that's a real
-//! concern.
+//! Multi-replica note: each tick is guarded by a session-level
+//! `pg_try_advisory_lock` ([`run_guarded_pass`]) keyed on a fixed sentinel
+//! ([`RECONCILE_ADVISORY_LOCK_KEY`]). All replicas contend for the same lock,
+//! so at most one runs a pass at a time — the rest skip the tick. The lock is
+//! held on a dedicated connection for the pass duration and released after
+//! (or auto-released if the connection / process dies). The pass body
+//! ([`run_pass`]) stays unlocked so the unit tests and the one-shot CLI path
+//! don't contend on the global key.
 
 use std::time::Duration;
 
@@ -228,7 +232,8 @@ async fn reconcile_one<F: StripeSubscriptionFetcher>(
     // calendars owned by this user. Best-effort: log failures but don't
     // propagate them as reconcile errors — the subscription data is already
     // corrected, which is the primary goal.
-    if was_paid_status && becomes_free_status
+    if was_paid_status
+        && becomes_free_status
         && let Some(deps) = sharing
     {
         apply_sharing_side_effects(row.user_id, deps).await;
@@ -236,7 +241,8 @@ async fn reconcile_one<F: StripeSubscriptionFetcher>(
 
     // After a confirmed Free→Paid correction, restore sharing for all
     // calendars owned by this user and send restore emails. Best-effort.
-    if was_free_status && becomes_paid_status
+    if was_free_status
+        && becomes_paid_status
         && let Some(deps) = sharing
     {
         apply_restore_sharing_side_effects(row.user_id, deps).await;
@@ -418,8 +424,7 @@ pub fn spawn_loop<F>(
     fetcher: F,
     interval_secs: u64,
     sharing: Option<SharingDeps>,
-)
-where
+) where
     F: StripeSubscriptionFetcher + 'static,
 {
     if interval_secs == 0 {
@@ -435,11 +440,61 @@ where
         ticker.tick().await;
         loop {
             ticker.tick().await;
-            if let Err(e) = run_pass(&mapper, &fetcher, sharing.as_ref()).await {
+            if let Err(e) = run_guarded_pass(&mapper, &fetcher, sharing.as_ref()).await {
                 error!("reconcile: pass failed at top level: {e}");
             }
         }
     });
+}
+
+/// Fixed advisory-lock key for the reconcile pass. Arbitrary but stable, so
+/// every replica contends for the same lock. Chosen high to avoid colliding
+/// with the per-user `pg_advisory_xact_lock(user_id)` keys used elsewhere
+/// (those are bounded by `i32` user ids).
+const RECONCILE_ADVISORY_LOCK_KEY: i64 = 0x7265_636f_6e63_696c; // b"reconcil"
+
+/// Acquire the cross-replica advisory lock, run one pass, then release it.
+///
+/// Uses session-level `pg_try_advisory_lock` on a dedicated connection held
+/// for the whole pass. If another replica already holds the lock the tick is
+/// skipped (it's already reconciling), so the two never double-bill drift
+/// counters or hammer Stripe in parallel (M-9). The lock auto-releases if the
+/// connection drops, so a crashed replica can't wedge the lock permanently.
+///
+/// # Errors
+/// Returns an error only if the lock connection can't be acquired or the
+/// `pg_try_advisory_lock` query itself fails. A skipped tick is `Ok(())`.
+async fn run_guarded_pass<F: StripeSubscriptionFetcher>(
+    mapper: &SubscriptionMapper,
+    fetcher: &F,
+    sharing: Option<&SharingDeps>,
+) -> ServerResult<()> {
+    // Dedicated connection: session-level advisory locks are held until the
+    // owning connection releases them or closes, so it must outlive the pass.
+    let mut conn = mapper.pool().acquire().await?;
+    let acquired: bool = sqlx::query_scalar("SELECT pg_try_advisory_lock($1)")
+        .bind(RECONCILE_ADVISORY_LOCK_KEY)
+        .fetch_one(&mut *conn)
+        .await?;
+    if !acquired {
+        info!("reconcile: advisory lock held by another replica, skipping this tick");
+        return Ok(());
+    }
+
+    let result = run_pass(mapper, fetcher, sharing).await;
+
+    // Best-effort release on the same connection. If this fails the lock
+    // still drops when `conn` is returned to the pool and recycled, or when
+    // the session ends — it can't leak permanently.
+    if let Err(e) = sqlx::query("SELECT pg_advisory_unlock($1)")
+        .bind(RECONCILE_ADVISORY_LOCK_KEY)
+        .execute(&mut *conn)
+        .await
+    {
+        error!("reconcile: failed to release advisory lock: {e}");
+    }
+
+    result.map(|_| ())
 }
 
 #[cfg(test)]
@@ -756,6 +811,68 @@ mod tests {
         .unwrap();
         // Ghost row was soft-skipped — its local status is untouched.
         assert_eq!(ghost.status, "active");
+    }
+
+    #[tokio::test]
+    async fn guarded_pass_skips_when_lock_held_by_other_replica() {
+        // Simulate a second replica holding the reconcile advisory lock: a
+        // drifting row must NOT be corrected while the lock is held, then IS
+        // corrected once it's released (M-9).
+        let pool = crate::test_helpers::test_pool().await;
+        let mapper = SubscriptionMapper::from_pool(pool.clone());
+        let user_id = seed_user(&pool).await;
+        let sub_id = unique_sub_id("locked");
+        let period_end = (Utc::now() + ChronoDuration::days(14)).naive_utc();
+        seed_subscription(&pool, user_id, &sub_id, "active", period_end, false, None).await;
+
+        let fetcher = MockFetcher::new();
+        fetcher.set(
+            &sub_id,
+            RemoteSubscription {
+                status: "past_due".to_string(),
+                current_period_end: period_end,
+                cancel_at_period_end: false,
+                trial_end: None,
+            },
+        );
+
+        // Hold the lock on a dedicated connection for the first pass.
+        let mut holder = pool.acquire().await.unwrap();
+        let got: bool = sqlx::query_scalar("SELECT pg_try_advisory_lock($1)")
+            .bind(RECONCILE_ADVISORY_LOCK_KEY)
+            .fetch_one(&mut *holder)
+            .await
+            .unwrap();
+        assert!(got, "test must acquire the lock first");
+
+        run_guarded_pass(&mapper, &fetcher, None).await.unwrap();
+
+        let row = sqlx::query!(
+            "SELECT status FROM subscriptions WHERE stripe_subscription_id = $1",
+            sub_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(row.status, "active", "pass must be skipped while lock held");
+
+        // Release the lock; a subsequent guarded pass now corrects the drift.
+        sqlx::query("SELECT pg_advisory_unlock($1)")
+            .bind(RECONCILE_ADVISORY_LOCK_KEY)
+            .execute(&mut *holder)
+            .await
+            .unwrap();
+
+        run_guarded_pass(&mapper, &fetcher, None).await.unwrap();
+
+        let row = sqlx::query!(
+            "SELECT status FROM subscriptions WHERE stripe_subscription_id = $1",
+            sub_id,
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+        assert_eq!(row.status, "past_due", "pass runs once the lock is free");
     }
 
     #[test]

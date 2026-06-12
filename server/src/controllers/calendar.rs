@@ -1152,12 +1152,19 @@ pub async fn add_item(
     let _ = cache.invalidate_calendar(calendar_id).await;
     let _ = cache.invalidate_user_paged_calendars(cal.user_id).await;
     let _ = cache.invalidate_subscription(&cal.subscription_token).await;
-    let display = users
-        .get_user_by_id(actor_id)
-        .await
-        .ok()
-        .map(|u| u.username)
-        .unwrap_or_else(|| actor_id.to_string());
+    // Only resolve the actor's display name when someone is watching this
+    // calendar — otherwise the frame reaches no one and the username DB
+    // round-trip is wasted (F2-31).
+    let display = if publisher.calendar_has_subscribers(calendar_id).await {
+        users
+            .get_user_by_id(actor_id)
+            .await
+            .ok()
+            .map(|u| u.username)
+            .unwrap_or_else(|| actor_id.to_string())
+    } else {
+        actor_id.to_string()
+    };
     let _ = publisher
         .publish_calendar(
             calendar_id,
@@ -1220,12 +1227,17 @@ pub async fn remove_item(
             let _ = cache.invalidate_calendar(calendar_id).await;
             let _ = cache.invalidate_user_paged_calendars(cal.user_id).await;
             let _ = cache.invalidate_subscription(&cal.subscription_token).await;
-            let display = users
-                .get_user_by_id(actor_id)
-                .await
-                .ok()
-                .map(|u| u.username)
-                .unwrap_or_else(|| actor_id.to_string());
+            // Resolve the actor's display name only when watched (F2-31).
+            let display = if publisher.calendar_has_subscribers(calendar_id).await {
+                users
+                    .get_user_by_id(actor_id)
+                    .await
+                    .ok()
+                    .map(|u| u.username)
+                    .unwrap_or_else(|| actor_id.to_string())
+            } else {
+                actor_id.to_string()
+            };
             let _ = publisher
                 .publish_calendar(
                     calendar_id,

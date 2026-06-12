@@ -106,6 +106,12 @@ pub fn start(
     // once here so the controller can't reach into other ServerConfig fields.
     let public_config = public_config::PublicConfig {
         google_client_id: config.google_client_id,
+        limits: public_config::PublicLimits {
+            free_calendar_limit: config.limits.free_calendar_limit,
+            free_show_cap: config.limits.free_show_cap,
+            pro_max_reminders: config.limits.pro_max_reminders,
+        },
+        presence_heartbeat_seconds: config.sharing.presence_heartbeat_seconds,
     };
 
     let rate_limit = crate::middleware::rate_limit::RateLimit::new(

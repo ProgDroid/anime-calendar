@@ -45,6 +45,13 @@ impl SubscriptionMapper {
         }
     }
 
+    /// Borrow the underlying connection pool. Used by the reconcile loop to
+    /// acquire a dedicated connection for the cross-replica advisory lock.
+    #[must_use]
+    pub const fn pool(&self) -> &sqlx::PgPool {
+        &self.db.pool
+    }
+
     /// Return the user's currently-entitling subscription row, if any.
     ///
     /// "Entitling" = status in (trialing, active, `past_due`) and the period has

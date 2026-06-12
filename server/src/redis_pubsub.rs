@@ -108,6 +108,29 @@ impl RedisPubSub {
         Ok(())
     }
 
+    /// Return the number of subscribers on `channel` across the whole fleet.
+    ///
+    /// Uses Redis `PUBSUB NUMSUB`, which counts every connection subscribed to
+    /// the channel on this Redis instance. Because each app replica opens at
+    /// most one Redis `SUBSCRIBE` per channel (see [`Self::subscribe`]) and all
+    /// replicas share one Redis, a non-zero count means *some* replica has a
+    /// live SSE subscriber — the correct global "is anyone watching?" gate
+    /// (local `Sender::receiver_count` would only see this replica).
+    ///
+    /// # Errors
+    /// Returns [`Error::Redis`] if the `PUBSUB NUMSUB` command fails.
+    pub async fn channel_subscriber_count(&self, channel: &str) -> ServerResult<u64> {
+        let mut conn = self.publisher.clone();
+        // NUMSUB replies as a flat 2-element array: [channel, count].
+        let (_chan, count): (String, u64) = redis::cmd("PUBSUB")
+            .arg("NUMSUB")
+            .arg(channel)
+            .query_async(&mut conn)
+            .await
+            .map_err(|e| Error::Redis(e.to_string()))?;
+        Ok(count)
+    }
+
     /// Subscribe to `channel` and return a [`Receiver`] that yields JSON
     /// strings for every message published to that channel.
     ///
@@ -178,7 +201,10 @@ impl RedisPubSub {
 
         // Only insert the Sender into the map AFTER we know the task is alive,
         // so a concurrent fast-path caller never gets a dead Sender.
-        self.subscribers.write().await.insert(channel.to_owned(), tx);
+        self.subscribers
+            .write()
+            .await
+            .insert(channel.to_owned(), tx);
 
         Ok(rx)
     }
@@ -214,10 +240,7 @@ impl RedisPubSub {
             let url = build_url(&host, port, &password);
             let connect_result = async {
                 let client = Client::open(url).map_err(|e| e.to_string())?;
-                let mut pubsub = client
-                    .get_async_pubsub()
-                    .await
-                    .map_err(|e| e.to_string())?;
+                let mut pubsub = client.get_async_pubsub().await.map_err(|e| e.to_string())?;
                 pubsub.subscribe(channel).await.map_err(|e| e.to_string())?;
                 Ok::<_, String>(pubsub)
             }
@@ -303,8 +326,7 @@ impl RedisPubSub {
 impl RedisPubSub {
     /// Construct a `RedisPubSub` connected to the test Redis instance.
     pub async fn for_tests() -> Self {
-        let host =
-            std::env::var("REDIS_HOST").unwrap_or_else(|_| "aegyptvault.local".to_owned());
+        let host = std::env::var("REDIS_HOST").unwrap_or_else(|_| "aegyptvault.local".to_owned());
         let port = std::env::var("REDIS_PORT")
             .ok()
             .and_then(|p| p.parse::<u16>().ok())
@@ -320,8 +342,7 @@ mod tests {
     use super::*;
 
     fn test_redis_params() -> (String, u16) {
-        let host =
-            std::env::var("REDIS_HOST").unwrap_or_else(|_| "aegyptvault.local".to_owned());
+        let host = std::env::var("REDIS_HOST").unwrap_or_else(|_| "aegyptvault.local".to_owned());
         let port = std::env::var("REDIS_PORT")
             .ok()
             .and_then(|p| p.parse::<u16>().ok())
@@ -339,13 +360,10 @@ mod tests {
         ps.publish("test:chan", &serde_json::json!({"hello": "world"}))
             .await
             .unwrap();
-        let msg = tokio::time::timeout(
-            std::time::Duration::from_secs(3),
-            rx.recv(),
-        )
-        .await
-        .expect("timeout")
-        .expect("recv failed");
+        let msg = tokio::time::timeout(std::time::Duration::from_secs(3), rx.recv())
+            .await
+            .expect("timeout")
+            .expect("recv failed");
         assert!(msg.contains("hello"));
     }
 }

@@ -90,6 +90,19 @@ impl CalendarEventPublisher {
             .await
     }
 
+    /// Whether any SSE subscriber (on any replica) is currently watching this
+    /// calendar's channel. Lets callers skip work whose only purpose is to
+    /// populate an event payload nobody will receive (F2-31).
+    ///
+    /// Fails *open*: on a Redis error this returns `true`, so a transient
+    /// `PUBSUB` hiccup never suppresses an event-enriching lookup.
+    pub async fn calendar_has_subscribers(&self, calendar_id: i32) -> bool {
+        self.pubsub
+            .channel_subscriber_count(&format!("cal:{calendar_id}"))
+            .await
+            .map_or(true, |n| n > 0)
+    }
+
     /// # Errors
     /// Propagates Redis publish errors.
     pub async fn publish_kick(&self, user_id: i32, reason: &str) -> ServerResult<()> {

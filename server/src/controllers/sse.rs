@@ -18,8 +18,8 @@ use serde_json::json;
 
 use crate::{
     config::server::SharingConfig,
-    mappers::calendar::CalendarMapper,
     error::Error,
+    mappers::calendar::CalendarMapper,
     middleware::auth::Claims,
     redis_pubsub::RedisPubSub,
     services::{
@@ -86,6 +86,10 @@ pub async fn calendar_events(
             String::new()
         }
     };
+    // Sent when a broadcast receiver lags past the channel capacity and drops
+    // messages: the client can't trust its incremental state, so it should
+    // refetch the calendar (M-6). Precomputed once; cloned on the rare lag.
+    let resync_frame = json!({ "type": "resync" }).to_string();
 
     let stream = async_stream::stream! {
         // Hold the guard for the lifetime of the stream so the per-user
@@ -103,7 +107,10 @@ pub async fn calendar_events(
             tokio::select! {
                 msg = cal_rx.recv() => match msg {
                     Ok(payload) => yield Ok(sse::Event::Data(sse::Data::new(payload))),
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {} // skip and continue
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        log::warn!("sse: cal channel lagged by {n} for calendar {calendar_id}; emitting resync");
+                        yield Ok(sse::Event::Data(sse::Data::new(resync_frame.clone())));
+                    }
                     // Closed means the fan-out sender is gone: recv() would
                     // resolve immediately on every select! iteration, spinning
                     // this task at full CPU while delivering nothing.
@@ -114,7 +121,10 @@ pub async fn calendar_events(
                 },
                 msg = presence_rx.recv() => match msg {
                     Ok(payload) => yield Ok(sse::Event::Data(sse::Data::new(payload))),
-                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(n)) => {
+                        log::warn!("sse: presence channel lagged by {n} for calendar {calendar_id}; emitting resync");
+                        yield Ok(sse::Event::Data(sse::Data::new(resync_frame.clone())));
+                    }
                     Err(tokio::sync::broadcast::error::RecvError::Closed) => {
                         log::warn!("sse: presence channel closed, ending stream for calendar {calendar_id}");
                         break;
