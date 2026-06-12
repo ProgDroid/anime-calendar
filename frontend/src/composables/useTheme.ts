@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/auth'
 import { updateUserSettings } from '@/services/userSettingsService'
 import type { Accent, UserSettings } from '@/types/userSettings'
 import { PRO_ACCENTS } from '@/constants/proAccents'
+import { logger } from '@/services/logger'
 
 const DEFAULT_ACCENT: Accent = 'coral'
 
@@ -78,7 +79,7 @@ async function persistToServer() {
     await updateUserSettings(next)
     store.settings = next
   } catch (err) {
-    console.error('Failed to persist theme/accent', err)
+    logger.error('Failed to persist theme/accent', err)
   }
 }
 

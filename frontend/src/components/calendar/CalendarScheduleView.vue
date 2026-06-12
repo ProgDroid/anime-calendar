@@ -6,6 +6,7 @@ import { useDayLabels } from '@/composables/useDayLabels'
 import { useWeekRange, formatIsoWeek } from '@/composables/useWeekRange'
 import { useViewportLayout } from '@/composables/useViewportLayout'
 import { fetchScheduleForCalendar } from '@/services/calendars'
+import { logger } from '@/services/logger'
 import type { ScheduleByDay } from '@/types/schedule'
 import UiButton from '@/components/ui/UiButton.vue'
 import ScheduleDayColumn from './ScheduleDayColumn.vue'
@@ -42,7 +43,7 @@ watch(
     } catch (err) {
       if (my === seq) {
         entriesByDay.value = {}
-        console.error('[schedule] fetch failed', err)
+        logger.error('[schedule] fetch failed', err)
       }
     }
   },

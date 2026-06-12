@@ -9,6 +9,7 @@ import { i18n, initI18n } from './plugins/i18n'
 import { useUserSettingsStore } from './stores/userSettingsStore'
 import { useTheme } from './composables/useTheme'
 import { loadPublicConfig } from './services/publicConfig'
+import { logger } from './services/logger'
 
 const app = createApp(App)
 
@@ -52,7 +53,7 @@ loadPublicConfig()
     .catch(err => {
         // Only reachable if loadPublicConfig() rejected — auth/settings
         // failures are caught above and resolve to a degraded mount.
-        console.error('Public config bootstrap failed; refusing to mount.', err)
+        logger.error('Public config bootstrap failed; refusing to mount.', err)
         renderBootstrapErrorShell()
     })
 
