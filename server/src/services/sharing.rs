@@ -107,12 +107,10 @@ pub async fn suspend_owner_sharing_in_tx(
     owner_id: i32,
 ) -> ServerResult<Vec<KickRecord>> {
     // Fetch all calendar IDs owned by this user.
-    let calendar_ids: Vec<i32> = sqlx::query_scalar!(
-        "SELECT id FROM calendars WHERE user_id = $1",
-        owner_id
-    )
-    .fetch_all(&mut *tx)
-    .await?;
+    let calendar_ids: Vec<i32> =
+        sqlx::query_scalar!("SELECT id FROM calendars WHERE user_id = $1", owner_id)
+            .fetch_all(&mut *tx)
+            .await?;
 
     let mut kick_records: Vec<KickRecord> = Vec::new();
 
@@ -195,30 +193,60 @@ mod tests {
         let inv_expires = (Utc::now() + Duration::days(7)).naive_utc();
 
         // Insert active editors then suspend them all.
-        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_a, editor_a1).await.unwrap();
-        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_a, editor_a2).await.unwrap();
-        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_b, editor_b1).await.unwrap();
-        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_b, editor_b2).await.unwrap();
-        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut *tx, cal_a).await.unwrap();
-        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut *tx, cal_b).await.unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_a, editor_a1)
+            .await
+            .unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_a, editor_a2)
+            .await
+            .unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_b, editor_b1)
+            .await
+            .unwrap();
+        CalendarEditorMapper::upsert_active_in_tx(&mut *tx, cal_b, editor_b2)
+            .await
+            .unwrap();
+        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut *tx, cal_a)
+            .await
+            .unwrap();
+        CalendarEditorMapper::suspend_for_calendar_in_tx(&mut *tx, cal_b)
+            .await
+            .unwrap();
 
         // Seed 1 suspended invitation per calendar.
         let na: u64 = rand::random();
         CalendarInvitationMapper::create_in_tx(
-            &mut *tx, cal_a, owner_id,
-            &format!("inv_a_{na}@example.com"), &format!("hash_a_{na}"), inv_expires,
-        ).await.unwrap();
-        CalendarInvitationMapper::suspend_pending_for_calendar_in_tx(&mut *tx, cal_a).await.unwrap();
+            &mut *tx,
+            cal_a,
+            owner_id,
+            &format!("inv_a_{na}@example.com"),
+            &format!("hash_a_{na}"),
+            inv_expires,
+        )
+        .await
+        .unwrap();
+        CalendarInvitationMapper::suspend_pending_for_calendar_in_tx(&mut *tx, cal_a)
+            .await
+            .unwrap();
 
         let nb: u64 = rand::random();
         CalendarInvitationMapper::create_in_tx(
-            &mut *tx, cal_b, owner_id,
-            &format!("inv_b_{nb}@example.com"), &format!("hash_b_{nb}"), inv_expires,
-        ).await.unwrap();
-        CalendarInvitationMapper::suspend_pending_for_calendar_in_tx(&mut *tx, cal_b).await.unwrap();
+            &mut *tx,
+            cal_b,
+            owner_id,
+            &format!("inv_b_{nb}@example.com"),
+            &format!("hash_b_{nb}"),
+            inv_expires,
+        )
+        .await
+        .unwrap();
+        CalendarInvitationMapper::suspend_pending_for_calendar_in_tx(&mut *tx, cal_b)
+            .await
+            .unwrap();
 
         // Act: call the function under test using the same transaction connection.
-        let restored = restore_owner_sharing_in_tx(&mut *tx, owner_id).await.unwrap();
+        let restored = restore_owner_sharing_in_tx(&mut *tx, owner_id)
+            .await
+            .unwrap();
 
         // Assert: all editors are now active with suspended_at = NULL.
         let active_a: i64 = sqlx::query_scalar(

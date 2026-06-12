@@ -74,7 +74,6 @@ impl Default for Calendar {
     }
 }
 
-
 /// Owner-projection used by `GET /calendars` `shared_with_me` entries.
 /// Server-managed: never deserialised from request bodies.
 ///

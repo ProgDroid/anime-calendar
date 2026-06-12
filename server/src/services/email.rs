@@ -224,9 +224,14 @@ mod tests {
         svc.send_verification_email("user@example.com", "https://app/verify?t=x")
             .await
             .expect("verification noop");
-        svc.send_invitation("user@example.com", "Owner", "My Calendar", "https://app/invite/x")
-            .await
-            .expect("invitation noop");
+        svc.send_invitation(
+            "user@example.com",
+            "Owner",
+            "My Calendar",
+            "https://app/invite/x",
+        )
+        .await
+        .expect("invitation noop");
         svc.send_editor_restored("user@example.com", "My Calendar")
             .await
             .expect("editor restored noop");

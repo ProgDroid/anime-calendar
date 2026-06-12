@@ -105,7 +105,8 @@ pub async fn create_invitation(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await
+    {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -154,11 +155,15 @@ pub async fn revoke_invitation(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await
+    {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
-    if let Err(e) = authz.assert_can(actor_id, &cal, Action::ManageEditors).await {
+    if let Err(e) = authz
+        .assert_can(actor_id, &cal, Action::ManageEditors)
+        .await
+    {
         return e.error_response();
     }
     match svc.revoke(calendar_id, invitation_id).await {
@@ -199,7 +204,8 @@ pub async fn resend_invitation(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await
+    {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -246,11 +252,15 @@ pub async fn list_members(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await
+    {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
-    if let Err(e) = authz.assert_can(actor_id, &cal, Action::ManageEditors).await {
+    if let Err(e) = authz
+        .assert_can(actor_id, &cal, Action::ManageEditors)
+        .await
+    {
         return e.error_response();
     }
 
@@ -325,11 +335,15 @@ pub async fn remove_editor(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await
+    {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
-    if let Err(e) = authz.assert_can(actor_id, &cal, Action::ManageEditors).await {
+    if let Err(e) = authz
+        .assert_can(actor_id, &cal, Action::ManageEditors)
+        .await
+    {
         return e.error_response();
     }
     if let Err(e) = editors.remove(calendar_id, target_user_id).await {
@@ -545,7 +559,8 @@ pub async fn presence_heartbeat(
         Ok(id) => id,
         Err(e) => return e.error_response(),
     };
-    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await {
+    let cal = match CalendarMapper::get_by_id_any_owner_from_pool(pool.get_ref(), calendar_id).await
+    {
         Ok(c) => c,
         Err(e) => return e.error_response(),
     };
@@ -556,7 +571,10 @@ pub async fn presence_heartbeat(
         Ok(u) => u,
         Err(e) => return e.error_response(),
     };
-    let viewers = match presence.heartbeat(calendar_id, actor_id, &user.username).await {
+    let viewers = match presence
+        .heartbeat(calendar_id, actor_id, &user.username)
+        .await
+    {
         Ok(v) => v,
         Err(e) => return e.error_response(),
     };

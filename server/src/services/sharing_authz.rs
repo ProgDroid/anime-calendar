@@ -94,7 +94,10 @@ impl SharingAuthz {
                 if !is_owner {
                     return Err(Error::Forbidden);
                 }
-                if matches!(self.entitlements.effective_tier(actor_id).await?, Tier::Paid) {
+                if matches!(
+                    self.entitlements.effective_tier(actor_id).await?,
+                    Tier::Paid
+                ) {
                     Ok(())
                 } else {
                     Err(Error::PaymentRequired {
@@ -124,8 +127,7 @@ impl SharingAuthz {
                 if is_owner {
                     return Ok(());
                 }
-                if CalendarEditorMapper::is_active_editor_in_tx(conn, calendar.id, actor_id)
-                    .await?
+                if CalendarEditorMapper::is_active_editor_in_tx(conn, calendar.id, actor_id).await?
                 {
                     return Ok(());
                 }
@@ -265,11 +267,11 @@ mod tests {
             .await
             .unwrap();
 
-        assert_forbidden(&
-            SharingAuthz::assert_can_in_tx(&mut tx, editor, &cal, Action::MetaMutate).await,
+        assert_forbidden(
+            &SharingAuthz::assert_can_in_tx(&mut tx, editor, &cal, Action::MetaMutate).await,
         );
-        assert_forbidden(&
-            SharingAuthz::assert_can_in_tx(&mut tx, editor, &cal, Action::ManageEditors).await,
+        assert_forbidden(
+            &SharingAuthz::assert_can_in_tx(&mut tx, editor, &cal, Action::ManageEditors).await,
         );
 
         tx.rollback().await.unwrap();
@@ -302,8 +304,8 @@ mod tests {
         let stranger = create_test_user(&mut tx).await;
         let cal = create_test_calendar(&mut tx, owner).await;
 
-        assert_forbidden(&
-            SharingAuthz::assert_can_in_tx(&mut tx, stranger, &cal, Action::ItemMutate).await,
+        assert_forbidden(
+            &SharingAuthz::assert_can_in_tx(&mut tx, stranger, &cal, Action::ItemMutate).await,
         );
 
         tx.rollback().await.unwrap();
@@ -323,8 +325,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_forbidden(&
-            SharingAuthz::assert_can_in_tx(&mut tx, editor, &cal, Action::ItemMutate).await,
+        assert_forbidden(
+            &SharingAuthz::assert_can_in_tx(&mut tx, editor, &cal, Action::ItemMutate).await,
         );
 
         tx.rollback().await.unwrap();
@@ -336,8 +338,8 @@ mod tests {
         let owner = create_test_user(&mut tx).await;
         let cal = create_test_calendar(&mut tx, owner).await;
 
-        assert_share_calendar_payment_required(&
-            SharingAuthz::assert_can_in_tx(&mut tx, owner, &cal, Action::Invite).await,
+        assert_share_calendar_payment_required(
+            &SharingAuthz::assert_can_in_tx(&mut tx, owner, &cal, Action::Invite).await,
         );
 
         tx.rollback().await.unwrap();
@@ -370,8 +372,8 @@ mod tests {
             .await
             .unwrap();
 
-        assert_forbidden(&
-            SharingAuthz::assert_can_in_tx(&mut tx, editor, &cal, Action::Invite).await,
+        assert_forbidden(
+            &SharingAuthz::assert_can_in_tx(&mut tx, editor, &cal, Action::Invite).await,
         );
 
         tx.rollback().await.unwrap();
@@ -385,8 +387,8 @@ mod tests {
         make_paid(&mut tx, stranger).await;
         let cal = create_test_calendar(&mut tx, owner).await;
 
-        assert_forbidden(&
-            SharingAuthz::assert_can_in_tx(&mut tx, stranger, &cal, Action::Invite).await,
+        assert_forbidden(
+            &SharingAuthz::assert_can_in_tx(&mut tx, stranger, &cal, Action::Invite).await,
         );
 
         tx.rollback().await.unwrap();

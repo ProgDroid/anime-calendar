@@ -123,11 +123,8 @@ impl CalendarInvitationMapper {
         token_hash: &str,
     ) -> ServerResult<Option<CalendarInvitation>> {
         crate::metrics::db::timed("calendar_invitation.find_pending_by_token_hash", async {
-            Self::find_pending_by_token_hash_in_tx(
-                &mut *self.db.pool.acquire().await?,
-                token_hash,
-            )
-            .await
+            Self::find_pending_by_token_hash_in_tx(&mut *self.db.pool.acquire().await?, token_hash)
+                .await
         })
         .await
     }
@@ -227,11 +224,8 @@ impl CalendarInvitationMapper {
         calendar_id: i32,
     ) -> ServerResult<Vec<CalendarInvitation>> {
         crate::metrics::db::timed("calendar_invitation.list_pending_for_calendar", async {
-            Self::list_pending_for_calendar_in_tx(
-                &mut *self.db.pool.acquire().await?,
-                calendar_id,
-            )
-            .await
+            Self::list_pending_for_calendar_in_tx(&mut *self.db.pool.acquire().await?, calendar_id)
+                .await
         })
         .await
     }
@@ -345,7 +339,6 @@ impl CalendarInvitationMapper {
         Ok(count.unwrap_or(0))
     }
 
-
     /// Count invitations sent by `inviter_id` to **any** invitee since
     /// `since`, regardless of status. Used by `InvitationService::send`
     /// to enforce the per-inviter hourly rate limit (config
@@ -399,11 +392,7 @@ impl CalendarInvitationMapper {
     /// for this method).
     // First production caller lands in Phase 1 (accept/decline/revoke).
     #[allow(dead_code)]
-    pub async fn mark_resolved(
-        &self,
-        id: i64,
-        status: InvitationStatus,
-    ) -> ServerResult<u64> {
+    pub async fn mark_resolved(&self, id: i64, status: InvitationStatus) -> ServerResult<u64> {
         crate::metrics::db::timed("calendar_invitation.mark_resolved", async {
             Self::mark_resolved_in_tx(&mut *self.db.pool.acquire().await?, id, status).await
         })
@@ -415,7 +404,10 @@ impl CalendarInvitationMapper {
         id: i64,
         status: InvitationStatus,
     ) -> ServerResult<u64> {
-        if matches!(status, InvitationStatus::Pending | InvitationStatus::Suspended) {
+        if matches!(
+            status,
+            InvitationStatus::Pending | InvitationStatus::Suspended
+        ) {
             return Err(Error::InvalidRequest);
         }
         let result = sqlx::query!(
@@ -491,18 +483,9 @@ impl CalendarInvitationMapper {
     /// Returns the underlying sqlx error.
     // First production caller lands in Phase 1 (POST /invitations/:id/resend).
     #[allow(dead_code)]
-    pub async fn bump_expiry(
-        &self,
-        id: i64,
-        new_expires_at: NaiveDateTime,
-    ) -> ServerResult<u64> {
+    pub async fn bump_expiry(&self, id: i64, new_expires_at: NaiveDateTime) -> ServerResult<u64> {
         crate::metrics::db::timed("calendar_invitation.bump_expiry", async {
-            Self::bump_expiry_in_tx(
-                &mut *self.db.pool.acquire().await?,
-                id,
-                new_expires_at,
-            )
-            .await
+            Self::bump_expiry_in_tx(&mut *self.db.pool.acquire().await?, id, new_expires_at).await
         })
         .await
     }
@@ -610,14 +593,24 @@ mod tests {
         let cal = create_test_calendar(&mut tx, owner).await;
 
         CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "dup@example.com", "h1", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "dup@example.com",
+            "h1",
+            future_expiry(),
         )
         .await
         .unwrap();
 
         // Same email, different casing — must still be rejected (citext + lower()).
         let result = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "DUP@example.com", "h2", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "DUP@example.com",
+            "h2",
+            future_expiry(),
         )
         .await;
 
@@ -633,7 +626,12 @@ mod tests {
         let cal = create_test_calendar(&mut tx, owner).await;
 
         let first = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "user@example.com", "h1", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "user@example.com",
+            "h1",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -650,7 +648,12 @@ mod tests {
 
         // Now a fresh pending invite is allowed
         let second = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "user@example.com", "h2", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "user@example.com",
+            "h2",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -668,7 +671,12 @@ mod tests {
 
         // Active row
         let active = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "active@example.com", "active_hash", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "active@example.com",
+            "active_hash",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -681,7 +689,12 @@ mod tests {
 
         // Expired row
         let expired = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "expired@example.com", "expired_hash", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "expired@example.com",
+            "expired_hash",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -733,17 +746,32 @@ mod tests {
         let cal = create_test_calendar(&mut tx, owner).await;
 
         let pending = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "pending@example.com", "h_p", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "pending@example.com",
+            "h_p",
+            future_expiry(),
         )
         .await
         .unwrap();
         let to_accept = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "accepted@example.com", "h_a", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "accepted@example.com",
+            "h_a",
+            future_expiry(),
         )
         .await
         .unwrap();
         let to_revoke = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "revoked@example.com", "h_r", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "revoked@example.com",
+            "h_r",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -783,7 +811,12 @@ mod tests {
         let owner = create_test_user(&mut tx).await;
         let cal = create_test_calendar(&mut tx, owner).await;
         let inv = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "x@example.com", "h", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "x@example.com",
+            "h",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -816,7 +849,12 @@ mod tests {
         let owner = create_test_user(&mut tx).await;
         let cal = create_test_calendar(&mut tx, owner).await;
         let inv = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "x@example.com", "h", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "x@example.com",
+            "h",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -850,12 +888,22 @@ mod tests {
         let cal = create_test_calendar(&mut tx, owner).await;
 
         let fresh = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "fresh@example.com", "h_f", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "fresh@example.com",
+            "h_f",
+            future_expiry(),
         )
         .await
         .unwrap();
         let stale = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "stale@example.com", "h_s", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "stale@example.com",
+            "h_s",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -875,10 +923,9 @@ mod tests {
         .await
         .unwrap();
 
-        let restored =
-            CalendarInvitationMapper::restore_suspended_for_calendar_in_tx(&mut tx, cal)
-                .await
-                .unwrap();
+        let restored = CalendarInvitationMapper::restore_suspended_for_calendar_in_tx(&mut tx, cal)
+            .await
+            .unwrap();
         assert_eq!(restored, 1, "only the unexpired suspended row is restored");
 
         let still_suspended = CalendarInvitationMapper::find_by_id_in_tx(&mut tx, stale.id)
@@ -904,7 +951,12 @@ mod tests {
         let an_hour_ago = (Utc::now() - Duration::hours(1)).naive_utc();
 
         CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "Same@Example.COM", "h1", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "Same@Example.COM",
+            "h1",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -922,7 +974,12 @@ mod tests {
         .unwrap();
 
         CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "same@example.com", "h2", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "same@example.com",
+            "h2",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -940,7 +997,6 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
-
     #[tokio::test]
     async fn count_for_inviter_since_aggregates_across_invitees() {
         let mut tx = crate::test_helpers::test_tx().await;
@@ -949,17 +1005,32 @@ mod tests {
         let an_hour_ago = (Utc::now() - Duration::hours(1)).naive_utc();
 
         CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "alice@example.com", "h1", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "alice@example.com",
+            "h1",
+            future_expiry(),
         )
         .await
         .unwrap();
         CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "bob@example.com", "h2", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "bob@example.com",
+            "h2",
+            future_expiry(),
         )
         .await
         .unwrap();
         CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "carol@example.com", "h3", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "carol@example.com",
+            "h3",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -997,7 +1068,12 @@ mod tests {
             .unwrap();
 
         let inv = CalendarInvitationMapper::create_in_tx(
-            &mut tx, cal, owner, "bump@example.com", "h", future_expiry(),
+            &mut tx,
+            cal,
+            owner,
+            "bump@example.com",
+            "h",
+            future_expiry(),
         )
         .await
         .unwrap();
@@ -1014,13 +1090,9 @@ mod tests {
         assert_eq!(after.expires_at, new_deadline);
 
         // Resolve, then bump again — must not change anything.
-        CalendarInvitationMapper::mark_resolved_in_tx(
-            &mut tx,
-            inv.id,
-            InvitationStatus::Accepted,
-        )
-        .await
-        .unwrap();
+        CalendarInvitationMapper::mark_resolved_in_tx(&mut tx, inv.id, InvitationStatus::Accepted)
+            .await
+            .unwrap();
         let bumped_again =
             CalendarInvitationMapper::bump_expiry_in_tx(&mut tx, inv.id, future_expiry())
                 .await

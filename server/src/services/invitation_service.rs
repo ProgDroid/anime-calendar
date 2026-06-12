@@ -170,8 +170,7 @@ impl InvitationService {
         let calendar_id = owner.id;
 
         // Per-inviter rolling-hour rate limit.
-        let window_start =
-            (Utc::now() - Duration::hours(1)).naive_utc();
+        let window_start = (Utc::now() - Duration::hours(1)).naive_utc();
         let recent = self
             .invitations
             .count_for_inviter_since(inviter_id, window_start)
@@ -187,7 +186,13 @@ impl InvitationService {
         .naive_utc();
 
         let invitation = self
-            .insert_with_cap_check(calendar_id, inviter_id, invitee_email, &token_hash, expires_at)
+            .insert_with_cap_check(
+                calendar_id,
+                inviter_id,
+                invitee_email,
+                &token_hash,
+                expires_at,
+            )
             .await?;
 
         // Send AFTER commit. If SMTP is down, the row exists; the owner
@@ -221,8 +226,7 @@ impl InvitationService {
         .await?;
 
         let active = CalendarEditorMapper::count_active_in_tx(&mut tx, calendar_id).await?;
-        let pending =
-            CalendarInvitationMapper::count_pending_in_tx(&mut tx, calendar_id).await?;
+        let pending = CalendarInvitationMapper::count_pending_in_tx(&mut tx, calendar_id).await?;
         if active + pending >= i64::from(self.sharing.editor_cap) {
             return Err(Error::Conflict {
                 reason: "editor_cap_reached",
@@ -241,7 +245,9 @@ impl InvitationService {
         {
             Ok(i) => i,
             Err(Error::Database(sqlx::Error::Database(db_err)))
-                if db_err.constraint().is_some_and(|c| c.contains("pending_unique")) =>
+                if db_err
+                    .constraint()
+                    .is_some_and(|c| c.contains("pending_unique")) =>
             {
                 return Err(Error::Conflict {
                     reason: "invite_already_pending",
@@ -265,14 +271,12 @@ impl InvitationService {
     pub async fn accept(&self, actor_id: i32, raw_token: &str) -> ServerResult<CalendarInvitation> {
         let token_hash = hash_token(raw_token);
         let mut tx = self.pool.begin().await?;
-        let inv = CalendarInvitationMapper::find_pending_by_token_hash_in_tx(
-            &mut tx,
-            &token_hash,
-        )
-        .await?
-        .ok_or(Error::InvalidRequest)?;
+        let inv = CalendarInvitationMapper::find_pending_by_token_hash_in_tx(&mut tx, &token_hash)
+            .await?
+            .ok_or(Error::InvalidRequest)?;
 
-        let user = crate::mappers::user::UserMapper::get_user_by_id_in_tx(&mut tx, actor_id).await?;
+        let user =
+            crate::mappers::user::UserMapper::get_user_by_id_in_tx(&mut tx, actor_id).await?;
         if !user.email.eq_ignore_ascii_case(&inv.invitee_email) {
             return Err(Error::InvalidRequest);
         }
@@ -306,14 +310,12 @@ impl InvitationService {
     pub async fn decline(&self, actor_id: i32, raw_token: &str) -> ServerResult<()> {
         let token_hash = hash_token(raw_token);
         let mut tx = self.pool.begin().await?;
-        let inv = CalendarInvitationMapper::find_pending_by_token_hash_in_tx(
-            &mut tx,
-            &token_hash,
-        )
-        .await?
-        .ok_or(Error::InvalidRequest)?;
+        let inv = CalendarInvitationMapper::find_pending_by_token_hash_in_tx(&mut tx, &token_hash)
+            .await?
+            .ok_or(Error::InvalidRequest)?;
 
-        let user = crate::mappers::user::UserMapper::get_user_by_id_in_tx(&mut tx, actor_id).await?;
+        let user =
+            crate::mappers::user::UserMapper::get_user_by_id_in_tx(&mut tx, actor_id).await?;
         if !user.email.eq_ignore_ascii_case(&inv.invitee_email) {
             return Err(Error::InvalidRequest);
         }
@@ -459,12 +461,9 @@ impl InvitationService {
     pub async fn preview(&self, raw_token: &str) -> ServerResult<InvitationPreview> {
         let token_hash = hash_token(raw_token);
         let mut tx = self.pool.begin().await?;
-        let inv = CalendarInvitationMapper::find_pending_by_token_hash_in_tx(
-            &mut tx,
-            &token_hash,
-        )
-        .await?
-        .ok_or(Error::InvalidRequest)?;
+        let inv = CalendarInvitationMapper::find_pending_by_token_hash_in_tx(&mut tx, &token_hash)
+            .await?
+            .ok_or(Error::InvalidRequest)?;
 
         let cal_row = sqlx::query!(
             "SELECT name, user_id FROM calendars
@@ -475,9 +474,10 @@ impl InvitationService {
         .await?
         .ok_or(Error::InvalidRequest)?;
 
-        let owner = crate::mappers::user::UserMapper::get_user_by_id_in_tx(&mut tx, cal_row.user_id)
-            .await
-            .map_err(|_| Error::InvalidRequest)?;
+        let owner =
+            crate::mappers::user::UserMapper::get_user_by_id_in_tx(&mut tx, cal_row.user_id)
+                .await
+                .map_err(|_| Error::InvalidRequest)?;
 
         let item_count: Option<i64> = sqlx::query_scalar!(
             "SELECT COUNT(*) FROM calendar_items WHERE calendar_id = $1",
@@ -675,9 +675,13 @@ mod tests {
         let user_id = seed_user(&pool, "acc_unk").await;
 
         // Random 64-char hex string that won't match any seeded token_hash.
-        let bogus = format!("{:016x}{:016x}{:016x}{:016x}",
-            rand::random::<u64>(), rand::random::<u64>(),
-            rand::random::<u64>(), rand::random::<u64>());
+        let bogus = format!(
+            "{:016x}{:016x}{:016x}{:016x}",
+            rand::random::<u64>(),
+            rand::random::<u64>(),
+            rand::random::<u64>(),
+            rand::random::<u64>()
+        );
 
         let err = svc.accept(user_id, &bogus).await.unwrap_err();
         assert!(
@@ -694,8 +698,7 @@ mod tests {
         let svc = make_svc(pool.clone());
 
         // Seed invitation for a unique invitee email.
-        let (_invitee_id, raw_token, _invitee_email) =
-            seed_invitation(&pool, "amm", false).await;
+        let (_invitee_id, raw_token, _invitee_email) = seed_invitation(&pool, "amm", false).await;
 
         // A different user whose email does NOT match the invitee_email
         let other_id = seed_user(&pool, "other_amm").await;
@@ -714,8 +717,7 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        let (invitee_id, raw_token, _invitee_email) =
-            seed_invitation(&pool, "aar", false).await;
+        let (invitee_id, raw_token, _invitee_email) = seed_invitation(&pool, "aar", false).await;
 
         // Manually resolve the row so the race-condition branch fires.
         sqlx::query!(
@@ -745,9 +747,13 @@ mod tests {
 
         let user_id = seed_user(&pool, "dec_unk").await;
 
-        let bogus = format!("{:016x}{:016x}{:016x}{:016x}",
-            rand::random::<u64>(), rand::random::<u64>(),
-            rand::random::<u64>(), rand::random::<u64>());
+        let bogus = format!(
+            "{:016x}{:016x}{:016x}{:016x}",
+            rand::random::<u64>(),
+            rand::random::<u64>(),
+            rand::random::<u64>(),
+            rand::random::<u64>()
+        );
 
         let err = svc.decline(user_id, &bogus).await.unwrap_err();
         assert!(
@@ -763,8 +769,7 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        let (_invitee_id, raw_token, _invitee_email) =
-            seed_invitation(&pool, "dmm", false).await;
+        let (_invitee_id, raw_token, _invitee_email) = seed_invitation(&pool, "dmm", false).await;
 
         let other_id = seed_user(&pool, "other_dmm").await;
 
@@ -782,8 +787,7 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        let (invitee_id, raw_token, _invitee_email) =
-            seed_invitation(&pool, "dar", false).await;
+        let (invitee_id, raw_token, _invitee_email) = seed_invitation(&pool, "dar", false).await;
 
         sqlx::query!(
             "UPDATE calendar_invitations SET status = 'declined', resolved_at = NOW()
@@ -811,8 +815,7 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        let (_invitee_id, raw_token, _invitee_email) =
-            seed_invitation(&pool, "anf", false).await;
+        let (_invitee_id, raw_token, _invitee_email) = seed_invitation(&pool, "anf", false).await;
 
         let attacker_id = seed_user(&pool, "attacker_anf").await;
 
@@ -828,8 +831,7 @@ mod tests {
         let pool = test_pool().await;
         let svc = make_svc(pool.clone());
 
-        let (_invitee_id, raw_token, _invitee_email) =
-            seed_invitation(&pool, "dnf", false).await;
+        let (_invitee_id, raw_token, _invitee_email) = seed_invitation(&pool, "dnf", false).await;
 
         let attacker_id = seed_user(&pool, "attacker_dnf").await;
 

@@ -50,16 +50,16 @@ use crate::{
     config::server::StripeConfig,
     entity::subscription::Tier,
     mappers::{
-        stripe_event::StripeEventMapper,
-        subscription::SubscriptionMapper,
-        user::UserMapper,
+        stripe_event::StripeEventMapper, subscription::SubscriptionMapper, user::UserMapper,
     },
     services::{
         calendar_events::{CalendarEvent, CalendarEventPublisher},
         email::EmailService,
         entitlement::EntitlementService,
         frozen_ics::FrozenIcsService,
-        sharing::{KickRecord, RestoredEditor, restore_owner_sharing_in_tx, suspend_owner_sharing_in_tx},
+        sharing::{
+            KickRecord, RestoredEditor, restore_owner_sharing_in_tx, suspend_owner_sharing_in_tx,
+        },
     },
 };
 use secrecy::ExposeSecret as _;
@@ -308,9 +308,7 @@ async fn dispatch_event(
         // our metadata, so we don't write here. The event id is already
         // persisted by record_first_time_in_tx, so 200 is correct.
         EventObject::CustomerSubscriptionCreated(sub)
-        | EventObject::CustomerSubscriptionUpdated(sub) => {
-            upsert_subscription(tx, &sub).await
-        }
+        | EventObject::CustomerSubscriptionUpdated(sub) => upsert_subscription(tx, &sub).await,
 
         EventObject::CustomerSubscriptionDeleted(sub) => {
             handle_subscription_deleted(tx, &sub).await
@@ -326,9 +324,7 @@ async fn dispatch_event(
             Ok((FrozenAction::None, vec![], vec![]))
         }
 
-        EventObject::CustomerSubscriptionPaused(sub) => {
-            handle_subscription_paused(tx, &sub).await
-        }
+        EventObject::CustomerSubscriptionPaused(sub) => handle_subscription_paused(tx, &sub).await,
 
         EventObject::CustomerSubscriptionResumed(sub) => {
             // Stripe sends the full subscription on resume; treat it like an
@@ -336,9 +332,7 @@ async fn dispatch_event(
             upsert_subscription(tx, &sub).await
         }
 
-        EventObject::CustomerDeleted(customer) => {
-            handle_customer_deleted(tx, &customer).await
-        }
+        EventObject::CustomerDeleted(customer) => handle_customer_deleted(tx, &customer).await,
 
         EventObject::InvoicePaymentActionRequired(invoice) => {
             handle_invoice_payment_action_required(tx, &invoice).await?;
@@ -625,10 +619,9 @@ async fn handle_customer_deleted(
     customer: &stripe_shared::Customer,
 ) -> Result<(FrozenAction, Vec<KickRecord>, Vec<RestoredEditor>), String> {
     let customer_id = customer.id.to_string();
-    let Some(user_id) =
-        SubscriptionMapper::find_user_id_by_customer_in_tx(&mut *tx, &customer_id)
-            .await
-            .map_err(|e| format!("find_user_id_by_customer failed: {e}"))?
+    let Some(user_id) = SubscriptionMapper::find_user_id_by_customer_in_tx(&mut *tx, &customer_id)
+        .await
+        .map_err(|e| format!("find_user_id_by_customer failed: {e}"))?
     else {
         warn!(
             "stripe webhook: customer.deleted for {customer_id} has no local subscription rows; \
@@ -680,10 +673,8 @@ async fn handle_invoice_payment_action_required(
     _tx: &mut sqlx::PgConnection,
     invoice: &stripe_shared::Invoice,
 ) -> Result<(), String> {
-    metrics::counter!(
-        crate::metrics::names::STRIPE_WEBHOOK_PAYMENT_ACTION_REQUIRED_TOTAL
-    )
-    .increment(1);
+    metrics::counter!(crate::metrics::names::STRIPE_WEBHOOK_PAYMENT_ACTION_REQUIRED_TOTAL)
+        .increment(1);
     let Some(line) = invoice.lines.data.first() else {
         warn!("stripe webhook: invoice.payment_action_required with no lines.data");
         return Ok(());
@@ -783,12 +774,8 @@ mod tests {
             ShowCountService::new(pool.clone()),
             &LimitsConfig::default(),
         );
-        let ics_export = IcsExportService::new(
-            pool.clone(),
-            cached,
-            user_settings_mapper,
-            entitlement,
-        );
+        let ics_export =
+            IcsExportService::new(pool.clone(), cached, user_settings_mapper, entitlement);
         FrozenIcsService::new(pool, ics_export)
     }
 
@@ -1024,15 +1011,23 @@ mod tests {
 
         let n: u64 = rand::random();
         CalendarInvitationMapper::create_in_tx(
-            &mut conn, cal_a, owner_id,
-            &format!("invite_a_{n}@example.com"), &format!("hash_a_{n}"), inv_expires,
+            &mut conn,
+            cal_a,
+            owner_id,
+            &format!("invite_a_{n}@example.com"),
+            &format!("hash_a_{n}"),
+            inv_expires,
         )
         .await
         .unwrap();
         let m: u64 = rand::random();
         CalendarInvitationMapper::create_in_tx(
-            &mut conn, cal_b, owner_id,
-            &format!("invite_b_{m}@example.com"), &format!("hash_b_{m}"), inv_expires,
+            &mut conn,
+            cal_b,
+            owner_id,
+            &format!("invite_b_{m}@example.com"),
+            &format!("hash_b_{m}"),
+            inv_expires,
         )
         .await
         .unwrap();
@@ -1075,7 +1070,10 @@ mod tests {
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(suspended_at_null_count, 0, "all editor rows must have suspended_at set");
+        assert_eq!(
+            suspended_at_null_count, 0,
+            "all editor rows must have suspended_at set"
+        );
 
         // Assert: pending invitations are now suspended
         let pending_a: i64 = sqlx::query_scalar(
@@ -1086,7 +1084,10 @@ mod tests {
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(pending_a, 0, "cal_a: no pending invitations after downgrade");
+        assert_eq!(
+            pending_a, 0,
+            "cal_a: no pending invitations after downgrade"
+        );
 
         let pending_b: i64 = sqlx::query_scalar(
             "SELECT COUNT(*) FROM calendar_invitations \
@@ -1096,7 +1097,10 @@ mod tests {
         .fetch_one(&pool)
         .await
         .unwrap();
-        assert_eq!(pending_b, 0, "cal_b: no pending invitations after downgrade");
+        assert_eq!(
+            pending_b, 0,
+            "cal_b: no pending invitations after downgrade"
+        );
 
         // Assert: kick records cover all 4 editors
         assert_eq!(kicks.len(), 4, "exactly 4 kick records (2 per calendar)");
@@ -1110,7 +1114,10 @@ mod tests {
             (cal_b, editor_b2),
         ];
         expected_pairs.sort_unstable();
-        assert_eq!(kick_pairs, expected_pairs, "kick records must cover all editors");
+        assert_eq!(
+            kick_pairs, expected_pairs,
+            "kick records must cover all editors"
+        );
 
         // Cleanup
         sqlx::query("DELETE FROM calendar_invitations WHERE calendar_id = ANY($1)")
@@ -1239,8 +1246,7 @@ mod tests {
         // a typo in the metric name constant or a missing describe entry
         // would not be caught at runtime, but the `describe()` call is wired
         // into `init()` and exercised at startup.
-        let _ = metrics::counter!(
-            crate::metrics::names::STRIPE_WEBHOOK_PAYMENT_ACTION_REQUIRED_TOTAL
-        );
+        let _ =
+            metrics::counter!(crate::metrics::names::STRIPE_WEBHOOK_PAYMENT_ACTION_REQUIRED_TOTAL);
     }
 }

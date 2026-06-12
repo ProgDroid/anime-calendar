@@ -301,8 +301,7 @@ pub async fn delete_user(
     }
 
     // Invalidate all refresh tokens so existing sessions are kicked immediately.
-    if let Err(e) =
-        RefreshTokenMapper::invalidate_all_for_user_in_tx(&mut tx, user_id_inner).await
+    if let Err(e) = RefreshTokenMapper::invalidate_all_for_user_in_tx(&mut tx, user_id_inner).await
     {
         error!("Failed to invalidate refresh tokens for user {user_id_inner}: {e}");
         let _ = tx.rollback().await;
@@ -868,7 +867,10 @@ mod integration_tests {
                 .fetch_one(&pool)
                 .await
                 .unwrap();
-        assert!(deleted_at.is_none(), "user must not be deleted when sub is active");
+        assert!(
+            deleted_at.is_none(),
+            "user must not be deleted when sub is active"
+        );
     }
 
     #[tokio::test]

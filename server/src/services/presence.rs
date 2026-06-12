@@ -30,12 +30,20 @@ impl PresenceService {
     /// # Errors
     /// Returns [`crate::error::Error::Redis`] if the connection cannot be
     /// established.
-    pub async fn new(host: &str, port: u16, password: &str, ttl_seconds: u64) -> ServerResult<Self> {
+    pub async fn new(
+        host: &str,
+        port: u16,
+        password: &str,
+        ttl_seconds: u64,
+    ) -> ServerResult<Self> {
         let pw = SecretString::from(password.to_owned());
         let url = if pw.expose_secret().is_empty() {
             format!("redis://{host}:{port}")
         } else {
-            format!("redis://:{pw_val}@{host}:{port}", pw_val = pw.expose_secret())
+            format!(
+                "redis://:{pw_val}@{host}:{port}",
+                pw_val = pw.expose_secret()
+            )
         };
         let client = Client::open(url).map_err(|e| crate::error::Error::Redis(e.to_string()))?;
         let redis = client
@@ -94,14 +102,14 @@ impl PresenceService {
                 .await
                 .map_err(|e| crate::error::Error::Redis(e.to_string()))?;
             for key in keys {
-                if let Ok(raw) = redis::cmd("GET").arg(&key).query_async::<String>(&mut conn).await
+                if let Ok(raw) = redis::cmd("GET")
+                    .arg(&key)
+                    .query_async::<String>(&mut conn)
+                    .await
                     && let Ok(stored) = serde_json::from_str::<ViewerStored>(&raw)
                 {
                     // Extract user_id from the key suffix `…:user:{id}`.
-                    let Some(uid) = key
-                        .rsplit(':')
-                        .next()
-                        .and_then(|s| s.parse::<i32>().ok())
+                    let Some(uid) = key.rsplit(':').next().and_then(|s| s.parse::<i32>().ok())
                     else {
                         log::warn!("presence: unparseable key suffix in '{key}'; skipping");
                         continue;
@@ -140,8 +148,7 @@ mod tests {
     use super::*;
 
     fn test_redis_params() -> (String, u16) {
-        let host =
-            std::env::var("REDIS_HOST").unwrap_or_else(|_| "aegyptvault.local".to_owned());
+        let host = std::env::var("REDIS_HOST").unwrap_or_else(|_| "aegyptvault.local".to_owned());
         let port = std::env::var("REDIS_PORT")
             .ok()
             .and_then(|p| p.parse::<u16>().ok())
@@ -167,7 +174,9 @@ mod tests {
             .await
             .unwrap();
         assert!(
-            viewers.iter().any(|v| v.user_id == user_id && v.display == "TestUser"),
+            viewers
+                .iter()
+                .any(|v| v.user_id == user_id && v.display == "TestUser"),
             "expected TestUser in viewer list; got {viewers:?}"
         );
 

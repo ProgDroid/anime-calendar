@@ -1,7 +1,7 @@
 use sqlx::PgPool;
 
-use crate::services::ics_export::IcsExportService;
 use crate::ServerResult;
+use crate::services::ics_export::IcsExportService;
 
 /// Manages the `calendars.frozen_subscribe_ics` lifecycle.
 ///
@@ -62,9 +62,7 @@ impl FrozenIcsService {
         let mut failures = 0_usize;
         for cid in calendar_ids {
             if let Err(e) = self.regenerate(cid).await {
-                log::error!(
-                    "FrozenIcsService::regenerate_for_user: calendar {cid} failed: {e:?}"
-                );
+                log::error!("FrozenIcsService::regenerate_for_user: calendar {cid} failed: {e:?}");
                 failures += 1;
             }
         }
@@ -117,12 +115,8 @@ mod tests {
             ShowCountService::new(pool.clone()),
             &LimitsConfig::default(),
         );
-        let ics_export = IcsExportService::new(
-            pool.clone(),
-            cached,
-            user_settings_mapper,
-            entitlement,
-        );
+        let ics_export =
+            IcsExportService::new(pool.clone(), cached, user_settings_mapper, entitlement);
         let frozen = FrozenIcsService::new(pool, ics_export.clone());
         (ics_export, frozen)
     }

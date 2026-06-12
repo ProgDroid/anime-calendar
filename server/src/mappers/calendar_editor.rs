@@ -1,6 +1,6 @@
 use crate::{
-    ServerResult, config::database::Database as DatabaseConfig, entity::calendar_editor::CalendarEditor,
-    mappers::database::Database,
+    ServerResult, config::database::Database as DatabaseConfig,
+    entity::calendar_editor::CalendarEditor, mappers::database::Database,
 };
 
 #[derive(Clone)]
@@ -91,18 +91,10 @@ impl CalendarEditorMapper {
     ///
     /// # Errors
     /// Returns the underlying sqlx error.
-    pub async fn is_active_editor(
-        &self,
-        calendar_id: i32,
-        user_id: i32,
-    ) -> ServerResult<bool> {
+    pub async fn is_active_editor(&self, calendar_id: i32, user_id: i32) -> ServerResult<bool> {
         crate::metrics::db::timed("calendar_editor.is_active_editor", async {
-            Self::is_active_editor_in_tx(
-                &mut *self.db.pool.acquire().await?,
-                calendar_id,
-                user_id,
-            )
-            .await
+            Self::is_active_editor_in_tx(&mut *self.db.pool.acquire().await?, calendar_id, user_id)
+                .await
         })
         .await
     }
@@ -132,11 +124,7 @@ impl CalendarEditorMapper {
     /// Returns the underlying sqlx error.
     pub async fn list_calendars_for_user(&self, user_id: i32) -> ServerResult<Vec<i32>> {
         crate::metrics::db::timed("calendar_editor.list_calendars_for_user", async {
-            Self::list_calendars_for_user_in_tx(
-                &mut *self.db.pool.acquire().await?,
-                user_id,
-            )
-            .await
+            Self::list_calendars_for_user_in_tx(&mut *self.db.pool.acquire().await?, user_id).await
         })
         .await
     }

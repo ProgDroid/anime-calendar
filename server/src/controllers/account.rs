@@ -8,8 +8,7 @@
 //! Coupling them would force settings refetches on every editor edit.
 
 use crate::{
-    mappers::user::UserMapper, middleware::auth::Claims,
-    services::show_count::ShowCountService,
+    mappers::user::UserMapper, middleware::auth::Claims, services::show_count::ShowCountService,
 };
 use actix_web::{HttpResponse, ResponseError, get, web};
 use serde::Serialize;

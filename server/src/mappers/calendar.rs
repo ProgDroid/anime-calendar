@@ -270,7 +270,6 @@ impl CalendarMapper {
         Ok((calendars, total_count as usize))
     }
 
-
     /// List calendars shared with `user_id` (i.e. where they are an active
     /// editor). Returns each calendar with its owner projection and the four
     /// most-recent item ids (mirrors the owned-list shape).
@@ -359,11 +358,7 @@ impl CalendarMapper {
         user_id: i32,
     ) -> ServerResult<Vec<(Calendar, CalendarOwnerInfo, Vec<i32>)>> {
         crate::metrics::db::timed("calendar.list_shared_with_user", async {
-            Self::list_shared_with_user_in_tx(
-                &mut *self.db.pool.acquire().await?,
-                user_id,
-            )
-            .await
+            Self::list_shared_with_user_in_tx(&mut *self.db.pool.acquire().await?, user_id).await
         })
         .await
     }
@@ -1191,7 +1186,6 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
-
     #[tokio::test]
     async fn get_calendars_paginated_returns_editor_count() {
         use crate::mappers::calendar_editor::CalendarEditorMapper;
@@ -1218,7 +1212,6 @@ mod tests {
         tx.rollback().await.unwrap();
     }
 
-
     #[tokio::test]
     async fn list_shared_with_user_returns_only_active_editor_calendars_with_owner() {
         use crate::mappers::calendar_editor::CalendarEditorMapper;
@@ -1227,13 +1220,11 @@ mod tests {
         let editor_id = create_test_user(&mut tx).await;
         let other_id = create_test_user(&mut tx).await;
 
-        let owner_username: String = sqlx::query_scalar!(
-            "SELECT username FROM users WHERE id = $1",
-            owner_id,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .unwrap();
+        let owner_username: String =
+            sqlx::query_scalar!("SELECT username FROM users WHERE id = $1", owner_id,)
+                .fetch_one(&mut *tx)
+                .await
+                .unwrap();
 
         // Owner has 2 calendars; editor is active on cal_a only.
         let cal_a = CalendarMapper::insert_calendar_in_tx(&mut tx, new_calendar(owner_id))
@@ -1297,7 +1288,10 @@ mod tests {
         let shared = CalendarMapper::list_shared_with_user_in_tx(&mut tx, owner_id)
             .await
             .unwrap();
-        assert!(shared.is_empty(), "owners do not appear in their own shared list");
+        assert!(
+            shared.is_empty(),
+            "owners do not appear in their own shared list"
+        );
         tx.rollback().await.unwrap();
     }
 
@@ -1333,7 +1327,10 @@ mod tests {
         let result = CalendarMapper::remove_item_idempotent_in_tx(&mut tx, cal.id, 9999)
             .await
             .unwrap();
-        assert!(!result, "removing a non-existent item should report affected=false");
+        assert!(
+            !result,
+            "removing a non-existent item should report affected=false"
+        );
 
         tx.rollback().await.unwrap();
     }

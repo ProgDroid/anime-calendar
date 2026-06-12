@@ -212,7 +212,10 @@ jobs:
       - uses: EmbarkStudios/cargo-deny-action@91bf2b620e09e18d6eb78b92e7861937469acedb # v2.0.17
         with:
           command: check
-          arguments: --all-features --show-stats
+          # --show-stats was removed in newer cargo-deny releases (the action
+          # pulls the latest binary): it now rejects the flag with "unexpected
+          # argument '--show-stats' found". Stats print by default regardless.
+          arguments: --all-features
 
   # ---------------------------------------------------------------------------
   # OpenAPI spec validation
