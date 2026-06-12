@@ -15,7 +15,6 @@ use log::error;
 use rand::RngCore;
 use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 
 /// Generic error response body
 #[derive(Serialize, utoipa::ToSchema)]
@@ -45,13 +44,12 @@ pub fn generate_raw_token() -> String {
 }
 
 /// SHA-256 hash of `raw`, returned as a lowercase hex string.
+///
+/// Delegates to the canonical [`crate::services::auth::hash_token`] so the
+/// SHA-256→hex logic lives in exactly one place (L-5).
 #[must_use]
 pub fn hash_refresh_token(raw: &str) -> String {
-    let h = Sha256::digest(raw.as_bytes());
-    h.iter().fold(String::new(), |mut s, b| {
-        let _ = std::fmt::Write::write_fmt(&mut s, format_args!("{b:02x}"));
-        s
-    })
+    crate::services::auth::hash_token(raw)
 }
 
 #[derive(Deserialize, utoipa::ToSchema)]

@@ -7,8 +7,8 @@ use std::collections::HashMap;
 
 /// Wraps `Anilist` with per-item Redis caching. Each item is cached under
 /// two keys with different TTLs:
-/// - `item:meta:{id}` (24h default) — gates how stale the metadata can be
-/// - `item:airing:{id}` (15m default) — gates how stale the airing schedule can be
+/// - `item:meta:v1:{id}` (24h default) — gates how stale the metadata can be
+/// - `item:airing:v1:{id}` (15m default) — gates how stale the airing schedule can be
 ///
 /// Both keys store the full `Item`. A cache hit requires both keys present;
 /// a miss on either refetches upstream and rewrites both. Search is cached

@@ -207,13 +207,9 @@ impl RefreshTokenMapper {
 mod tests {
     use super::*;
 
+    // Mirrors production token hashing via the canonical helper (L-5).
     fn hash(raw: &str) -> String {
-        use sha2::{Digest, Sha256};
-        let h = Sha256::digest(raw.as_bytes());
-        h.iter().fold(String::new(), |mut s, b| {
-            let _ = std::fmt::Write::write_fmt(&mut s, format_args!("{b:02x}"));
-            s
-        })
+        crate::services::auth::hash_token(raw)
     }
 
     async fn seed_user(conn: &mut sqlx::PgConnection) -> i32 {

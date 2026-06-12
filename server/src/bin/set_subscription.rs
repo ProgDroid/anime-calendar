@@ -1,5 +1,9 @@
 //! Dev-only CLI to set a user's subscription state for testing.
 //!
+//! Logging note (L-17): this binary uses `eprintln!`/`println!` deliberately —
+//! a CLI's job is to write human-readable output to stderr/stdout, so the
+//! server convention of routing through `log::error!` does not apply here.
+//!
 //! Usage:
 //!   `set_subscription` --email <email> <state>
 //!   `set_subscription` --user-id <id>  <state>

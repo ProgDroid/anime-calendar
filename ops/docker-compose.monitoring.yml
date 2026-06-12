@@ -25,6 +25,10 @@ services:
     ports:
       - "127.0.0.1:3001:3000"
     environment:
+      # Default admin/admin is acceptable ONLY because the port is bound to
+      # 127.0.0.1 above (loopback-only dev monitoring). For any non-loopback or
+      # production exposure, override GF_SECURITY_ADMIN_PASSWORD with a secret
+      # (e.g. __FILE/_FILE env or a Docker secret) before deploying (L-16).
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_USERS_ALLOW_SIGN_UP: "false"

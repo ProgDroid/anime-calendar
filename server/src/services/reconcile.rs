@@ -94,9 +94,12 @@ impl StripeSubscriptionFetcher for LiveStripeFetcher {
         let sub = match RetrieveSubscription::new(id).send(&self.client).await {
             Ok(s) => s,
             Err(e) => {
-                // async-stripe surfaces 404 as a typed error; we don't have
-                // a clean "not found" branch off the public API, so just
-                // log + skip. The next pass will retry.
+                // async-stripe surfaces 404 as a typed error, but the rc.5
+                // error enum doesn't expose a stable "not found" discriminant
+                // off the public API, so we string-match the message. This is a
+                // deliberate keep (L-19): a typed match would couple us to
+                // rc.5 internals for marginal benefit and is hard to test
+                // without a live Stripe. The next pass retries either way.
                 let msg = format!("{e}");
                 if msg.contains("No such subscription") || msg.contains("resource_missing") {
                     return Ok(None);

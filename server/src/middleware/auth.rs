@@ -15,6 +15,13 @@ pub struct Claims {
     pub exp: usize,
     pub iss: String,
     pub aud: String,
+    /// Issued-at and not-before (L-4). `#[serde(default)]` so tokens minted
+    /// before these claims existed still decode during a rolling deploy; they
+    /// are not added to `set_required_spec_claims` for the same reason.
+    #[serde(default)]
+    pub iat: usize,
+    #[serde(default)]
+    pub nbf: usize,
 }
 
 impl Claims {
@@ -52,6 +59,10 @@ impl FromRequest for Claims {
             validation.set_issuer(&[ISS]);
             validation.set_audience(&[AUD]);
             validation.set_required_spec_claims(&["exp", "sub", "iss", "aud"]);
+            // Enforce nbf when present (L-4); default 60s leeway absorbs minor
+            // clock skew. Old tokens decode with nbf=0 (serde default), which
+            // is always satisfied.
+            validation.validate_nbf = true;
 
             let token_data = decode::<Self>(&token, &decoding_key, &validation)
                 .map_err(|_| Error::Unauthorised)?;
@@ -104,6 +115,8 @@ mod tests {
             exp: 0,
             iss: ISS.to_owned(),
             aud: AUD.to_owned(),
+            iat: 0,
+            nbf: 0,
         };
         let token = encode(
             &Header::default(),

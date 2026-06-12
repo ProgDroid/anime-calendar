@@ -79,11 +79,14 @@ pub fn validate_password_strength(password: &str) -> bool {
 /// Fails if claims cannot be encoded
 pub fn generate_token<T: AsRef<[u8]>>(id: &i32, jwt_secret: T) -> ServerResult<String> {
     use crate::middleware::auth::{AUD, ISS};
+    let now = chrono::Utc::now();
     let claims = Claims {
         sub: id.to_string(),
-        exp: (chrono::Utc::now() + chrono::Duration::minutes(30)).timestamp() as usize,
+        exp: (now + chrono::Duration::minutes(30)).timestamp() as usize,
         iss: ISS.to_owned(),
         aud: AUD.to_owned(),
+        iat: now.timestamp() as usize,
+        nbf: now.timestamp() as usize,
     };
 
     let encoding_key = EncodingKey::from_secret(jwt_secret.as_ref());
@@ -124,6 +127,7 @@ pub fn verify_token<T: AsRef<[u8]>>(token: &str, jwt_secret: T) -> ServerResult<
     validation.set_issuer(&[ISS]);
     validation.set_audience(&[AUD]);
     validation.set_required_spec_claims(&["exp", "sub", "iss", "aud"]);
+    validation.validate_nbf = true; // enforce nbf when present (L-4)
     let token_data = jsonwebtoken::decode::<Claims>(token, &decoding_key, &validation)?;
     Ok(token_data.claims)
 }

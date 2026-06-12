@@ -333,14 +333,17 @@ pub fn generate_calendar_items_key(id: i32) -> String {
     format!("calendar:items:{id}")
 }
 
+// The `:v1` segment versions the cached `Item`-derived blobs (L-8): when a new
+// field is added to `Item`, bump `v1`→`v2` here to invalidate every stale blob
+// at once instead of flushing Redis manually. Keep both keys on the same version.
 #[must_use]
 pub fn generate_item_meta_key(id: i64) -> String {
-    format!("item:meta:{id}")
+    format!("item:meta:v1:{id}")
 }
 
 #[must_use]
 pub fn generate_item_airing_key(id: i64) -> String {
-    format!("item:airing:{id}")
+    format!("item:airing:v1:{id}")
 }
 
 #[must_use]
