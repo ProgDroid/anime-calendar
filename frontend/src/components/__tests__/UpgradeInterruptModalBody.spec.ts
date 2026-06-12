@@ -32,7 +32,7 @@ describe('UpgradeInterruptModalBody — reason-routed copy', () => {
     expect(wrapper.find('[data-testid="upgrade-interrupt-heading"]').text())
       .toBe(en.interrupt.heading.cap_calendars)
     expect(wrapper.find('[data-testid="upgrade-interrupt-description"]').text())
-      .toBe(en.interrupt.description.cap_calendars)
+      .toBe(en.interrupt.description.cap_calendars.replace('{count}', '3'))
     wrapper.unmount()
   })
 
@@ -41,7 +41,7 @@ describe('UpgradeInterruptModalBody — reason-routed copy', () => {
     expect(wrapper.find('[data-testid="upgrade-interrupt-heading"]').text())
       .toBe(en.interrupt.heading.cap_shows)
     expect(wrapper.find('[data-testid="upgrade-interrupt-description"]').text())
-      .toBe(en.interrupt.description.cap_shows)
+      .toBe(en.interrupt.description.cap_shows.replace('{count}', '25'))
     wrapper.unmount()
   })
 

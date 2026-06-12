@@ -406,8 +406,8 @@
         "cta": "Plano atual",
         "features": {
           "tracking": "Acompanhamento de animes e grade semanal",
-          "limitedCalendars": "Até 3 calendários",
-          "limitedShows": "Até 25 séries acompanhadas",
+          "limitedCalendars": "Até {count} calendários",
+          "limitedShows": "Até {count} séries acompanhadas",
           "icsExport": "Exportação .ics para download",
           "freeAccents": "Acentos Coral e Iris",
           "noProAccents": "Acentos Pro (Matcha, Sakura, Citron)",
@@ -477,8 +477,8 @@
       "share_calendar": "Co-edição é uma funcionalidade Pro"
     },
     "description": {
-      "cap_calendars": "Contas grátis incluem 3 calendários. Faz upgrade para Pro para calendários ilimitados e o resto do conjunto de funcionalidades.",
-      "cap_shows": "Contas grátis incluem 25 séries acompanhadas em simultâneo. Faz upgrade para Pro para séries ilimitadas e o resto do conjunto de funcionalidades.",
+      "cap_calendars": "Contas grátis incluem {count} calendários. Faz upgrade para Pro para calendários ilimitados e o resto do conjunto de funcionalidades.",
+      "cap_shows": "Contas grátis incluem {count} séries acompanhadas em simultâneo. Faz upgrade para Pro para séries ilimitadas e o resto do conjunto de funcionalidades.",
       "pro_accent": "O Pro desbloqueia acentos premium e o resto do conjunto de funcionalidades.",
       "share_calendar": "Faz upgrade para Pro para convidar co-editores para os teus calendários."
     },

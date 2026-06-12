@@ -9,6 +9,7 @@ import IconCheck from './ui/icons/IconCheck.vue'
 import IconX from './ui/icons/IconX.vue'
 import IconSparkle from './ui/icons/IconSparkle.vue'
 import { createCheckoutSession, type BillingInterval } from '@/services/subscription'
+import { FREE_CALENDAR_CAP, FREE_SHOW_CAP } from '@/stores/usageStore'
 
 defineOptions({ name: 'UpgradePage' })
 
@@ -26,13 +27,14 @@ const intervalOptions = computed(() => [
 interface FeatureRow {
   ok: boolean
   textKey: string
+  params?: Record<string, number>
 }
 
 // Free tier — mix of ✓ and ✗ to set up the comparison.
 const FREE_FEATURES: readonly FeatureRow[] = [
   { ok: true, textKey: 'pricing.tiers.free.features.tracking' },
-  { ok: true, textKey: 'pricing.tiers.free.features.limitedCalendars' },
-  { ok: true, textKey: 'pricing.tiers.free.features.limitedShows' },
+  { ok: true, textKey: 'pricing.tiers.free.features.limitedCalendars', params: { count: FREE_CALENDAR_CAP } },
+  { ok: true, textKey: 'pricing.tiers.free.features.limitedShows', params: { count: FREE_SHOW_CAP } },
   { ok: true, textKey: 'pricing.tiers.free.features.icsExport' },
   { ok: true, textKey: 'pricing.tiers.free.features.freeAccents' },
   { ok: false, textKey: 'pricing.tiers.free.features.noProAccents' },
@@ -155,7 +157,7 @@ async function startCheckout() {
             >
               <IconX />
             </span>
-            <span>{{ t(row.textKey) }}</span>
+            <span>{{ t(row.textKey, row.params ?? {}) }}</span>
           </li>
         </ul>
       </article>

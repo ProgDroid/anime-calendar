@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { useRouter } from 'vue-router'
 import type { UpgradeReason } from '@/composables/useUpgradeInterrupt'
+import { FREE_CALENDAR_CAP, FREE_SHOW_CAP } from '@/stores/usageStore'
 import UiButton from '@/components/ui/UiButton.vue'
 import IconSparkle from '@/components/ui/icons/IconSparkle.vue'
 
@@ -26,6 +27,11 @@ const router = useRouter()
 
 const headingKey = computed(() => `interrupt.heading.${props.reason}`)
 const descriptionKey = computed(() => `interrupt.description.${props.reason}`)
+// Cap descriptions interpolate the real limit (M-10); harmless for the
+// other reasons, whose copy has no `{count}` placeholder.
+const descriptionParams = computed(() => ({
+  count: props.reason === 'cap_shows' ? FREE_SHOW_CAP : FREE_CALENDAR_CAP,
+}))
 
 function close() {
   emit('close')
@@ -47,7 +53,7 @@ function goToUpgrade() {
     </div>
 
     <p class="mt-3 text-sm text-fg-2" data-testid="upgrade-interrupt-description">
-      {{ t(descriptionKey) }}
+      {{ t(descriptionKey, descriptionParams) }}
     </p>
     <ul class="mt-3 flex flex-col gap-1.5 text-sm text-fg-1">
       <li class="flex gap-2">

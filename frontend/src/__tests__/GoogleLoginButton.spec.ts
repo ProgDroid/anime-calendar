@@ -14,8 +14,17 @@ vi.mock('@/config/api', () => ({
 // `getPublicConfig()`, which throws if the bootstrap cache is empty. Stub
 // the service so component setup succeeds without a real bootstrap fetch.
 vi.mock('@/services/publicConfig', () => ({
-  getPublicConfig: () => ({ googleClientId: 'test-cid' }),
-  loadPublicConfig: () => Promise.resolve({ googleClientId: 'test-cid' }),
+  getPublicConfig: () => ({
+    googleClientId: 'test-cid',
+    limits: { freeCalendarLimit: 3, freeShowCap: 25, proMaxReminders: 5 },
+    presenceHeartbeatSeconds: 30,
+  }),
+  loadPublicConfig: () =>
+    Promise.resolve({
+      googleClientId: 'test-cid',
+      limits: { freeCalendarLimit: 3, freeShowCap: 25, proMaxReminders: 5 },
+      presenceHeartbeatSeconds: 30,
+    }),
 }))
 
 import api from '@/config/api'

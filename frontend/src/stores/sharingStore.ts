@@ -7,9 +7,14 @@ export const useSharingStore = defineStore('sharing', () => {
   const editors = ref<MemberSummary[]>([])
   const pendingInvites = ref<PendingInviteSummary[]>([])
   const editorCap = ref(5)
+  // Monotonic request id so a slower earlier load can't overwrite a newer
+  // one's results (e.g. switching calendars quickly) (F2-28).
+  let membersSeq = 0
 
   async function loadMembers(calendarId: number) {
+    const seq = ++membersSeq
     const { editors: e, pending, editor_cap } = await sharingService.listMembers(calendarId)
+    if (seq !== membersSeq) return
     editors.value = e
     pendingInvites.value = pending
     editorCap.value = editor_cap

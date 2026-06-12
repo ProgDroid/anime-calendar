@@ -292,6 +292,13 @@ export function useCalendarEditor() {
         toastService.error(t(`sharing.toasts.kick.${frame.reason}`))
         void router.push('/my-calendars')
         break
+      case 'resync':
+        // We lagged behind the live channel and dropped frames, so the local
+        // view may be stale. Surface the same non-destructive collision banner
+        // meta_updated uses — let the user reload rather than auto-clobbering
+        // any unsaved edits (M-6).
+        showCollisionBanner.value = true
+        break
     }
   })
 

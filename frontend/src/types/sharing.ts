@@ -48,3 +48,7 @@ export type CalendarEvent =
   | { type: 'member_left'; user_id: string; actor: string; reason: string }
   | { type: 'presence'; viewers: Viewer[] }
   | { type: 'kick'; reason: string }
+  // Emitted by the server when this client's broadcast receiver lagged past
+  // the channel buffer and dropped frames: the incremental view can't be
+  // trusted, so the client should refetch (M-6).
+  | { type: 'resync' }

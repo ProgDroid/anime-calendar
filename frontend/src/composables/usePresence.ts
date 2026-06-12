@@ -1,12 +1,25 @@
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 import axios from 'axios'
 import api from '@/config/api'
+import { getPublicConfig } from '@/services/publicConfig'
 import type { Viewer, CalendarEvent } from '@/types/sharing'
 
 const RECONNECT_BASE_DELAY_MS = 1_000
 const RECONNECT_MAX_DELAY_MS = 30_000
+const DEFAULT_HEARTBEAT_MS = 30_000
 
 export function usePresence(calendarId: number) {
+  // Track the server's configured presence TTL so the heartbeat cadence stays
+  // in lockstep with `presence_heartbeat_seconds` instead of a hardcoded
+  // constant (L-11). Falls back to the default if config isn't bootstrapped
+  // (e.g. unit tests).
+  const heartbeatMs = (() => {
+    try {
+      return getPublicConfig().presenceHeartbeatSeconds * 1000
+    } catch {
+      return DEFAULT_HEARTBEAT_MS
+    }
+  })()
   const viewers = ref<Viewer[]>([])
   const metaVersion = ref(0)
   const lastEvent = ref<CalendarEvent | null>(null)
@@ -98,7 +111,7 @@ export function usePresence(calendarId: number) {
       // triggers the silent-refresh interceptor instead of 401ing forever
       // and dropping the user from the viewers list while they're active.
       api.post(`/calendars/${calendarId}/presence/heartbeat`).catch(() => {})
-    }, 30_000)
+    }, heartbeatMs)
   })
 
   onBeforeUnmount(() => {

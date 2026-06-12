@@ -406,8 +406,8 @@
         "cta": "Current plan",
         "features": {
           "tracking": "Anime tracking and weekly schedule",
-          "limitedCalendars": "Up to 3 calendars",
-          "limitedShows": "Up to 25 tracked shows",
+          "limitedCalendars": "Up to {count} calendars",
+          "limitedShows": "Up to {count} tracked shows",
           "icsExport": ".ics download export",
           "freeAccents": "Coral and Iris accents",
           "noProAccents": "Pro accent themes (Matcha, Sakura, Citron)",
@@ -477,8 +477,8 @@
       "share_calendar": "Co-editing is a Pro feature"
     },
     "description": {
-      "cap_calendars": "Free accounts include 3 calendars. Upgrade to Pro for unlimited calendars and the rest of the polished feature set.",
-      "cap_shows": "Free accounts include 25 shows tracked at once. Upgrade to Pro for unlimited shows and the rest of the polished feature set.",
+      "cap_calendars": "Free accounts include {count} calendars. Upgrade to Pro for unlimited calendars and the rest of the polished feature set.",
+      "cap_shows": "Free accounts include {count} shows tracked at once. Upgrade to Pro for unlimited shows and the rest of the polished feature set.",
       "pro_accent": "Pro unlocks premium accents and the rest of the polished feature set.",
       "share_calendar": "Upgrade to Pro to invite co-editors to your calendars."
     },

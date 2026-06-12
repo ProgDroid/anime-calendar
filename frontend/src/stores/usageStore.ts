@@ -1,14 +1,30 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import api from '@/config/api'
+import { getPublicConfig } from '@/services/publicConfig'
 
 /**
- * Free-tier usage caps. Hardcoded on the frontend for now; matches
- * `LimitsConfig::default()` in `server/src/config/server.rs`. A future change
- * can pipe these in via `/api/public-config`.
+ * Free-tier usage caps + Pro ceiling, sourced from the runtime
+ * `/api/public-config` payload (mirrors `LimitsConfig` on the server) so a
+ * server-side limit change drives both cap *enforcement* (the computeds below,
+ * consumed across the editor + my-calendars surfaces) and cap *display*
+ * (pricing / interrupt copy) from one place — no more silent drift (M-10,
+ * F2-28). Evaluated at module load, which in the running app happens after the
+ * `loadPublicConfig()` bootstrap; the `catch` falls back to the backend
+ * defaults for unit tests, which never bootstrap the config cache.
  */
-export const FREE_CALENDAR_CAP = 3
-export const FREE_SHOW_CAP = 25
+function freeLimits(): { freeCalendarLimit: number; freeShowCap: number; proMaxReminders: number } {
+  try {
+    return getPublicConfig().limits
+  } catch {
+    return { freeCalendarLimit: 3, freeShowCap: 25, proMaxReminders: 5 }
+  }
+}
+
+const RESOLVED_LIMITS = freeLimits()
+export const FREE_CALENDAR_CAP = RESOLVED_LIMITS.freeCalendarLimit
+export const FREE_SHOW_CAP = RESOLVED_LIMITS.freeShowCap
+export const PRO_MAX_REMINDERS = RESOLVED_LIMITS.proMaxReminders
 
 /**
  * 0..1 ratio above which the editor shows a soft "approaching cap" banner.
@@ -59,12 +75,6 @@ export const useUsageStore = defineStore('usage', () => {
     return inFlight
   }
 
-  function reset() {
-    showCount.value = 0
-    calendarCount.value = 0
-    loaded.value = false
-  }
-
   return {
     showCount,
     calendarCount,
@@ -73,6 +83,5 @@ export const useUsageStore = defineStore('usage', () => {
     calendarCapReached,
     showsNearCap,
     refresh,
-    reset,
   }
 })

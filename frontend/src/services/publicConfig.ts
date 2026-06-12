@@ -1,11 +1,25 @@
 import api from '@/config/api'
 
+export interface PublicLimits {
+  freeCalendarLimit: number
+  freeShowCap: number
+  proMaxReminders: number
+}
+
 export interface PublicConfig {
   googleClientId: string
+  limits: PublicLimits
+  presenceHeartbeatSeconds: number
 }
 
 interface PublicConfigResponse {
   google_client_id: string
+  limits: {
+    free_calendar_limit: number
+    free_show_cap: number
+    pro_max_reminders: number
+  }
+  presence_heartbeat_seconds: number
 }
 
 let cached: PublicConfig | null = null
@@ -24,7 +38,15 @@ let cached: PublicConfig | null = null
 export async function loadPublicConfig(): Promise<PublicConfig> {
   if (cached) return cached
   const { data } = await api.get<PublicConfigResponse>('/public-config')
-  cached = { googleClientId: data.google_client_id }
+  cached = {
+    googleClientId: data.google_client_id,
+    limits: {
+      freeCalendarLimit: data.limits.free_calendar_limit,
+      freeShowCap: data.limits.free_show_cap,
+      proMaxReminders: data.limits.pro_max_reminders,
+    },
+    presenceHeartbeatSeconds: data.presence_heartbeat_seconds,
+  }
   return cached
 }
 

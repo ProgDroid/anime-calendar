@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRouter } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import UiButton from './ui/UiButton.vue'
 import IconSparkle from './ui/icons/IconSparkle.vue'
@@ -10,7 +10,6 @@ import { toastService } from '@/services/toastService'
 defineOptions({ name: 'UpgradeSuccessPage' })
 
 const { t } = useI18n()
-const route = useRoute()
 const router = useRouter()
 
 type State = 'polling' | 'flipped' | 'timeout'
@@ -34,14 +33,15 @@ function clearTimer() {
 
 async function pollOnce() {
   attempt += 1
-  const sessionId = typeof route.query.session_id === 'string' ? route.query.session_id : undefined
   try {
-    const ent = await getMySubscription(sessionId)
+    const ent = await getMySubscription()
     if (ent.tier === 'paid') {
       state.value = 'flipped'
       toastService.success(t('upgrade.success.toast'))
-      // Brief delay so the user sees the flip before redirect.
-      window.setTimeout(() => router.replace('/my-calendars'), 800)
+      // Brief delay so the user sees the flip before redirect. Tracked via
+      // `timer` so an unmount during the window cancels it (F2-28) — a stray
+      // late router.replace would otherwise fire after navigation away.
+      timer = window.setTimeout(() => router.replace('/my-calendars'), 800)
       return
     }
   } catch {

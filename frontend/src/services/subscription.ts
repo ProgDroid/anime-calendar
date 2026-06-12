@@ -27,14 +27,12 @@ export async function createCheckoutSession(
 }
 
 /**
- * Read the current user's effective entitlement. Pass `sessionId` from the
- * /upgrade/success page so the server can pre-populate the local row before
- * the webhook arrives (Phase-2 stopgap, removed in Phase 3).
+ * Read the current user's effective entitlement. The server resolves the
+ * caller from JWT claims; the old `session_id` query param was a Phase-2
+ * stopgap the backend no longer reads, so it's gone (F2-28).
  */
-export async function getMySubscription(sessionId?: string): Promise<Entitlement> {
-  const res = await api.get<Entitlement>('/subscription/me', {
-    params: sessionId ? { session_id: sessionId } : undefined,
-  })
+export async function getMySubscription(): Promise<Entitlement> {
+  const res = await api.get<Entitlement>('/subscription/me')
   return res.data
 }
 

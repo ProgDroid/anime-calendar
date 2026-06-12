@@ -66,10 +66,12 @@ describe('UpgradeSuccessPage', () => {
       cancel_at_period_end: false,
       trial_end: null,
     })
-    const { wrapper } = await mountPage({ session_id: 'cs_test_123' })
+    // session_id is no longer forwarded (F2-28); the server resolves the
+    // caller from JWT claims, so the entitlement read takes no argument.
+    const { wrapper } = await mountPage()
     await flushPromises()
     expect(wrapper.text()).toContain(enMessages.upgrade.success.polling)
-    expect(getMySubscriptionMock).toHaveBeenCalledWith('cs_test_123')
+    expect(getMySubscriptionMock).toHaveBeenCalledWith()
   })
 
   it('flips to success and pushes a toast when the tier becomes paid', async () => {

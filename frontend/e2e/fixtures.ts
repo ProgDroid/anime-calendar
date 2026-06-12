@@ -33,7 +33,11 @@ export const test = base.extend<{ apiMock: void }>({
         route.fulfill({
           status: 200,
           contentType: 'application/json',
-          body: JSON.stringify({ google_client_id: 'e2e-test-cid' }),
+          body: JSON.stringify({
+            google_client_id: 'e2e-test-cid',
+            limits: { free_calendar_limit: 3, free_show_cap: 25, pro_max_reminders: 5 },
+            presence_heartbeat_seconds: 30,
+          }),
         }),
       )
       await use()

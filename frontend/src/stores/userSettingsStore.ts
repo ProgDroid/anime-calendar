@@ -7,7 +7,6 @@ import { useAuthStore } from './auth'
 export const useUserSettingsStore = defineStore('userSettings', () => {
   const settings = ref<UserSettings | null>(null)
   const loading = ref(false)
-  const error = ref<string | null>(null)
   const fetchPromise = ref<Promise<UserSettings> | null>(null)
   const authStore = useAuthStore()
 
@@ -35,13 +34,11 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
     const promise = (async () => {
       try {
         loading.value = true
-        error.value = null
 
         const fetchedSettings = await getUserSettings()
         settings.value = fetchedSettings
         return fetchedSettings
       } catch {
-        error.value = 'Failed to fetch user settings'
         return getDefaultSettings()
       } finally {
         loading.value = false
@@ -54,13 +51,9 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
   }
 
   const updateSettings = async (newSettings: UserSettings): Promise<void> => {
-    try {
-      await updateUserSettings(newSettings)
-      settings.value = newSettings
-    } catch (err) {
-      error.value = 'Failed to update user settings'
-      throw err
-    }
+    // Propagates on failure; callers surface their own error UX.
+    await updateUserSettings(newSettings)
+    settings.value = newSettings
   }
 
   const clearCache = () => {
@@ -71,7 +64,6 @@ export const useUserSettingsStore = defineStore('userSettings', () => {
   return {
     settings,
     loading,
-    error,
     fetchPromise,
     fetchSettings,
     updateSettings,

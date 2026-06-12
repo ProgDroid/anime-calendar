@@ -23,6 +23,21 @@ const accent: Ref<Accent> = ref('coral')
 const isPaid: Ref<boolean> = ref(true)
 
 let patchTimer: ReturnType<typeof setTimeout> | null = null
+let storageListenerAttached = false
+
+// Cross-tab sync: mirror theme/accent changes made in another tab. Defined at
+// module scope (a stable reference) and attached at most once (F2-28) — the
+// singleton composable would otherwise leak a fresh, un-removable listener on
+// every init() call (e.g. across test re-instantiations).
+function handleStorageEvent(e: StorageEvent) {
+  if (e.key === 'theme' && isTheme(e.newValue)) {
+    theme.value = e.newValue
+    document.documentElement.setAttribute('data-theme', e.newValue)
+  } else if (e.key === 'accent' && isAccent(e.newValue)) {
+    accent.value = e.newValue
+    document.documentElement.setAttribute('data-accent', e.newValue)
+  }
+}
 
 /// Map an accent value to what should actually be rendered. Pro accents on
 /// a free user fall back to the default — preserves `accent` (the stored
@@ -74,15 +89,10 @@ export function useTheme() {
     if (isTheme(t)) theme.value = t
     if (isAccent(a)) accent.value = a
 
-    window.addEventListener('storage', (e) => {
-      if (e.key === 'theme' && isTheme(e.newValue)) {
-        theme.value = e.newValue
-        document.documentElement.setAttribute('data-theme', e.newValue)
-      } else if (e.key === 'accent' && isAccent(e.newValue)) {
-        accent.value = e.newValue
-        document.documentElement.setAttribute('data-accent', e.newValue)
-      }
-    })
+    if (!storageListenerAttached) {
+      storageListenerAttached = true
+      window.addEventListener('storage', handleStorageEvent)
+    }
   }
 
   function setTheme(t: Theme) {
