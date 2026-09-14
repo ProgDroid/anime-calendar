@@ -145,6 +145,21 @@ git commit -m "feat: add GET /health endpoint"
 
 The `config` crate supports layered sources — file first, then env vars override. Cloud Run has no config files, so env vars must work standalone.
 
+**Corrections applied 2026-09-14** (all three verified against `config` 0.15.14 and covered by tests):
+
+1. **`Database::new()` must use `Environment::with_prefix("DATABASE")`, not `Environment::default()`.**
+   Task 12 injects `DATABASE__URL`. Unprefixed, that splits on `__` into `database` -> `url` — a map
+   landing on the `database: String` field — and the load *fails* rather than populating `url`.
+   Prefixing also stops ambient `USER` / `HOST` / `PORT` / `PASS` (present in most shells and in CI
+   runners) from silently overriding `database.toml`, since the crate skips any key not matching the
+   prefix. `Server::new()` stays unprefixed on purpose: Cloud Run injects `PORT` itself.
+2. **The `Server` struct block in Step 3 is stale.** It predates `trust_proxy_header`, `app`,
+   `stripe`, `reconcile`, `cache`, `limits` and `sharing`. Add the two new fields; do not paste the
+   block over the current struct or you will delete seven.
+3. **Step 4 breaks the build on its own.** Adding `domain` to `CookieSettings` requires updating all
+   five construction sites (`server/src/server.rs` plus the test helpers in `controllers/auth.rs`,
+   `controllers/refresh.rs`, `controllers/email_verification.rs`), or Step 6 cannot compile.
+
 **Files:**
 - Modify: `server/src/config/server.rs`
 - Modify: `server/src/config/database.rs`
@@ -320,7 +335,7 @@ impl Database {
         Config::builder()
             .add_source(File::with_name(DATABASE_FILE).required(false))
             .add_source(
-                config::Environment::default()
+                config::Environment::with_prefix("DATABASE")
                     .separator("__")
                     .try_parsing(true),
             )

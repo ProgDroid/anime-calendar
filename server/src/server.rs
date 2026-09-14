@@ -102,6 +102,7 @@ pub fn start(
     }
     let cookie_settings = CookieSettings {
         secure: config.cookie_secure,
+        domain: config.cookie_domain.clone(),
     };
     let app_base_url = AppBaseUrl::new(config.app_base_url);
     let sharing_config = config.sharing.clone();

@@ -174,7 +174,10 @@ mod integration_tests {
         web::Data::new(JwtSecret::new(SecretString::from(SECRET)))
     }
     fn cookie_data() -> web::Data<CookieSettings> {
-        web::Data::new(CookieSettings { secure: false })
+        web::Data::new(CookieSettings {
+            secure: false,
+            domain: None,
+        })
     }
     fn dev_email() -> web::Data<EmailService> {
         web::Data::new(EmailService::new(SmtpConfig::default()))

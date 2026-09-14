@@ -454,7 +454,10 @@ mod integration_tests {
     }
 
     fn cookie_data() -> web::Data<CookieSettings> {
-        web::Data::new(CookieSettings { secure: false })
+        web::Data::new(CookieSettings {
+            secure: false,
+            domain: None,
+        })
     }
 
     struct SeedUser {

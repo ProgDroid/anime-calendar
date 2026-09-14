@@ -87,7 +87,10 @@ mod tests {
     }
 
     fn cookie_data() -> web::Data<CookieSettings> {
-        web::Data::new(CookieSettings { secure: false })
+        web::Data::new(CookieSettings {
+            secure: false,
+            domain: None,
+        })
     }
 
     async fn seed_user_with_refresh_token(pool: &sqlx::PgPool) -> (i32, String) {
