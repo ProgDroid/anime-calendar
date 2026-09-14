@@ -18,7 +18,7 @@ use crate::{
     cache::Cache,
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig, StripeConfig},
     controllers::{
-        account, auth, calendar, email_verification, item, items, oauth, password_reset,
+        account, auth, calendar, email_verification, health, item, items, oauth, password_reset,
         public_config, refresh, stripe as stripe_controller,
         stripe_webhook as stripe_webhook_controller, subscription as subscription_controller, user,
     },
@@ -193,6 +193,7 @@ pub fn start(
             .app_data(web::Data::new(presence_service.clone()))
             .app_data(web::Data::new(sse_connection_tracker.clone()))
             .service(public_config::get)
+            .service(health::health)
             .service(item::get)
             .service(items::get)
             .service(items::search)

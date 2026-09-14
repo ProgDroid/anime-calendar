@@ -17,7 +17,7 @@
 ## File Map
 
 **Created:**
-- `server/src/controllers/health.rs` — `GET /api/health` handler
+- `server/src/controllers/health.rs` — `GET /health` handler (nginx strips the `/api` prefix)
 - `server/src/middleware/cloudflare.rs` — CF origin secret middleware
 
 **Modified:**
@@ -43,6 +43,12 @@
 - Modify: `server/src/controllers.rs`
 - Modify: `server/src/server.rs`
 
+**Route prefix (corrected 2026-09-14):** register the handler at `/health`, **not** `/api/health`.
+`frontend/nginx.conf` proxies `location /api/` to `http://server:8080/` — the trailing slash strips
+the `/api` prefix, so a browser request to `/api/health` reaches actix as `/health`. Every other
+backend route follows the same convention (`#[get("/public-config")]`, `/calendars/...`).
+The public-URL smoke tests in Tasks 12 and 13 correctly keep `/api/health` — they go through nginx.
+
 - [ ] **Step 1: Write the health controller**
 
 Create `server/src/controllers/health.rs`:
@@ -56,7 +62,7 @@ struct HealthResponse {
     status: &'static str,
 }
 
-#[get("/api/health")]
+#[get("/health")]
 pub async fn health() -> HttpResponse {
     HttpResponse::Ok().json(HealthResponse { status: "ok" })
 }
@@ -103,7 +109,7 @@ mod tests {
     #[actix_web::test]
     async fn health_returns_200_ok() {
         let app = test::init_service(App::new().service(health)).await;
-        let req = test::TestRequest::get().uri("/api/health").to_request();
+        let req = test::TestRequest::get().uri("/health").to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 200);
     }
@@ -111,7 +117,7 @@ mod tests {
     #[actix_web::test]
     async fn health_returns_status_ok_json() {
         let app = test::init_service(App::new().service(health)).await;
-        let req = test::TestRequest::get().uri("/api/health").to_request();
+        let req = test::TestRequest::get().uri("/health").to_request();
         let body: serde_json::Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(body["status"], "ok");
     }
@@ -130,7 +136,7 @@ Expected: 2 tests pass.
 
 ```bash
 git add server/src/controllers/health.rs server/src/controllers.rs server/src/server.rs
-git commit -m "feat: add GET /api/health endpoint"
+git commit -m "feat: add GET /health endpoint"
 ```
 
 ---
