@@ -423,7 +423,7 @@ mod tests {
     }
 
     /// `__` is the nesting separator; a single underscore is part of the name.
-    /// If that ever flipped, LOG_LEVEL would become `log.level` and silently
+    /// If that ever flipped, `LOG_LEVEL` would become `log.level` and silently
     /// stop applying.
     #[test]
     fn single_underscore_is_part_of_the_name_not_a_separator() {
@@ -431,7 +431,7 @@ mod tests {
         assert_eq!(cfg.log_level, "info");
     }
 
-    /// The deploy workflow injects REDIS__URL for Upstash TLS; it must land on
+    /// The deploy workflow injects `REDIS__URL` for Upstash TLS; it must land on
     /// the nested redis config, not a top-level key.
     #[test]
     fn redis_url_env_var_maps_to_nested_redis_url() {

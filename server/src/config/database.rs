@@ -73,7 +73,7 @@ impl Database {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use secrecy::ExposeSecret as _;
+    use secrecy::ExposeSecret;
 
     /// Every field the struct requires, so the env layer is exercised standalone.
     fn required() -> Vec<(&'static str, &'static str)> {
@@ -96,7 +96,7 @@ mod tests {
         assert!(cfg.url.is_none());
     }
 
-    /// The deploy workflow injects DATABASE__URL. Unprefixed it would split on
+    /// The deploy workflow injects `DATABASE__URL`. Unprefixed it would split on
     /// `__` into `database.url` and fail to deserialize instead of landing here.
     #[test]
     fn database_url_env_var_populates_url_field() {
@@ -104,7 +104,7 @@ mod tests {
         vars.push(("DATABASE__URL", "postgres://u:p@ep-x.neon.tech/neondb"));
         let cfg = Database::from_env_map(&vars).expect("load should succeed");
         assert_eq!(
-            cfg.url.as_ref().map(|u| u.expose_secret()),
+            cfg.url.as_ref().map(ExposeSecret::expose_secret),
             Some("postgres://u:p@ep-x.neon.tech/neondb")
         );
     }
