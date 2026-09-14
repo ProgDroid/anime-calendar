@@ -10,7 +10,9 @@ use actix_web::{
 };
 use env_logger::Builder;
 use log::{LevelFilter, error};
+#[cfg(feature = "swagger-ui")]
 use utoipa::OpenApi as _;
+#[cfg(feature = "swagger-ui")]
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
@@ -29,7 +31,6 @@ use crate::{
         refresh_token::RefreshTokenMapper, stripe_event::StripeEventMapper,
         subscription::SubscriptionMapper, user::UserMapper, user_settings::UserSettingsMapper,
     },
-    openapi::ApiDoc,
     services::{
         cached_anilist::CachedAnilist, calendar_events::CalendarEventPublisher,
         email::EmailService, entitlement::EntitlementService, frozen_ics::FrozenIcsService,
@@ -37,6 +38,9 @@ use crate::{
     },
 };
 use stripe::Client as StripeClient;
+
+#[cfg(feature = "swagger-ui")]
+use crate::openapi::ApiDoc;
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 /// # Errors
@@ -84,6 +88,12 @@ pub fn start(
     let port = config.port;
     let compress = config.compress;
     let enable_docs = config.enable_docs;
+    #[cfg(not(feature = "swagger-ui"))]
+    if enable_docs {
+        log::warn!(
+            "enable_docs = true but this binary was built without the `swagger-ui` feature — /swagger-ui/ will not be served"
+        );
+    }
     let allowed_origins = config.allowed_origins.clone();
     if allowed_origins.is_empty() {
         return Err(Error::Config(config::ConfigError::Message(
@@ -136,9 +146,10 @@ pub fn start(
         };
 
         App::new()
-            .configure(move |cfg| {
+            .configure(move |_cfg| {
+                #[cfg(feature = "swagger-ui")]
                 if enable_docs {
-                    cfg.service(
+                    _cfg.service(
                         SwaggerUi::new("/swagger-ui/{_:.*}")
                             .url("/api-docs/openapi.json", ApiDoc::openapi()),
                     );

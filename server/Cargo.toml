@@ -43,7 +43,18 @@ sqlx = { version = "0.8", features = [ "runtime-tokio", "tls-native-tls", "postg
 thiserror = "2.0"
 tokio = { version = "1", features = ["full"] }
 utoipa = { version = "5", features = ["actix_extras", "chrono"] }
-utoipa-swagger-ui = { version = "9", features = ["actix-web"] }
+utoipa-swagger-ui = { version = "9", features = ["actix-web"], optional = true }
+
+[features]
+# Serving the Swagger UI is a dev-only convenience (gated at runtime by
+# `enable_docs`), but utoipa-swagger-ui downloads the Swagger UI archive from
+# GitHub in its build script. That makes the whole crate unbuildable in any
+# sandbox without egress to github.com. Keep it on by default so CI and local
+# dev are unchanged, and build with --no-default-features where the download
+# is unavailable or unwanted (including production images, which never set
+# enable_docs = true).
+default = ["swagger-ui"]
+swagger-ui = ["dep:utoipa-swagger-ui"]
 
 [dev-dependencies]
 metrics-util = "0.20.1"
