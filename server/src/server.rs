@@ -104,6 +104,8 @@ pub fn start(
         secure: config.cookie_secure,
         domain: config.cookie_domain.clone(),
     };
+    // Origin lock. `None` leaves it disabled, which is the local-dev default.
+    let cf_origin_secret = config.cf_origin_secret.clone();
     let app_base_url = AppBaseUrl::new(config.app_base_url);
     let sharing_config = config.sharing.clone();
 
@@ -150,6 +152,12 @@ pub fn start(
             )
             .wrap(rate_limit.clone())
             .wrap(cors)
+            // Registered last so it wraps outermost and runs first: a request
+            // that did not come through Cloudflare is refused before it can
+            // consume a rate-limit token or touch any handler.
+            .wrap(crate::middleware::cloudflare::CloudflareOrigin::new(
+                cf_origin_secret.clone(),
+            ))
             .wrap(
                 DefaultHeaders::new()
                     .add(("X-Content-Type-Options", "nosniff"))

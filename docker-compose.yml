@@ -52,6 +52,11 @@ services:
       # No build args. Public bootstrap config (Google OAuth client ID, etc.)
       # is delivered at runtime by the backend via GET /api/public-config,
       # so the resulting image is environment-agnostic.
+    environment:
+      # nginx.conf is an envsubst template now, so the backend address is
+      # supplied at runtime instead of being baked in. `server` is this
+      # compose network's backend service.
+      - BACKEND_URL=http://server:8080
     ports:
       - "80:80"
     depends_on:

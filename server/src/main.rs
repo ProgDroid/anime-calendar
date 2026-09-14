@@ -79,26 +79,24 @@ async fn main() -> ServerResult<()> {
     // Reconcile loop: spawned further below, after redis_pubsub and
     // calendar_event_publisher are initialised (sharing deps need them).
 
+    // One resolved URL for every Redis consumer below. `redis.url` (a managed
+    // provider's `rediss://` string) wins when set, otherwise it is assembled
+    // from host/port/password. Resolving once is deliberate: the cache,
+    // Pub/Sub and presence each dial Redis separately, and honouring the URL
+    // in only some of them would leave the rest pointing at localhost.
+    let redis_url = settings.redis.connection_url();
+
     // Initialize Redis cache
-    let cache = Cache::new(
-        &settings.redis.host,
-        settings.redis.port,
-        &settings.redis.password,
-        settings.redis.db,
-    )
-    .await
-    .expect("Failed to initialize Redis cache");
+    let cache = Cache::from_url(redis_url.expose_secret())
+        .await
+        .expect("Failed to initialize Redis cache");
 
     // Initialize Redis Pub/Sub (publisher + per-channel subscriber tasks).
-    // Credentials are passed as separate fields so RedisPubSub can protect
-    // the password with SecretString rather than embedding it in a plain URL.
-    let redis_pubsub = server::redis_pubsub::RedisPubSub::new(
-        &settings.redis.host,
-        settings.redis.port,
-        &settings.redis.password,
-    )
-    .await
-    .expect("Failed to initialize Redis Pub/Sub");
+    // The URL is held as a SecretString so the embedded password is zeroed on
+    // drop and stays out of Debug output.
+    let redis_pubsub = server::redis_pubsub::RedisPubSub::from_url(redis_url.expose_secret())
+        .await
+        .expect("Failed to initialize Redis Pub/Sub");
 
     let calendar_event_publisher = CalendarEventPublisher::new(redis_pubsub.clone());
 
@@ -129,10 +127,8 @@ async fn main() -> ServerResult<()> {
         log::info!("reconcile: stripe not configured, loop not spawned");
     }
 
-    let presence_service = server::services::presence::PresenceService::new(
-        &settings.redis.host,
-        settings.redis.port,
-        &settings.redis.password,
+    let presence_service = server::services::presence::PresenceService::from_url(
+        redis_url.expose_secret(),
         u64::from(settings.sharing.presence_ttl_seconds),
     )
     .await

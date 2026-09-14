@@ -70,40 +70,89 @@ pub struct MessageResponse {
     pub message: String,
 }
 
+/// Build an auth-related cookie with the attributes every one of them shares.
+///
+/// Every auth cookie — set *and* cleared — goes through here on purpose. A
+/// removal cookie only removes the original if its `Domain` and `Path` match,
+/// so a host-only clear silently fails to remove a domain-scoped cookie and
+/// leaves the user apparently logged in. Routing all four through one builder
+/// makes that mismatch impossible.
+///
+/// `SameSite=Lax` rather than `Strict`: under `Strict` the cookie is withheld
+/// on *top-level navigations that originate off-site*, which breaks two flows
+/// this app actually has — returning from Stripe Checkout (a full-page
+/// redirect back from `checkout.stripe.com`) and opening a co-editor
+/// invitation link from an email client. The user would land logged out.
+/// `Lax` still withholds cookies on cross-site POST/PUT/DELETE, so CSRF
+/// protection for state-changing requests is unchanged; only top-level GET
+/// navigation is relaxed. Note this is unrelated to subdomains: `app.example`
+/// and `api.example` are same-site under any `SameSite` value — sharing cookies
+/// across them is what `Domain` is for.
+fn build_cookie(
+    name: &'static str,
+    value: String,
+    path: &'static str,
+    max_age: Duration,
+    cookie_settings: &CookieSettings,
+) -> Cookie<'static> {
+    let mut builder = Cookie::build(name, value)
+        .http_only(true)
+        .same_site(SameSite::Lax)
+        .path(path)
+        .max_age(max_age)
+        .secure(cookie_settings.secure);
+    if let Some(domain) = &cookie_settings.domain {
+        builder = builder.domain(domain.clone());
+    }
+    builder.finish()
+}
+
 /// Build an httpOnly auth cookie from a JWT token and cookie settings.
 #[must_use]
 pub fn build_auth_cookie(token: String, cookie_settings: &CookieSettings) -> Cookie<'static> {
-    Cookie::build("auth_token", token)
-        .http_only(true)
-        .same_site(SameSite::Strict)
-        .path("/api/")
-        .max_age(Duration::minutes(30))
-        .secure(cookie_settings.secure)
-        .finish()
+    build_cookie(
+        "auth_token",
+        token,
+        "/api/",
+        Duration::minutes(30),
+        cookie_settings,
+    )
+}
+
+/// Build a zero-max-age auth cookie to clear it on logout.
+#[must_use]
+pub fn clear_auth_cookie(cookie_settings: &CookieSettings) -> Cookie<'static> {
+    build_cookie(
+        "auth_token",
+        String::new(),
+        "/api/",
+        Duration::ZERO,
+        cookie_settings,
+    )
 }
 
 /// Build an httpOnly refresh token cookie scoped to the refresh endpoint.
 #[must_use]
 pub fn build_refresh_cookie(token: String, cookie_settings: &CookieSettings) -> Cookie<'static> {
-    Cookie::build("refresh_token", token)
-        .http_only(true)
-        .same_site(SameSite::Strict)
-        .path("/api/auth/refresh")
-        .max_age(Duration::days(30))
-        .secure(cookie_settings.secure)
-        .finish()
+    build_cookie(
+        "refresh_token",
+        token,
+        "/api/auth/refresh",
+        Duration::days(30),
+        cookie_settings,
+    )
 }
 
 /// Build a zero-max-age refresh cookie to clear it on logout.
 #[must_use]
 fn clear_refresh_cookie(cookie_settings: &CookieSettings) -> Cookie<'static> {
-    Cookie::build("refresh_token", "")
-        .http_only(true)
-        .same_site(SameSite::Strict)
-        .path("/api/auth/refresh")
-        .max_age(Duration::ZERO)
-        .secure(cookie_settings.secure)
-        .finish()
+    build_cookie(
+        "refresh_token",
+        String::new(),
+        "/api/auth/refresh",
+        Duration::ZERO,
+        cookie_settings,
+    )
 }
 
 #[utoipa::path(
@@ -391,13 +440,7 @@ pub async fn logout(
         log::error!("Failed to invalidate refresh tokens on logout for user {user_id}: {e}");
     }
 
-    let removal_cookie = Cookie::build("auth_token", "")
-        .http_only(true)
-        .same_site(SameSite::Strict)
-        .path("/api/")
-        .max_age(Duration::ZERO)
-        .secure(cookie_settings.secure)
-        .finish();
+    let removal_cookie = clear_auth_cookie(&cookie_settings);
     let removal_refresh = clear_refresh_cookie(&cookie_settings);
 
     HttpResponse::Ok()
@@ -977,5 +1020,73 @@ mod integration_tests {
             test::call_service(&app, req).await.status(),
             StatusCode::UNAUTHORIZED
         );
+    }
+}
+
+#[cfg(test)]
+mod cookie_attribute_tests {
+    use super::*;
+
+    fn settings(domain: Option<&str>) -> CookieSettings {
+        CookieSettings {
+            secure: true,
+            domain: domain.map(ToOwned::to_owned),
+        }
+    }
+
+    #[test]
+    fn auth_cookie_is_lax_httponly_and_secure() {
+        let c = build_auth_cookie("tok".to_owned(), &settings(None));
+        assert_eq!(c.same_site(), Some(SameSite::Lax));
+        assert_eq!(c.http_only(), Some(true));
+        assert_eq!(c.secure(), Some(true));
+        assert_eq!(c.path(), Some("/api/"));
+        assert!(c.domain().is_none(), "host-only when no domain configured");
+    }
+
+    #[test]
+    fn configured_domain_is_applied_to_every_cookie() {
+        let s = settings(Some(".example.com"));
+        for c in [
+            build_auth_cookie("t".to_owned(), &s),
+            build_refresh_cookie("t".to_owned(), &s),
+            clear_auth_cookie(&s),
+            clear_refresh_cookie(&s),
+        ] {
+            assert_eq!(
+                c.domain(),
+                Some(".example.com"),
+                "cookie {} missing the configured domain",
+                c.name()
+            );
+        }
+    }
+
+    /// A removal cookie only clears the original when Domain and Path match.
+    /// If these ever diverge, logout stops working on the deployed domain
+    /// while still passing locally (where domain is None on both sides).
+    #[test]
+    fn clearing_cookies_match_the_setting_cookies_on_domain_and_path() {
+        let s = settings(Some(".example.com"));
+        let set_auth = build_auth_cookie("t".to_owned(), &s);
+        let clear_auth = clear_auth_cookie(&s);
+        assert_eq!(set_auth.name(), clear_auth.name());
+        assert_eq!(set_auth.domain(), clear_auth.domain());
+        assert_eq!(set_auth.path(), clear_auth.path());
+
+        let set_refresh = build_refresh_cookie("t".to_owned(), &s);
+        let clear_refresh = clear_refresh_cookie(&s);
+        assert_eq!(set_refresh.name(), clear_refresh.name());
+        assert_eq!(set_refresh.domain(), clear_refresh.domain());
+        assert_eq!(set_refresh.path(), clear_refresh.path());
+    }
+
+    #[test]
+    fn clearing_cookies_have_zero_max_age_and_empty_value() {
+        let s = settings(None);
+        for c in [clear_auth_cookie(&s), clear_refresh_cookie(&s)] {
+            assert_eq!(c.max_age(), Some(Duration::ZERO));
+            assert_eq!(c.value(), "");
+        }
     }
 }

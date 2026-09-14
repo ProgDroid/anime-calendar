@@ -366,6 +366,24 @@ git commit -m "feat: support env var config override for Cloud Run (no config fi
 
 Upstash requires `rediss://` (TLS). `Cache::new()` builds only `redis://`. Add `Cache::from_url()` and wire it in `main.rs`.
 
+**Corrections applied 2026-09-14:**
+
+1. **The `redis` crate had no TLS feature at all.** It was declared
+   `features = ["aio", "tokio-comp"]`, so `rediss://` failed with
+   `InvalidClientConfig: "can't connect with TLS, the feature is not enabled"`
+   *before any network I/O* — the whole point of this task would have panicked at
+   startup on first deploy. Fixed by adding `tokio-native-tls-comp` (native-tls to
+   match sqlx and lettre, rather than pulling rustls in as a second TLS stack).
+   Locked in by `cache::tls_support::rediss_scheme_is_supported_by_the_enabled_feature_set`.
+2. **There are three Redis consumers, not one.** `main.rs` also builds
+   `RedisPubSub` (co-editor SSE fan-out) and `PresenceService`, both of which
+   assembled their own `redis://` URL from host/port/password. Honouring `redis.url`
+   in `Cache` alone would have left those two dialling `127.0.0.1:6379` and
+   panicking at startup, taking co-editor sharing down. All three now take a URL;
+   `RedisConfig::connection_url()` resolves it once in `main.rs`.
+   `RedisPubSub` additionally stored host/port/password to rebuild the URL for each
+   subscriber reconnect — it now stores the resolved URL as a `SecretString`.
+
 **Files:**
 - Modify: `server/src/cache.rs`
 - Modify: `server/src/main.rs`
@@ -737,6 +755,24 @@ Cookies need `Domain=.yourdomain.com` and `SameSite=Lax` to work across subdomai
 **Files:**
 - Modify: `server/src/controllers/auth.rs`
 
+**Corrections applied 2026-09-14:**
+
+1. **The plan's stated reason for `SameSite=Lax` is wrong.** Lax is *not* needed for
+   subdomain auth — `app.example.com` and `api.example.com` are same-site under any
+   SameSite value; sharing cookies across them is what `Domain` does. The real reason
+   to leave `Strict` is cross-site *top-level navigation*: returning from Stripe
+   Checkout, and opening a co-editor invitation link from an email client. Under
+   `Strict` the user lands logged out in both. Lax still withholds cookies on
+   cross-site POST/PUT/DELETE, so CSRF protection for mutations is unchanged — worth
+   stating explicitly because `.claude/memory/feedback_httponly_cookie_migration.md`
+   records `Strict` as a deliberate anti-CSRF choice.
+2. **There are four cookie sites, not two.** Besides `build_auth_cookie` and
+   `build_refresh_cookie` there is `clear_refresh_cookie` *and* an inline removal
+   cookie built directly in the `logout` handler. All four now go through one
+   `build_cookie` helper — a removal cookie only clears the original when `Domain`
+   and `Path` match, so a missed site would break logout on the deployed domain
+   while still passing locally (where `domain` is `None` on both sides).
+
 - [ ] **Step 1: Find the cookie builder functions**
 
 The functions are `build_auth_cookie` and `build_refresh_cookie` in `server/src/controllers/auth.rs`. Read around line 76 to locate them.
@@ -809,6 +845,11 @@ git commit -m "fix: cookies use SameSite=Lax and support optional domain for sub
 **Files:**
 - Modify: `config.toml.dist`
 
+**Correction applied 2026-09-14:** the replacement block below is stale — it predates
+`trust_proxy_header`, `[app]`, `[stripe]`, `[cache]`, `[limits]` and `[sharing]`. **Add**
+the three new keys; do not paste it over the file. `database.toml.dist` also gained a
+commented `url` key, which the plan omits.
+
 - [ ] **Step 1: Add new fields to config.toml.dist**
 
 Replace the entire `config.toml.dist` with:
@@ -875,6 +916,20 @@ The frontend nginx config has `http://server:8080` hardcoded (Docker Compose hos
 **Files:**
 - Rename: `frontend/nginx.conf` → `frontend/nginx.conf.template`
 - Modify: `frontend/Dockerfile`
+
+**Corrections applied 2026-09-14:**
+
+1. **The template below is a rewrite, not a port.** The real `nginx.conf` carries the
+   SSE proxy settings (H-14), the `add_header` inheritance workaround, the security
+   headers, and the `/invite/` and `/api/invitations/` location blocks. Convert the
+   existing file by replacing the two `http://server:8080` occurrences with
+   `${BACKEND_URL}`; do not swap in the simplified version.
+2. **`/etc/nginx/conf.d` must be chowned to `nginx`.** The image runs as `USER nginx`,
+   and the entrypoint writes the substituted config into that directory as that user.
+   Without the chown the container fails to start.
+3. **`docker-compose.yml` needs `BACKEND_URL` too.** Its frontend service relied on the
+   hardcoded `http://server:8080`; templating it without adding an `environment:` entry
+   breaks local compose, with nginx refusing to start on `proxy_pass /;`.
 
 - [ ] **Step 1: Rename and update nginx.conf to a template**
 
@@ -996,6 +1051,11 @@ When `database.url` is set (Cloud Run uses Neon or Cloud SQL connection string),
 
 **Files:**
 - Modify: `server/src/main.rs`
+
+**Correction applied 2026-09-14:** the DSN is not built in `main.rs` — there is no
+`PgPoolOptions` call there. `main.rs` passes `db_config` to the mappers, and
+`mappers/database.rs::Database::new` builds the connection string. Applying the change
+there covers all eight pool constructions at once instead of one.
 
 - [ ] **Step 1: Read the current database pool creation in main.rs**
 

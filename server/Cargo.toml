@@ -34,7 +34,10 @@ log = "0.4"
 metrics = "0.24.3"
 metrics-exporter-prometheus = "0.18.1"
 rand = "0.9"
-redis = { version = "1.0", features = [ "aio", "tokio-comp" ] }
+# tokio-native-tls-comp is required for `rediss://` (managed Redis providers
+# mandate TLS). It pulls in tls-native-tls, matching sqlx and lettre so the
+# tree carries one TLS stack rather than adding rustls alongside it.
+redis = { version = "1.0", features = [ "aio", "tokio-comp", "tokio-native-tls-comp" ] }
 secrecy = { version = "0.10", features = [ "serde" ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"

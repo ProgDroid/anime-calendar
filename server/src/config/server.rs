@@ -111,6 +111,33 @@ impl Default for Server {
     }
 }
 
+impl RedisConfig {
+    /// The URL every Redis consumer should connect with: the explicit `url`
+    /// when set (Upstash and friends hand out a full `rediss://` string),
+    /// otherwise one assembled from the individual fields.
+    ///
+    /// Returned as a `SecretString` because it embeds the password. Resolving
+    /// this in one place matters: the cache, the Pub/Sub client and the
+    /// presence service each open their own connection, and if only some of
+    /// them honoured `url` the rest would quietly dial localhost.
+    #[must_use]
+    pub fn connection_url(&self) -> SecretString {
+        self.url.clone().map_or_else(
+            || {
+                if self.password.is_empty() {
+                    SecretString::from(format!("redis://{}:{}", self.host, self.port))
+                } else {
+                    SecretString::from(format!(
+                        "redis://:{}@{}:{}",
+                        self.password, self.host, self.port
+                    ))
+                }
+            },
+            SecretString::from,
+        )
+    }
+}
+
 impl Default for RedisConfig {
     fn default() -> Self {
         Self {
