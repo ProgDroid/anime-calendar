@@ -88,12 +88,6 @@ pub fn start(
     let port = config.port;
     let compress = config.compress;
     let enable_docs = config.enable_docs;
-    #[cfg(not(feature = "swagger-ui"))]
-    if enable_docs {
-        log::warn!(
-            "enable_docs = true but this binary was built without the `swagger-ui` feature — /swagger-ui/ will not be served"
-        );
-    }
     let allowed_origins = config.allowed_origins.clone();
     if allowed_origins.is_empty() {
         return Err(Error::Config(config::ConfigError::Message(
@@ -146,15 +140,7 @@ pub fn start(
         };
 
         App::new()
-            .configure(move |_cfg| {
-                #[cfg(feature = "swagger-ui")]
-                if enable_docs {
-                    _cfg.service(
-                        SwaggerUi::new("/swagger-ui/{_:.*}")
-                            .url("/api-docs/openapi.json", ApiDoc::openapi()),
-                    );
-                }
-            })
+            .configure(move |cfg| configure_docs(cfg, enable_docs))
             .wrap(Condition::new(compress, Compress::default()))
             .wrap(crate::metrics::http::HttpMetrics)
             .wrap(
@@ -255,6 +241,28 @@ pub fn start(
     })
     .bind(format!("{host}:{port}"))?
     .run())
+}
+
+/// Mount the Swagger UI when the build includes it and `enable_docs` is set.
+#[cfg(feature = "swagger-ui")]
+fn configure_docs(cfg: &mut web::ServiceConfig, enable_docs: bool) {
+    if enable_docs {
+        cfg.service(
+            SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", ApiDoc::openapi()),
+        );
+    }
+}
+
+/// Stand-in for builds without the `swagger-ui` feature. Warns rather than
+/// failing silently: `enable_docs = true` in a binary that cannot serve the UI
+/// is a config mistake worth surfacing, not a no-op.
+#[cfg(not(feature = "swagger-ui"))]
+fn configure_docs(_cfg: &mut web::ServiceConfig, enable_docs: bool) {
+    if enable_docs {
+        log::warn!(
+            "enable_docs = true but this binary was built without the `swagger-ui` feature — /swagger-ui/ will not be served"
+        );
+    }
 }
 
 /// Scrub high-entropy URL-segment secrets from a request path before it

@@ -51,6 +51,20 @@ Design redesign: a 4-track plan from `design_handoff_anime_calendar/` is in flig
 AWS_LC_SYS_PREBUILT_NASM=1 cargo build
 ```
 
+### Backend in sandboxes without github.com egress
+`utoipa-swagger-ui` fetches the Swagger UI archive from github.com **in its build
+script**, so the `server` crate cannot build at all where that host is blocked —
+Claude Code cloud sessions included. The failure is opaque: the proxy's 403 JSON
+body gets saved as `v5.17.14.zip` and the build panics with
+`InvalidArchive("Could not find EOCD")`. Build and test there with:
+```bash
+SQLX_OFFLINE=true cargo test -p server --no-default-features
+```
+That drops only the `/swagger-ui/` route, which is dev-only and already gated at
+runtime behind `enable_docs` (a build without the feature logs a warning if
+`enable_docs = true`). CI and local dev use default features, so the Swagger path
+stays fully covered — don't "simplify" the feature away.
+
 ### Frontend
 ```bash
 cd frontend
