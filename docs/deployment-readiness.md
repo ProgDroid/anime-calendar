@@ -78,6 +78,19 @@ Last green run: 2026-06-12. Still **`cargo-deny` only** — Frontend, Backend,
 OpenAPI Validation and Frontend E2E all pass, so this is a dependency advisory,
 not a code regression.
 
+> **RESOLVED 2026-09-22.** `cargo deny check` reports `advisories ok, bans ok,
+> licenses ok, sources ok`, with **nothing added to the `ignore` list**. Three
+> of the four cleared by `cargo update`. The fourth could not: `actix-http` 3.x
+> requires `h2 ^0.3`, and **0.3.27 is the last release of that line** — the fix
+> is in 0.4.16 and no backport exists, so no dependency bump could reach it.
+> It was removed instead, by dropping actix-web's `http2` feature. Verified
+> from actix-web's source that the HTTP/2 path was unreachable anyway (plain
+> `bind()` → `listen()` → `.tcp()`; h2 needs `bind_auto_h2c()` or ALPN on
+> `bind_rustls`/`bind_openssl`, and TLS terminates at nginx/Cloudflare), and
+> verified that `actix-cors`, `actix-web-lab` and `utoipa-swagger-ui` all
+> declare actix-web with `default-features = false` so feature unification
+> would not quietly re-enable it. Plan Task 19.
+
 **Updated 2026-09-22 against CI run `35268609234` (2026-09-17): three advisories
 now, not one.** Two arrived after this document was first written.
 
@@ -185,12 +198,32 @@ So idle settles near zero — but the **ceiling is 150 connections per instance*
 and the deployment plan runs production at `--max-instances=5`. A `db-f1-micro`
 tops out around 25. Nothing caps this today.
 
-Two consequences: any Postgres sizing must be done against
-`max_connections × 15 × max-instances`, and an explicit cap belongs in
-`mappers/database.rs::Database::new` (one line, covers all 15 sites) before
-anything is provisioned. `test_before_acquire` already defaults to `true`, which
-is the behaviour a suspend-happy serverless Postgres needs; `idle_timeout` at 10
-minutes is the value that would need lowering for one.
+> **RESOLVED 2026-09-22 — the pools are now one pool.** `main.rs` builds a
+> single `Database` and every mapper and service takes an Arc-backed clone. The
+> per-instance budget is therefore a single configurable number,
+> `database.toml`'s `max_connections` (env `DATABASE__MAX_CONNECTIONS`),
+> defaulting to **5**.
+>
+> The sizing formula for choosing a Postgres instance is now simply:
+>
+> ```text
+> max_connections × (Cloud Run max-instances) + headroom  ≤  server limit
+> ```
+>
+> with headroom for migrations, the `set_subscription` CLI and a `psql`
+> session. At the default that is four instances inside a `db-f1-micro`'s ~25
+> with five to spare — so the smallest tier is now viable, which it was not
+> before. **This removes connection count as a reason to prefer one vendor over
+> another.**
+>
+> Capping the fifteen pools instead would *not* have sufficed: fifteen pools at
+> even 2 connections each is 30, already past `db-f1-micro` before multiplying
+> by instances. Plan Task 15.
+>
+> Note for whichever vendor is chosen: `test_before_acquire` already defaults to
+> `true`, which is what a suspend-happy serverless Postgres needs; sqlx's
+> 10-minute `idle_timeout` is the value that would want lowering for one
+> (Neon autosuspends at 5).
 
 ### The reconcile loop is the one genuine serverless obstacle
 

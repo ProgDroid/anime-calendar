@@ -52,13 +52,19 @@ and the vendor names that remain in doc comments and test fixtures are illustrat
 Tasks 14–20 were appended in discovery order, **not** execution order. The numbering is an id,
 not a sequence. Real order:
 
-| When | Tasks | Why |
-|---|---|---|
-| **Before provisioning anything** | 15 (pool caps), 20 (migration strategy), 19 (cargo-deny) | 15 sets the Postgres sizing arithmetic that Task 9 provisions against; 20 decides what Task 12's workflow does; 19 is a green-CI precondition for trusting any deploy. |
-| **Blocked on the open decisions** | 9, 10, 11 | Vendor provisioning, external accounts, secret values. |
-| **Before the first public deploy** | 17 (Access), 14 (reconcile) | 17 or the smoke test reports failure on a healthy service; 14 or Stripe state silently stops reconciling. |
-| **Before letting anyone in free** | 18 (comp path) | Blocks the owner's own use and the friends allow-list. |
-| **Any time — removes a constraint, fixes no fault** | 16 (Redis multiplexing) | Worth doing before sizing Redis, since it changes the answer. |
+| When | Tasks | Why | Status |
+|---|---|---|---|
+| **Before provisioning anything** | 15 (pool budget), 19 (cargo-deny) | 15 sets the Postgres sizing arithmetic that Task 9 provisions against; 19 is a green-CI precondition for trusting any deploy. | ✅ **both done 2026-09-22** |
+| | 20 (migration strategy) | Decides what Task 12's workflow does. | Open — needs a decision, not work |
+| **Blocked on the open decisions** | 9, 10, 11 | Vendor provisioning, external accounts, secret values. | Blocked |
+| **Before the first public deploy** | 17 (Access), 14 (reconcile) | 17 or the smoke test reports failure on a healthy service; 14 or Stripe state silently stops reconciling. | Open |
+| **Before letting anyone in free** | 18 (comp path) | Blocked the owner's own use and the friends allow-list. | ✅ **done 2026-09-22** |
+| **Any time — removes a constraint, fixes no fault** | 16 (Redis multiplexing) | Worth doing before sizing Redis, since it changes the answer. | Open |
+
+**Sizing is no longer a blocker on either vendor decision.** Task 15 made the Postgres budget one
+configurable number that fits the smallest Cloud SQL tier, and the Redis evidence above shows the
+free tier's ceiling lifts to 256 connections for ~$5 with an in-place upgrade. Both decisions can
+now be made on cost and preference rather than on whether the app fits.
 
 Tasks 1–8 are **done in code** on the cloud branch, verified type-clean, and the checkbox state
 in this document was never updated to reflect that — do not re-run them from the unticked boxes.
@@ -1950,26 +1956,37 @@ So idle settles near zero, but the **ceiling is 150 connections per instance**, 
 deploys production with `--max-instances=5`. A `db-f1-micro` tops out around 25. This is a hard
 constraint on the Postgres choice and it must be settled before Task 9 provisions anything.
 
-- [ ] **Step 1: Decide whether to cap per pool or share one pool**
+**DONE 2026-09-22 — and done as the sharing refactor, not the cap, because the cap alone does
+not fit the cheapest tier.**
 
-Two shapes. Capping is a one-line `PgPoolOptions::new().max_connections(n)` in
-`mappers/database.rs::Database::new`, covering all 15 sites at once — cheap, but 15 pools each
-holding their own small budget partitions connections badly under uneven load. Sharing a single
-pool across the mappers is the better architecture and a larger change. Cap first; note the
-sharing refactor as follow-up.
+- [x] **Step 1: Shared one pool rather than capping fifteen**
 
-- [ ] **Step 2: Derive the cap from the chosen instance's real limit**
+The plan said cap first and treat sharing as follow-up. That was wrong on both counts once the
+blast radius was measured: `Mapper::new` is called **only from `main.rs`**, and all ten mappers
+had an identical three-line constructor, so sharing cost ten mechanical edits. And capping alone
+could not have worked — fifteen pools at even 2 connections each is 30, already past a
+`db-f1-micro`'s ~25 before multiplying by `max-instances`.
 
-`max_connections × 15 × max-instances` must sit **below** the server's limit with headroom for
-migrations, the `set_subscription` CLI and any psql session. Write the arithmetic into the
-config comment — a bare number will be raised by someone who does not know what it was derived
-from.
+`main.rs` now builds one `Database` and hands out clones (Arc-backed, genuinely cheap). Mapper
+constructors take `Database` instead of `DatabaseConfig` and are no longer `async` or fallible.
+
+A detail worth recording: four call sites carried comments describing their pool as *"Cheap
+(Arc-backed)"*. They were not — each `Database::new` opened a fresh pool. **The comments asserted
+the property the code lacked**, which is why the cost stayed invisible. They are true now.
+
+- [x] **Step 2: `max_connections` is configurable, defaulting to 5, with the arithmetic written down**
+
+`database.toml` gains `max_connections` (env: `DATABASE__MAX_CONNECTIONS`). Because there is now
+exactly one pool, this number *is* the per-instance budget, and the formula simplifies to
+`max_connections × max-instances + headroom ≤ server limit`. The default of 5 fits four
+instances inside a `db-f1-micro` with five spare for migrations, the CLI and a `psql` session.
+A test asserts both the default and that the arithmetic holds.
 
 - [ ] **Step 3: If the choice lands on Neon, also set `idle_timeout`**
 
-sqlx's 10-minute default outlives Neon's 5-minute autosuspend, so connections get killed
-underneath the pool. `test_before_acquire` is already `true` by default and catches it, but an
-`idle_timeout` below the suspend threshold avoids the churn.
+Still open, and still contingent on the Postgres decision. sqlx's 10-minute default outlives
+Neon's 5-minute autosuspend. `test_before_acquire` already defaults to `true` and catches a
+killed connection, so this is churn-avoidance rather than a correctness fix.
 
 ---
 
@@ -2065,17 +2082,33 @@ The readiness doc's workaround was to set `environment = "staging"`, but that al
 (`server/src/config/server.rs:619`). Trading a real safety check for a comp mechanism is the
 wrong trade.
 
-- [ ] **Step 1: Pick the mechanism**
+**DONE 2026-09-22.**
 
-Either an explicit override flag on the CLI (so the guard stays the default and bypassing it is
-a visible, deliberate act), or an admin-only grant endpoint. The endpoint is more work and
-introduces an admin role the app does not currently have; the flag is smaller and keeps the
-blast radius in a dev-only binary.
+- [x] **Step 1: Added `--i-know-this-is-production` to the CLI**
 
-- [ ] **Step 2: Keep `environment = "production"` set correctly**
+Chose the flag over an admin endpoint: the endpoint needs an admin role the app does not have,
+and the flag keeps the blast radius inside a binary that is not in the production image
+(`Dockerfile:62` copies only `target/release/server`). The guard stays on by default; bypassing
+it is explicit and shows up in shell history.
 
-Whatever is chosen, the fix must not require lying about the environment. That flag gates real
-safety checks.
+- [x] **Step 2: `environment = "production"` stays truthful**
+
+Which was the point — the old workaround silently disarmed the `cookie_secure` check.
+
+- [x] **Step 3: Fixed a defect that made the whole thing moot**
+
+The CLI assembled its own DSN from the individual config fields and **ignored `url` entirely**,
+so it could not reach a managed Postgres at all — precisely the case this task exists for. It
+now resolves the DSN through the same `connection_string` helper the server uses.
+
+- [x] **Step 4: The target database is printed before any mutation**
+
+`APP_ENV` states *intent*; it says nothing about which database is on the other end of the
+socket, and it is typically **unset** when running from a laptop through a Cloud SQL proxy —
+the exact case you would most want caught. So the guard is not the real safety mechanism here.
+The printed target is: host and database only, credentials stripped, on every run. Three tests
+cover redaction, including a credential-free DSN and Cloud SQL's Unix-socket form (whose
+instance name is the only way to tell staging from production at a glance).
 
 ---
 
@@ -2092,17 +2125,42 @@ cargo-deny is still the only red job.
 | `RUSTSEC-2026-0285` | rustls | TLS 1.3 handshake messages accepted across encryption level boundaries. New. |
 | yanked | spin | Warning only. |
 
-- [ ] **Step 1: Try a targeted `cargo update` first**
+**DONE 2026-09-22. `cargo deny check` now reports `advisories ok, bans ok, licenses ok, sources ok`
+with zero additions to the `ignore` list.**
 
-All three are transitive. Check whether the advisories are cleared by dependency bumps before
-reaching for anything else.
+- [x] **Step 1: Targeted `cargo update` cleared three of the four**
 
-- [ ] **Step 2: Do not add to `deny.toml`'s `ignore` list as a shortcut**
+`crossbeam-epoch` 0.9.18 → 0.9.21, `rustls` 0.23.31 → 0.23.45, `spin` 0.9.8 → 0.9.9 (un-yanked),
+and the `h2` **0.4** line 0.4.12 → 0.4.19. `aws-lc-sys` came along for the ride, 0.41.0 → 0.45.0;
+the workspace still builds and the full suite still passes on it.
 
-`deny.toml:15-18` carries a documented convention: an entry requires a corresponding
-justification, and the existing precedent (`RUSTSEC-2023-0071`, rsa via google-oauth) explains
-why it is not exploitable *for this app's use*. `RUSTSEC-2026-0258` is a remote DoS on a
-public-facing HTTP stack and would not survive that test.
+- [x] **Step 2: `h2` 0.3 could not be updated — it was removed instead**
+
+The interesting one. `actix-http` 3.x requires `h2 ^0.3`, and **0.3.27 is the last release of that
+line** — confirmed against the crates.io version list; the fix landed in 0.4.16 and no 0.3.x
+backport exists. Bumping `actix-web` to 4.12.1 / `actix-http` 3.13.6 did *not* move it, so no
+dependency update could clear the advisory. That bump was reverted as unrelated churn.
+
+The fix: **drop actix-web's `http2` feature**, which removes the crate from the graph entirely.
+Verified reachable-by-nobody first, from actix-web's own source rather than by assumption —
+`HttpServer::bind()` calls `listen()`, which builds `.tcp()`; HTTP/2 is reached only via
+`.tcp_auto_h2c()` (behind the opt-in `bind_auto_h2c()`) or via ALPN on
+`bind_rustls()`/`bind_openssl()`. This app calls plain `.bind()` at `server/src/server.rs:251`
+and terminates TLS at nginx/Cloudflare, so the h2 code was compiled but unreachable.
+
+Checked for feature unification before trusting it: `actix-cors`, `actix-web-lab` and
+`utoipa-swagger-ui` all declare `actix-web` with `default-features = false`, so `http2` came
+only from our own manifest and removing it actually takes effect. Without that check this would
+have been a change that is accepted and silently does nothing.
+
+- [x] **Step 3: Nothing added to `deny.toml`**
+
+`deny.toml:15-18`'s convention was never invoked. Worth noting for next time: an ignore entry
+would have been the *worse* outcome even though the advisory was genuinely unreachable, because
+the feature removal also drops dead code from the binary and cannot silently stop being true.
+
+**If HTTP/2 is ever wanted at the origin**, re-add the feature *and* re-check the advisory — do
+not assume it is still unfixed.
 
 ---
 
