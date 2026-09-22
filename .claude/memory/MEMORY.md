@@ -4,7 +4,7 @@
 
 ## Project state & references
 
-- [DEPLOY: readiness + open decisions](project_deploy_readiness_and_open_decisions.md) — read `docs/deployment-readiness.md` + the plan's Decisions-of-record table first; Tasks 1-8/15/18/19 shipped, Postgres + Redis vendors still open (2026-09-22).
+- [DEPLOY: START HERE](project_deploy_readiness_and_open_decisions.md) — ONE environment, no staging; migrations = CI applies + startup verifies; sole blocker is buying the domain (2026-09-22).
 - [User: GCP/Cloud Run experience](user_gcp_cloud_run_experience.md) — substantial prior Cloud Run work; don't price in learning curve.
 - [Tech Stack](project_tech_stack.md) — Rust/Actix/PG/Redis backend; Vue3/TS/Tailwind/Pinia frontend (DaisyUI evicted).
 - [Conventions](project_conventions.md) — error doc comments, DI via web::Data, tests in-file, all strings i18n (both locales).
@@ -56,7 +56,6 @@
 - [Billing endpoints take no caller id](feedback_billing_endpoint_no_request_body.md) — self-service billing resolves target from claims, never request body.
 - [Sharing helpers in services/sharing.rs](feedback_sharing_helpers_in_services.md) — suspend/restore called by webhook + reconcile must live in services/, not controllers/.
 - [No global auth middleware](feedback_no_global_auth_middleware.md) — Claims decoded per-handler via FromRequest; per-user rate limits in the service layer.
-- [actix-governor path exemption](feedback_actix_governor_path_exempt.md) — (superseded by in-house rate_limit.rs) custom KeyExtractor path→sentinel-IP whitelist.
 - [Data<T> extractors fire before Claims](feedback_actix_web_data_extractor_ordering.md) — register new web::Data<T> params on every test app incl 401 tests or they 500.
 - [actix-web 4 service futures NOT Send](feedback_actix_web_4_service_futures_not_send.md) — middleware futures must be LocalBoxFuture not BoxFuture+Send; push back on reviewers.
 - [tokio broadcast Lagged break on kick](feedback_tokio_broadcast_lagged_kick.md) — Lagged on a must-deliver (kick/evict) channel = missed signal; break defensively.

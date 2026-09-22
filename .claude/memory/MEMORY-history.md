@@ -38,3 +38,4 @@ Archived from `MEMORY.md` to keep the always-loaded index lean. These are "work 
 
 - [Audit Phase 3 remediation (2026-05-07)](project_phase_3_complete.md) — 6 findings (CD-LICENSE-1, C-1, H-4, H-6, H-7, H-8, H-10) on `audit/phase-3-critical`. In-house MIT rate-limit middleware at `server/src/middleware/rate_limit.rs`.
 - [Follow-up audit kicked off (2026-06-11)](project_followup_audit_2026_06_11.md) — F2-1..30 logged in AUDIT.md. (Live status lives in AUDIT.md; Steps 1–6 shipped since.)
+- [actix-governor path exemption (superseded 2026-05-07)](feedback_actix_governor_path_exempt.md) — custom KeyExtractor mapping exempt paths to a sentinel IP. Replaced by the in-house `server/src/middleware/rate_limit.rs` from the same Phase 3 work, so the technique no longer applies to this codebase.
