@@ -187,7 +187,10 @@ mod tests {
             "postgres://appuser:pw@/anime?host=/cloudsql/proj:europe-west1:anime-prod",
         ));
         let described = describe_target(&cfg);
-        assert!(!described.contains("pw@"), "credentials leaked: {described}");
+        assert!(
+            !described.contains("pw@"),
+            "credentials leaked: {described}"
+        );
         assert_eq!(
             described,
             "/anime?host=/cloudsql/proj:europe-west1:anime-prod"

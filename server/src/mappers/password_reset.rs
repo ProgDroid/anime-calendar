@@ -1,6 +1,4 @@
-use crate::{
-    ServerResult, mappers::database::Database,
-};
+use crate::{ServerResult, mappers::database::Database};
 
 #[derive(Clone)]
 pub struct PasswordResetMapper {

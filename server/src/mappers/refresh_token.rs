@@ -1,7 +1,4 @@
-use crate::{
-    ServerResult, error::Error,
-    mappers::database::Database,
-};
+use crate::{ServerResult, error::Error, mappers::database::Database};
 
 #[derive(Clone)]
 pub struct RefreshTokenMapper {

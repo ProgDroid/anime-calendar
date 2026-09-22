@@ -75,6 +75,21 @@ npm run test:unit  # vitest
 npm run lint       # oxlint + eslint
 ```
 
+### Before pushing — the backend CI gate, in CI's own order
+
+```bash
+cargo fmt --all -- --check      # Format check — runs FIRST in CI
+cargo clippy --workspace --all-targets -- <the project allow-list, see below>
+cargo test --workspace          # needs PG + Redis; see .claude/memory for the container recipe
+cargo deny check
+```
+
+**`cargo fmt --all -- --check` is the first step of the Backend job** (`.github/workflows/ci.yml:97`),
+so a formatting slip fails the job *before* the build and test steps run — the rest of the backend
+is then untested, and a green-looking "only formatting failed" is not evidence that anything else
+passed. Run fmt before pushing, and after any hand-edited imports in particular: a regex edit that
+merges `use` lines leaves them mis-wrapped and nothing but rustfmt notices.
+
 ### Config
 Copy `config.toml.dist` → `config.toml` and `database.toml.dist` → `database.toml`, then fill in values.
 

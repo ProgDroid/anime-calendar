@@ -10,9 +10,7 @@
 //! sqlx transaction so the idempotency insert and the subsequent business
 //! writes commit or roll back atomically.
 
-use crate::{
-    ServerResult, mappers::database::Database,
-};
+use crate::{ServerResult, mappers::database::Database};
 
 #[derive(Clone)]
 pub struct StripeEventMapper {

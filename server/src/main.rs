@@ -53,8 +53,7 @@ async fn main() -> ServerResult<()> {
     let subscription_mapper = SubscriptionMapper::new(db.clone());
     let stripe_event_mapper = StripeEventMapper::new(db.clone());
     let email_service = EmailService::new(settings.smtp.clone());
-    let show_count_service =
-        server::services::show_count::ShowCountService::new(db.pool.clone());
+    let show_count_service = server::services::show_count::ShowCountService::new(db.pool.clone());
     let entitlement_service = EntitlementService::new(
         subscription_mapper.clone(),
         show_count_service.clone(),

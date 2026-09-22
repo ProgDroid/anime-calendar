@@ -1,6 +1,4 @@
-use crate::{
-    ServerResult, entity::calendar_editor::CalendarEditor, mappers::database::Database,
-};
+use crate::{ServerResult, entity::calendar_editor::CalendarEditor, mappers::database::Database};
 
 #[derive(Clone)]
 pub struct CalendarEditorMapper {

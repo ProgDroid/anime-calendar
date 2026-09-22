@@ -1,7 +1,4 @@
-use crate::{
-    ServerResult, entity::subscription::Subscription,
-    mappers::database::Database,
-};
+use crate::{ServerResult, entity::subscription::Subscription, mappers::database::Database};
 
 /// Slim row used by the reconcile loop. We only project the fields that
 /// participate in drift detection — adding more columns here means more

@@ -1,6 +1,6 @@
 use crate::{
-    ServerResult, entity::user::User, error::Error,
-    mappers::database::Database, middleware::auth::Claims,
+    ServerResult, entity::user::User, error::Error, mappers::database::Database,
+    middleware::auth::Claims,
 };
 
 #[derive(Clone)]
