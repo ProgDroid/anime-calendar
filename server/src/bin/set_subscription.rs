@@ -23,9 +23,25 @@
 //! Useful for debugging webhook delivery gaps or hand-checking a customer
 //! after the fact.
 //!
-//! Safety: refuses to run when `APP_ENV=production`. Reads database.toml from CWD.
+//! Safety: refuses to run when `APP_ENV=production` unless
+//! `--i-know-this-is-production` is passed. That override exists because
+//! comping access is a legitimate production need — the owner's own account,
+//! and friends given free access — and the alternative workaround (setting
+//! `environment = "staging"`) also disarms the `cookie_secure` check that
+//! `Config::validate` only enforces under `"production"`.
+//!
+//! Note that `APP_ENV` records *intent*, not which database is on the other
+//! end of the socket, and it is usually unset when running from a laptop
+//! against a Cloud SQL proxy. The target host/database is therefore printed
+//! before any mutation, whichever way the guard goes — that is the line to
+//! read before pressing on.
+//!
+//! Reads database.toml from CWD, honouring `url` (a managed provider's full
+//! connection string) the same way the server does.
 //! `--reconcile-from-stripe` additionally reads config.toml for the Stripe
-//! secret key. This bin is excluded from the production Docker image.
+//! secret key. This bin is excluded from the production Docker image (the
+//! image copies only `target/release/server`), so production use means running
+//! it locally against the production DSN.
 
 use std::{env, process::ExitCode};
 
@@ -74,7 +90,13 @@ fn print_usage() {
            set_subscription (--email <email> | --user-id <id>) <state>\n  \
            set_subscription (--email <email> | --user-id <id>) --reconcile-from-stripe\n\
          States: free | trialing | active | past-due | cancel-at-period-end | \
-         canceled-expired | incomplete"
+         canceled-expired | incomplete\n\
+         \n\
+         Flags:\n  \
+           --i-know-this-is-production  Override the APP_ENV=production guard.\n  \
+           \x20                         Needed to comp an account on the live\n  \
+           \x20                         system. The target database is printed\n  \
+           \x20                         before any change either way."
     );
 }
 
@@ -84,11 +106,14 @@ enum Mode {
     ReconcileFromStripe,
 }
 
-fn parse_args() -> Result<(UserSelector, Mode), String> {
+/// Returns the selector, the mode, and whether the production guard was
+/// explicitly overridden.
+fn parse_args() -> Result<(UserSelector, Mode, bool), String> {
     let mut args = env::args().skip(1);
     let mut selector: Option<UserSelector> = None;
     let mut state: Option<State> = None;
     let mut reconcile = false;
+    let mut allow_production = false;
 
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -103,6 +128,9 @@ fn parse_args() -> Result<(UserSelector, Mode), String> {
             }
             "--reconcile-from-stripe" => {
                 reconcile = true;
+            }
+            "--i-know-this-is-production" => {
+                allow_production = true;
             }
             "-h" | "--help" => {
                 print_usage();
@@ -126,7 +154,7 @@ fn parse_args() -> Result<(UserSelector, Mode), String> {
         (false, Some(s)) => Mode::SetState(s),
         (false, None) => return Err("missing state argument or --reconcile-from-stripe".into()),
     };
-    Ok((selector, mode))
+    Ok((selector, mode, allow_production))
 }
 
 async fn resolve_user_id(pool: &PgPool, selector: &UserSelector) -> Result<i32, String> {
@@ -282,15 +310,7 @@ async fn apply_reconcile(pool: &PgPool, user_id: i32) -> Result<String, String> 
 async fn main() -> ExitCode {
     use secrecy::ExposeSecret;
 
-    // Hard guard: never run against prod.
-    if let Ok(env_name) = env::var("APP_ENV")
-        && (env_name.eq_ignore_ascii_case("production") || env_name.eq_ignore_ascii_case("prod"))
-    {
-        eprintln!("refusing to run: APP_ENV={env_name}. This bin is dev-only.");
-        return ExitCode::from(2);
-    }
-
-    let (selector, mode) = match parse_args() {
+    let (selector, mode, allow_production) = match parse_args() {
         Ok(v) => v,
         Err(e) => {
             eprintln!("error: {e}");
@@ -298,6 +318,37 @@ async fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
+
+    // Guard: refuse under a production APP_ENV unless the operator says so
+    // explicitly on the command line.
+    //
+    // The override exists because comping access is a legitimate production
+    // need — the owner's own account, and friends given free access — and the
+    // previous workaround was to set `environment = "staging"`, which also
+    // disarms the `cookie_secure` check that `Config::validate` enforces only
+    // under "production". Trading a real safety check for a comp mechanism is
+    // the wrong trade; an explicit flag keeps the guard on by default and
+    // makes bypassing it a visible, deliberate act that shows up in shell
+    // history.
+    //
+    // Note what this guard can and cannot see: `APP_ENV` states *intent*. It
+    // says nothing about which database is on the other end of the socket, and
+    // it is typically unset when running from a laptop against a Cloud SQL
+    // proxy — the exact case you would most want caught. That is why the
+    // target is printed below regardless.
+    if let Ok(env_name) = env::var("APP_ENV")
+        && (env_name.eq_ignore_ascii_case("production") || env_name.eq_ignore_ascii_case("prod"))
+    {
+        if allow_production {
+            eprintln!("warning: APP_ENV={env_name} and --i-know-this-is-production was passed.");
+        } else {
+            eprintln!(
+                "refusing to run: APP_ENV={env_name}.\n\
+                 Pass --i-know-this-is-production to override (used for comping accounts)."
+            );
+            return ExitCode::from(2);
+        }
+    }
 
     let cfg = match DatabaseConfig::new() {
         Ok(c) => c,
@@ -307,15 +358,19 @@ async fn main() -> ExitCode {
         }
     };
 
-    let url = format!(
-        "postgres://{}:{}@{}:{}/{}",
-        cfg.user,
-        cfg.pass.expose_secret(),
-        cfg.host,
-        cfg.port,
-        cfg.database
+    // Resolve the DSN through the same helper the server uses, so `url` (a
+    // managed provider's full connection string) is honoured rather than
+    // silently ignored in favour of the individual fields.
+    let url = server::mappers::database::connection_string(&cfg);
+
+    // Always say where this is pointed before touching anything. This is the
+    // signal that actually corresponds to reality, unlike APP_ENV.
+    eprintln!(
+        "target: {}",
+        server::mappers::database::describe_target(&cfg)
     );
-    let pool = match PgPool::connect(&url).await {
+
+    let pool = match PgPool::connect(url.expose_secret()).await {
         Ok(p) => p,
         Err(e) => {
             eprintln!("db connect failed: {e}");
