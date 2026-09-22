@@ -61,6 +61,7 @@
 - [actix-web 4 service futures NOT Send](feedback_actix_web_4_service_futures_not_send.md) — middleware futures must be LocalBoxFuture not BoxFuture+Send; push back on reviewers.
 - [tokio broadcast Lagged break on kick](feedback_tokio_broadcast_lagged_kick.md) — Lagged on a must-deliver (kick/evict) channel = missed signal; break defensively.
 - [Redis NUMSUB fleet subscriber gate](feedback_redis_numsub_fleet_subscriber_gate.md) — PUBSUB NUMSUB for global "anyone watching?", not local Sender::receiver_count (one replica only).
+- [Redis pubsub shared subscriber](feedback_redis_pubsub_shared_subscriber.md) — PubSub::split() sink+stream, one driver; redis-rs 1.0.3 signature differs from docs.rs/latest; subscribers-before-sink lock order.
 - [Singleton loop advisory lock placement](feedback_singleton_loop_advisory_lock_outside_tested_fn.md) — pg_try_advisory_lock in a wrapper OUTSIDE run_pass; inside it, parallel tests contend on the global key.
 - [RAII guards into async_stream::stream!](feedback_stream_lifetime_raii_guard.md) — `let _g=guard;` as first line inside the block or it drops before first poll.
 - [Stale rust-analyzer after structural changes](feedback_stale_lsp_after_rust_structural_changes.md) — run `cargo check` before trusting <new-diagnostics> after renames/new structs.

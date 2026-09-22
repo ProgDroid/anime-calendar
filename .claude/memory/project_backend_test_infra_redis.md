@@ -5,7 +5,7 @@ metadata:
   node_type: memory
   type: project
   originSessionId: 1b126c7d-2485-4fb6-9437-7b543abb4528
-  modified: 2026-09-22T13:43:41.569Z
+  modified: 2026-09-22T19:50:41.099Z
 ---
 
 A fully-green `cargo test -p server --lib` (and `--workspace --lib`) needs TWO live services: Postgres AND Redis. Both come from env vars whose defaults only suit the original dev box:
@@ -18,6 +18,10 @@ A fully-green `cargo test -p server --lib` (and `--workspace --lib`) needs TWO l
 ## Throwaway-container recipe (measured green 2026-09-22: 401 passed / 0 failed)
 
 Prefer this over the dev DB — a fresh container has **no migration drift**, so it sidesteps [[project_dev_db_migration_drift]] completely. Port 5432 is often already taken by another project's container on this machine, hence 5433.
+
+**Pre-register these before running, so a disagreement is visible rather than absorbed** (re-measured 2026-09-22 evening): **21 migration files applied, 0 failures, 11 tables** in `information_schema.tables` for schema `public`; **408 passed / 0 failed / 1 ignored** for `cargo test -p server --lib`. The count was 401 earlier the same day — Tasks 15/16/18/19 added tests — so treat it as a moving floor and check *what* changed rather than assuming a mismatch is a failure.
+
+**Redis matters more than it used to.** Since Task 16 the pubsub tests assert against Redis's own `CLIENT LIST TYPE pubsub` and use `CLIENT KILL ID`, so `redis:7-alpine` on 6390 is load-bearing for four tests in `redis_pubsub.rs`, not just for the one `subscribe_feed` cache call. See [[feedback_redis_pubsub_shared_subscriber]].
 
 ```bash
 docker run -d --name ac-test-pg    -p 5433:5432 \
