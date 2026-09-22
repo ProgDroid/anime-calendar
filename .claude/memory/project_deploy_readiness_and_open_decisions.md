@@ -1,29 +1,53 @@
 ---
 name: project_deploy_readiness_and_open_decisions
-description: "Pre-deploy state: docs/deployment-readiness.md is the authority, the 2026-04-20 plan is now reconciled against it, and Postgres + Redis vendors are still the only open decisions."
+description: "START HERE on any deploy ask. CI is green, Tasks 1-8/15/18/19 shipped; blocked on ONE question from the user (environment shape) plus buying the domain. Task 16/14/17 are unblocked work."
 metadata: 
   node_type: memory
   type: project
   originSessionId: 0022e1bb-6627-4196-acb8-6586b29d9b35
-  modified: 2026-09-22T13:44:06.139Z
+  modified: 2026-09-22T18:19:40.807Z
 ---
 
-**Read `docs/deployment-readiness.md` first on any "let's deploy" / "what's left before shipping" request**, then `docs/superpowers/plans/2026-04-20-deployment.md` — specifically its **Decisions of record** and **Sequencing** tables at the top. Do not re-derive the analysis; several facts in it cost multiple source reads.
+**Read `docs/deployment-readiness.md` first on any "let's deploy" / "what's left before shipping" request**, then `docs/superpowers/plans/2026-04-20-deployment.md` — specifically its **Decisions of record** and **Sequencing** tables at the top. Do not re-derive that analysis; several facts in it cost multiple source reads.
 
-**Headline state (2026-09-22):**
-- Tasks 1–8 of the plan are **shipped on `main`** (health endpoint, env-var config, Redis TLS + unified URL, Cloudflare origin middleware, cookie domain/SameSite, nginx envsubst, `database.url`). Verified: 401 backend tests pass, clippy clean, 21 migrations apply from zero.
-- `AUDIT.md` docket fully closed. Nothing outstanding is a code-quality defect.
-- **CI on `main` is red on `cargo-deny` only — now THREE advisories, not one.** `RUSTSEC-2026-0204` (crossbeam-epoch), `RUSTSEC-2026-0258` (**h2, remote DoS — the one that matters publicly**), `RUSTSEC-2026-0285` (rustls). Plan Task 19.
-- 216 unticked UAT boxes across 5 checklists; legal pages still literal `"coming soon"` (blocks production, not staging).
+## NEXT SESSION PICKS UP HERE (state as of 2026-09-22)
 
-**Decided:** Cloud Run in `europe-west1`; Cloudflare Access for gating; Porkbun domain with nameservers at Cloudflare; Resend for SMTP.
+**Blocked on the user, not on work.** One upstream question decides almost everything:
 
-**Still open — the ONLY two, and only plan Tasks 9/10/11 depend on them:**
-1. **Postgres** — Cloud SQL (~$9/mo) vs Neon (free, branching, but not on GCP). **His blocker is not the comparison, it's committing to recurring cost with an unknown user base** (stated 2026-09-22). Two reframes he has not resolved: whether staging is a bounded pre-launch campaign or permanent infrastructure, and whether to skip a second environment entirely (one Cloud Run service, Stripe test mode → live mode).
-2. **Redis** — leaning Redis Cloud free, not fully convinced. **Measured 2026-09-22:** free 30 MB = 30 conns / 100 ops·s⁻¹; **250 MB (~$5) = 256 conns** / 1,000 ops·s⁻¹; and Redis documents that plan upgrades leave "data and endpoints not disrupted" — so outgrowing free is a console click, not a migration. Upstash is ruled out (wrong shape for a per-session `SUBSCRIBE`).
+> **Is this a bounded pre-launch campaign, permanent infrastructure alongside production, or should there be only ONE environment?**
 
-**Hard constraint he stated:** staging and production must use the **same mechanism**. Rules out a Redis sidecar.
+He has not answered it. It was put to him and he said he is not sure — *"it will depend how much maintenance or feature work I will do later"*. It determines the Postgres vendor, the Redis tier, and whether plan Tasks 9–12 build one environment or two. **Do not re-litigate Cloud SQL vs Neon before this is settled** — his hesitation was never about the comparison.
 
-**New requirement (2026-09-22):** he wants to use the product himself without paying, and comp some friends. `bin/set_subscription.rs:287` refuses to run under `APP_ENV=production|prod`, and the old workaround (`environment = "staging"`) disarms the `cookie_secure` check `Config::validate` only enforces under production. Needs a real comp path — plan Task 18.
+**Step zero, and no code moves it: buy the domain** (Porkbun, nameservers → Cloudflare immediately). It gates TLS (B-3), DKIM/SPF for Resend, and Google OAuth, which rejects bare IPs as authorized origins. B-3 and B-4 both wait on it.
 
-**How to apply:** confirm the two decisions before touching Tasks 9–11; everything else is vendor-neutral and can proceed. Related: [[project_dev_db_migration_drift]], [[user_gcp_cloud_run_experience]], [[reference_deep_dive_plan]], [[backend-full-green-test-run-needs-postgres-and-redis-on-2435]].
+**Unblocked work, in the recommended order** — none of it depends on the open decisions:
+1. **Task 16 — Redis subscriber multiplexing.** Direct sibling of the pool work already shipped: `redis_pubsub.rs:235-237` opens one TCP connection per channel where one connection can carry many. Collapses the budget to ~4 flat. Recommended next.
+2. **Task 14 — reconcile loop → Cloud Scheduler.** Under Cloud Run's default CPU throttling the hourly `tokio::time::interval` never fires and Stripe state silently stops reconciling. Needs `RECONCILE__INTERVAL_SECS=0` + an endpoint + an OIDC-authed job.
+3. **Task 17 — Cloudflare Access + a smoke test that survives it.** The deploy's smoke test curls the public domain, which Access answers with a login redirect: a healthy service reported as failed.
+
+**Also needs a decision, not work: Task 20 (migration strategy).** `docs/deployment-readiness.md` B-1 says migrate at startup; the plan's Task 12 migrates from CI. **The two documents currently contradict each other** — which is exactly how the `schema.sql` drift started. Settle it and write the answer in the readiness doc.
+
+## Shipped 2026-09-22
+
+- **Plan Tasks 1–8** (from the cloud-session branch, squashed): health endpoint, env-var config layering, Redis TLS + unified URL across all three consumers, Cloudflare origin middleware, cookie domain/`SameSite=Lax`, nginx envsubst template, `database.url` passthrough, swagger-ui behind a feature flag.
+- **Task 19** — `cargo deny check` green with **zero** `deny.toml` ignores. The h2 0.3 advisory had no backport, so actix-web's `http2` feature was dropped to remove the crate; CLAUDE.md records why re-adding it needs care.
+- **Task 15** — one Postgres pool per process, `max_connections` default 5. See CLAUDE.md.
+- **Task 18** — `--i-know-this-is-production` comp path; the CLI also now honours `database.url` (it previously ignored it and could not reach a managed Postgres at all).
+- **CI on `main` is GREEN** — all five jobs, first time since 2026-06-12. **B-2 is closed.**
+
+## Decided (do not reopen)
+
+Cloud Run in `europe-west1`; Cloudflare Access for gating; Porkbun domain; Resend for SMTP. **Hard constraint he stated: staging and production must use the same mechanism** — this is what rules out a Redis sidecar.
+
+## The two vendor choices — sizing no longer constrains either
+
+Both were stalled on numbers that turned out to be **properties of our own code, not the vendors'**. That is resolved; they are now pure cost-and-preference calls downstream of the environment-shape question.
+
+- **Postgres** — Cloud SQL (~$9/mo, same cloud, Unix socket, no VPC connector fee) vs Neon (free, branching, but AWS/Azure only so every query is cross-cloud to Frankfurt). Task 15 made the budget one number that fits a `db-f1-micro`, so the cheapest tier is viable.
+- **Redis** — leaning Redis Cloud free, not fully convinced. Measured: free 30 MB = 30 conns / 100 ops·s⁻¹; **250 MB (~$5) = 256 conns** / 1,000 ops·s⁻¹; upgrades leave *"data and endpoints not disrupted"*, so outgrowing free is a console click, not a migration. **Still unverified: that pub/sub works on Essentials** — documented as unrestricted, never documented as supported, which is the same gap that ruled out Upstash. Settle with a live `SUBSCRIBE` against a real free database (no card needed). Upstash is ruled out: wrong shape for a per-session `SUBSCRIBE`.
+
+## Still open beyond the platform choices
+
+216 unticked UAT boxes across 5 checklists in `docs/checklists/`; legal pages are literal `"coming soon"` (blocks production, not staging).
+
+**How to apply:** put the environment-shape question first, confirm the domain is bought, then pick from the unblocked list. Related: [[project_dev_db_migration_drift]], [[user_gcp_cloud_run_experience]], [[reference_deep_dive_plan]], [[backend-full-green-test-run-needs-postgres-and-redis-on-2435]].

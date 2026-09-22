@@ -1,7 +1,10 @@
 # Deployment Readiness — Staging & Production
 
 **Date:** 2026-09-10 · **Revised:** 2026-09-22
-**Status:** Analysis complete, platform decisions partly open (see §5)
+**Status:** B-2 closed (CI green). Blocked on one question from the owner —
+*is this a bounded pre-launch campaign, permanent infrastructure alongside
+production, or should there be only one environment?* — and on buying the
+domain, which no code can move. Unblocked work: plan Tasks 16, 14, 17.
 
 > **2026-09-22 revision.** Cloud sessions implemented Tasks 1–8 of
 > `docs/superpowers/plans/2026-04-20-deployment.md` without access to this
@@ -72,7 +75,30 @@ no host to shell into.
 > succeeds: 21 applied, 0 failures, 11 tables. **The migration set is sound from
 > zero**; the drift is a property of `schema.sql` alone.
 
-### B-2. CI on `main` is red
+### ~~B-2. CI on `main` is red~~ — CLOSED 2026-09-22
+
+**All five jobs green on run `35763755502`, the first fully passing `main` since
+2026-06-12.** Frontend, Frontend E2E, OpenAPI Validation, cargo-deny and
+Backend (format, clippy and `cargo nextest run --workspace --all-targets`).
+
+Two things worth keeping from closing it:
+
+- **A CI job's first step failing leaves every later step UNKNOWN, not passing.**
+  The run before this one failed Backend on *Format check*, which is step 9 of
+  22 — so build, clippy and tests never executed, and "only formatting failed"
+  read like good news while actually meaning the backend was entirely
+  unverified. Run `cargo fmt --all -- --check` before pushing; CLAUDE.md now
+  lists the backend gate in CI's own order.
+- **The step named "Clippy (deny warnings)" does not deny warnings.** It passes
+  only `-W` flags and `RUSTFLAGS` is just the lld linker arg, so the ~23 clippy
+  warnings currently in the server lib do not fail CI. The *behaviour* is
+  intentional (see the `reference_clippy_command` memory: curated allow-list,
+  not bare `-D warnings`); the *name* is stale and asserts enforcement that
+  does not exist.
+
+The original analysis follows, for the record.
+
+### B-2. CI on `main` is red (historical)
 
 Last green run: 2026-06-12. Still **`cargo-deny` only** — Frontend, Backend,
 OpenAPI Validation and Frontend E2E all pass, so this is a dependency advisory,

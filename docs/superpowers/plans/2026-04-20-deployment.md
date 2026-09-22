@@ -66,6 +66,33 @@ configurable number that fits the smallest Cloud SQL tier, and the Redis evidenc
 free tier's ceiling lifts to 256 connections for ~$5 with an in-place upgrade. Both decisions can
 now be made on cost and preference rather than on whether the app fits.
 
+### Resume here (2026-09-22)
+
+**CI on `main` is green** — all five jobs, first time since 2026-06-12, so B-2 is closed.
+
+Two things gate everything else, and neither is code:
+
+1. **One question for the owner:** *is this a bounded pre-launch campaign, permanent
+   infrastructure alongside production, or should there be only ONE environment?* It decides the
+   Postgres vendor, the Redis tier, and whether Tasks 9–12 build one environment or two. It was
+   put to him on 2026-09-22 and left unanswered. **Do not reopen Cloud SQL vs Neon before it is
+   settled** — the hesitation was never about that comparison.
+2. **Buy the domain** (Porkbun, nameservers → Cloudflare immediately). Gates TLS (B-3), Resend's
+   DKIM/SPF, and Google OAuth, which rejects bare IPs as authorized origins. B-3 and B-4 both
+   wait on it.
+
+Meanwhile, three tasks are fully unblocked and independent of both, recommended in this order:
+
+| Order | Task | Why this one |
+|---|---|---|
+| 1 | **16** — Redis subscriber multiplexing | Direct sibling of the pool work in Task 15, same shape, and it is the last thing tying Redis sizing to viewer count. |
+| 2 | **14** — reconcile → Cloud Scheduler | Fails *silently* in production otherwise: the hourly timer never fires under CPU throttling and Stripe state stops reconciling. |
+| 3 | **17** — Access + a smoke test that survives it | Reports a healthy service as failed on the very first deploy. |
+
+**Task 20 also needs a decision rather than work:** the readiness doc's B-1 says migrate at
+startup, this plan's Task 12 migrates from CI, and **they currently contradict each other** — the
+same condition that produced the `schema.sql` drift in the first place.
+
 Tasks 1–8 are **done in code** on the cloud branch, verified type-clean, and the checkbox state
 in this document was never updated to reflect that — do not re-run them from the unticked boxes.
 
