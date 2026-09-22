@@ -1404,7 +1404,7 @@ refactor has landed, the budget is ~4 connections flat rather than scaling per v
 
 ```bash
 DATABASE_URL="<the connection string from Step 1>" \
-  cargo sqlx migrate run --source server/migrations
+  cargo sqlx migrate run --source migrations
 ```
 
 Then **verify it applied** rather than trusting the exit code — `sqlx migrate info` should list
@@ -1594,7 +1594,7 @@ jobs:
           DATABASE_URL: ${{ steps.secrets.outputs.db_url }}
         run: |
           cargo install sqlx-cli --no-default-features --features postgres,native-tls
-          sqlx migrate run --source server/migrations
+          sqlx migrate run --source migrations
 
       - name: Deploy backend to Cloud Run (staging)
         run: |
@@ -1695,7 +1695,7 @@ jobs:
           DATABASE_URL="postgres://anime_user:${{ secrets.PROD_DB_PASSWORD }}@127.0.0.1:5433/anime_calendar" \
             cargo install sqlx-cli --no-default-features --features postgres,native-tls
           DATABASE_URL="postgres://anime_user:${{ secrets.PROD_DB_PASSWORD }}@127.0.0.1:5433/anime_calendar" \
-            sqlx migrate run --source server/migrations
+            sqlx migrate run --source migrations
           kill $PROXY_PID
 
       - name: Save previous backend revision
@@ -1842,6 +1842,15 @@ curl https://yourdomain.com/api/health
 ## Task 20: Settle the Migration Strategy (B-1)
 
 **Added 2026-09-22.** The two documents disagree and the disagreement is substantive, not a slip.
+
+> **Path correction, applied 2026-09-22 — this would have failed every deploy.** All three
+> migration invocations in this plan said `--source server/migrations`. **That directory does
+> not exist.** The 21 migrations live at **`./migrations`** at the repo root. Corrected in place
+> at the three call sites (Task 10 Step 3, and both deploy jobs in Task 12).
+>
+> Verified the same day by applying all 21 in order to a fresh PostgreSQL 16 container: 21
+> applied, 0 failures, 11 tables. So the migration set itself is sound from zero — the
+> `schema.sql` drift described in B-1 is a property of that file alone, not of the migrations.
 
 Readiness **B-1** records the decision as *"run `sqlx::migrate!` at server startup and drop the
 `schema.sql` mount"*, on the grounds that migrations become the single source of truth so the

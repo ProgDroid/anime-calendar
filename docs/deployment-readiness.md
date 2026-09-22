@@ -58,6 +58,20 @@ cannot recur. Note `sqlx` is already built with the `migrate` feature
 (`server/Cargo.toml:42`). This is **mandatory** under Cloud Run, where there is
 no host to shell into.
 
+> **Contested, 2026-09-22.** The deployment plan instead runs `sqlx migrate run`
+> from a GitHub Actions step before each deploy. That is not obviously worse —
+> it runs exactly once per deploy rather than racing across cold-starting
+> instances — but **the two documents currently assert different things, which
+> is how the `schema.sql` drift started.** Settle it and record the answer here:
+> Task 20 of the plan.
+>
+> Two facts established the same day. (a) The plan's three migration commands
+> pointed at `server/migrations`, **which does not exist** — the 21 migrations
+> are at `./migrations`. Every deploy would have failed on it. Corrected in the
+> plan. (b) Applying all 21 in order to a fresh PostgreSQL 16 container
+> succeeds: 21 applied, 0 failures, 11 tables. **The migration set is sound from
+> zero**; the drift is a property of `schema.sql` alone.
+
 ### B-2. CI on `main` is red
 
 Last green run: 2026-06-12. Still **`cargo-deny` only** — Frontend, Backend,
