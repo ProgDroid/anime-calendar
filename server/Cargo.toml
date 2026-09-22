@@ -6,7 +6,29 @@ publish = false
 
 [dependencies]
 actix-cors = "0.7"
-actix-web = "4.11"
+# `http2` is deliberately excluded from the default feature set. The server binds
+# with plain `HttpServer::bind()`, and actix-web selects HTTP/2 only via ALPN on
+# `bind_rustls()`/`bind_openssl()` or via the opt-in `bind_auto_h2c()` — neither of
+# which this app uses, since TLS is terminated at nginx/Cloudflare and the upstream
+# hop is HTTP/1.1. The h2 support was therefore compiled but unreachable, while
+# pulling in h2 0.3.x, whose line ended at 0.3.27 with RUSTSEC-2026-0258
+# (unbounded empty DATA frames) unpatched — the fix landed in 0.4.16 and
+# actix-http 3.x requires `h2 ^0.3`, so no dependency update can clear it.
+# Dropping the feature removes the crate from the graph entirely instead of
+# ignoring the advisory. actix-cors, actix-web-lab and utoipa-swagger-ui all
+# declare actix-web with `default-features = false`, so nothing re-enables it
+# through feature unification.
+# If HTTP/2 is ever needed at the origin, re-add the feature AND revisit the
+# advisory — do not assume it is still unfixed.
+actix-web = { version = "4.11", default-features = false, features = [
+    "macros",
+    "compress-brotli",
+    "compress-gzip",
+    "compress-zstd",
+    "cookies",
+    "unicode",
+    "compat",
+] }
 governor = "0.10"
 actix-web-lab = "0.24"
 anilist = { path = "../anilist" }
