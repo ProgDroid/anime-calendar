@@ -13,10 +13,35 @@ pub struct Database {
     pub host: String,
     pub port: String,
     pub database: String,
-    /// Full connection string (Neon, Cloud SQL). When set, the individual
-    /// fields above are ignored.
+    /// Full connection string (a managed provider's DSN). When set, the
+    /// individual fields above are ignored.
     #[serde(default)]
     pub url: Option<SecretString>,
+    /// Upper bound on connections in the (single, shared) pool.
+    ///
+    /// This is the whole connection budget for one process, so the arithmetic
+    /// a managed Postgres must satisfy is:
+    ///
+    /// ```text
+    /// max_connections × (Cloud Run max-instances) + headroom  ≤  server limit
+    /// ```
+    ///
+    /// where headroom covers migrations, the `set_subscription` CLI and any
+    /// interactive `psql`. A `db-f1-micro` allows roughly 25, so the default of
+    /// 5 leaves room for four instances plus five spare connections.
+    ///
+    /// Raising this is a real decision, not a tuning knob — read the formula
+    /// above and check it against the instance you actually provisioned.
+    #[serde(default = "default_max_connections")]
+    pub max_connections: u32,
+}
+
+/// Deliberately small. sqlx's own default is 10 *per pool*, which was the
+/// wrong unit here: before the pools were unified this process built fifteen
+/// of them, for a ceiling of 150 connections against a `db-f1-micro` limit of
+/// about 25.
+const fn default_max_connections() -> u32 {
+    5
 }
 
 impl Database {

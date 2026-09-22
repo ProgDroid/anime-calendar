@@ -2,7 +2,6 @@ use chrono::NaiveDateTime;
 
 use crate::{
     ServerResult,
-    config::database::Database as DatabaseConfig,
     entity::calendar_invitation::{CalendarInvitation, InvitationStatus},
     error::Error,
     mappers::database::Database,
@@ -14,12 +13,11 @@ pub struct CalendarInvitationMapper {
 }
 
 impl CalendarInvitationMapper {
-    /// # Errors
-    /// Fails if database connection fails.
-    pub async fn new(config: DatabaseConfig) -> ServerResult<Self> {
-        Ok(Self {
-            db: Database::new(config).await?,
-        })
+    /// Takes a **clone of the process-wide pool**, not a config to connect
+    /// with — see [`Database::new`] for why there is only one.
+    #[must_use]
+    pub const fn new(db: Database) -> Self {
+        Self { db }
     }
 
     /// Construct a mapper from a bare pool — for integration tests only.

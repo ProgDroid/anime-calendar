@@ -31,34 +31,39 @@ async fn main() -> ServerResult<()> {
     let anilist = Anilist::new();
     let db_config = DatabaseConfig::new()?;
 
-    let user_mapper = UserMapper::new(db_config.clone()).await?;
-    let user_settings_mapper = UserSettingsMapper::new(db_config.clone()).await?;
+    // ONE pool for the whole process. Every mapper and service below takes a
+    // clone, which is Arc-backed and shares the same underlying pool.
+    //
+    // This used to be fifteen separate `Database::new` calls. At sqlx's default
+    // of 10 connections per pool that is a ceiling of 150 per instance, and
+    // Cloud Run multiplies it again by `max-instances` — against a db-f1-micro
+    // limit of about 25. The budget is now a single number, `max_connections`
+    // in database.toml; see its doc comment for the arithmetic.
+    let db = server::mappers::database::Database::new(db_config).await?;
 
-    let calendar_mapper = CalendarMapper::new(db_config.clone()).await?;
+    let user_mapper = UserMapper::new(db.clone());
+    let user_settings_mapper = UserSettingsMapper::new(db.clone());
+
+    let calendar_mapper = CalendarMapper::new(db.clone());
 
     let google_oauth = GoogleOauth::new(&settings.google_client_id);
-    let token_mapper = PasswordResetMapper::new(db_config.clone()).await?;
-    let verification_mapper = EmailVerificationMapper::new(db_config.clone()).await?;
-    let refresh_token_mapper = RefreshTokenMapper::new(db_config.clone()).await?;
-    let subscription_mapper = SubscriptionMapper::new(db_config.clone()).await?;
-    let stripe_event_mapper = StripeEventMapper::new(db_config.clone()).await?;
+    let token_mapper = PasswordResetMapper::new(db.clone());
+    let verification_mapper = EmailVerificationMapper::new(db.clone());
+    let refresh_token_mapper = RefreshTokenMapper::new(db.clone());
+    let subscription_mapper = SubscriptionMapper::new(db.clone());
+    let stripe_event_mapper = StripeEventMapper::new(db.clone());
     let email_service = EmailService::new(settings.smtp.clone());
-    // Dedicated pool for the show-count service. Cheap (Arc-backed) and
-    // keeps EntitlementService independent of any single mapper's lifetime.
-    let show_count_pool = server::mappers::database::Database::new(db_config.clone())
-        .await?
-        .pool;
-    let show_count_service = server::services::show_count::ShowCountService::new(show_count_pool);
+    let show_count_service =
+        server::services::show_count::ShowCountService::new(db.pool.clone());
     let entitlement_service = EntitlementService::new(
         subscription_mapper.clone(),
         show_count_service.clone(),
         &settings.limits,
     );
 
-    let calendar_editor_mapper = CalendarEditorMapper::new(db_config.clone()).await?;
+    let calendar_editor_mapper = CalendarEditorMapper::new(db.clone());
     let calendar_invitation_mapper =
-        server::mappers::calendar_invitation::CalendarInvitationMapper::new(db_config.clone())
-            .await?;
+        server::mappers::calendar_invitation::CalendarInvitationMapper::new(db.clone());
     let sharing_authz =
         SharingAuthz::new(calendar_editor_mapper.clone(), entitlement_service.clone());
 
@@ -105,10 +110,10 @@ async fn main() -> ServerResult<()> {
     // empty secret). `interval_secs = 0` also disables it, used in tests.
     if settings.stripe.is_configured() {
         let fetcher = server::services::reconcile::LiveStripeFetcher::new(stripe_client.clone());
-        // Dedicated pool for the reconcile sharing-suspend transaction.
-        let reconcile_pool = server::mappers::database::Database::new(db_config.clone())
-            .await?
-            .pool;
+        // A clone of the shared pool for the reconcile sharing-suspend
+        // transaction. This one genuinely IS Arc-backed, unlike the
+        // `Database::new` call it replaces.
+        let reconcile_pool = db.pool.clone();
         let sharing_deps = server::services::reconcile::SharingDeps {
             editor_mapper: calendar_editor_mapper.clone(),
             invitation_mapper: calendar_invitation_mapper.clone(),
@@ -136,11 +141,8 @@ async fn main() -> ServerResult<()> {
 
     let cached_anilist = CachedAnilist::new(anilist, cache.clone(), &settings.cache);
 
-    // Dedicated pool for ICS export + frozen blob services. Cheap (Arc-backed)
-    // and keeps these services independent of any single mapper's lifetime.
-    let ics_pool = server::mappers::database::Database::new(db_config.clone())
-        .await?
-        .pool;
+    // Shared pool for ICS export + frozen blob services.
+    let ics_pool = db.pool.clone();
     let ics_export = server::services::ics_export::IcsExportService::new(
         ics_pool.clone(),
         cached_anilist.clone(),
@@ -150,18 +152,19 @@ async fn main() -> ServerResult<()> {
     let frozen_ics =
         server::services::frozen_ics::FrozenIcsService::new(ics_pool, ics_export.clone());
 
-    // Dedicated pool backing the advisory-locked transactions in both
-    // PUT /calendar and POST /calendars/{id}/items (add_item). Cheap
-    // (Arc-backed) and keeps the controller independent of any single
-    // mapper's lifetime.
-    let controller_pool = server::mappers::database::Database::new(db_config.clone())
-        .await?
-        .pool;
+    // Backs the advisory-locked transactions in both PUT /calendar and
+    // POST /calendars/{id}/items (add_item).
+    //
+    // Sharing one pool is safe here *because* these take `pg_advisory_xact_lock`:
+    // the lock is held for the transaction, not the connection, so two callers
+    // drawing from the same pool serialise exactly as they did when each had
+    // its own. What does change is that the pool's `max_connections` is now the
+    // ceiling for all of them together — if advisory-locked work ever starves,
+    // raise that number rather than reintroducing a separate pool.
+    let controller_pool = db.pool.clone();
 
-    // Dedicated pool for the InvitationService advisory-locked transactions.
-    let invitation_pool = server::mappers::database::Database::new(db_config.clone())
-        .await?
-        .pool;
+    // Same pool for the InvitationService advisory-locked transactions.
+    let invitation_pool = db.pool.clone();
     let invitation_service = server::services::invitation_service::InvitationService::new(
         calendar_invitation_mapper.clone(),
         email_service.clone(),

@@ -1,6 +1,5 @@
 use crate::{
-    ServerResult, config::database::Database as DatabaseConfig,
-    entity::calendar_editor::CalendarEditor, mappers::database::Database,
+    ServerResult, entity::calendar_editor::CalendarEditor, mappers::database::Database,
 };
 
 #[derive(Clone)]
@@ -9,12 +8,11 @@ pub struct CalendarEditorMapper {
 }
 
 impl CalendarEditorMapper {
-    /// # Errors
-    /// Fails if database connection fails.
-    pub async fn new(config: DatabaseConfig) -> ServerResult<Self> {
-        Ok(Self {
-            db: Database::new(config).await?,
-        })
+    /// Takes a **clone of the process-wide pool**, not a config to connect
+    /// with — see [`Database::new`] for why there is only one.
+    #[must_use]
+    pub const fn new(db: Database) -> Self {
+        Self { db }
     }
 
     /// Construct a mapper from a bare pool — for integration tests only.

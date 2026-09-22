@@ -1,5 +1,5 @@
 use crate::{
-    ServerResult, config::database::Database as DatabaseConfig, entity::subscription::Subscription,
+    ServerResult, entity::subscription::Subscription,
     mappers::database::Database,
 };
 
@@ -26,12 +26,11 @@ pub struct SubscriptionMapper {
 }
 
 impl SubscriptionMapper {
-    /// # Errors
-    /// Fails if the database connection cannot be established.
-    pub async fn new(config: DatabaseConfig) -> ServerResult<Self> {
-        Ok(Self {
-            db: Database::new(config).await?,
-        })
+    /// Takes a **clone of the process-wide pool**, not a config to connect
+    /// with — see [`Database::new`] for why there is only one.
+    #[must_use]
+    pub const fn new(db: Database) -> Self {
+        Self { db }
     }
 
     /// Construct from a bare pool — used by integration tests and by the
