@@ -55,39 +55,71 @@ not a sequence. Real order:
 | When | Tasks | Why | Status |
 |---|---|---|---|
 | **Before provisioning anything** | 15 (pool budget), 19 (cargo-deny) | 15 sets the Postgres sizing arithmetic that Task 9 provisions against; 19 is a green-CI precondition for trusting any deploy. | ✅ **both done 2026-09-22** |
-| | 20 (migration strategy) | Decides what Task 12's workflow does. | Open — needs a decision, not work |
-| **Blocked on the open decisions** | 9, 10, 11 | Vendor provisioning, external accounts, secret values. | Blocked |
+| | 20 (migration strategy) | Decides what Task 12's workflow does. | ✅ **decided 2026-09-22** — CI applies, startup verifies. Work not yet done. |
+| **Blocked on buying the domain** | 9, 10, 11 | Vendor provisioning, external accounts, secret values. | Blocked on the domain only — the environment-shape question is settled |
 | **Before the first public deploy** | 17 (Access), 14 (reconcile) | 17 or the smoke test reports failure on a healthy service; 14 or Stripe state silently stops reconciling. | Open |
 | **Before letting anyone in free** | 18 (comp path) | Blocked the owner's own use and the friends allow-list. | ✅ **done 2026-09-22** |
-| **Any time — removes a constraint, fixes no fault** | 16 (Redis multiplexing) | Worth doing before sizing Redis, since it changes the answer. | Open |
+| **Any time — removes a constraint, fixes no fault** | 16 (Redis multiplexing) | Worth doing before sizing Redis, since it changes the answer. | ✅ **done 2026-09-22** (Steps 1–3; Step 4, the throughput measurement, still open) |
 
 **Sizing is no longer a blocker on either vendor decision.** Task 15 made the Postgres budget one
 configurable number that fits the smallest Cloud SQL tier, and the Redis evidence above shows the
 free tier's ceiling lifts to 256 connections for ~$5 with an in-place upgrade. Both decisions can
 now be made on cost and preference rather than on whether the app fits.
 
-### Resume here (2026-09-22)
+### Decisions taken 2026-09-22 (evening) — these close the two open questions
+
+**1. ONE environment. There is no staging.** Production stands alone. Asked whether this should
+be a bounded pre-launch campaign, permanent staging alongside production, or a single
+environment, the owner chose the single environment.
+
+What that changes, concretely:
+
+- **Tasks 9–12 build one environment, not two.** Every step in them that is written twice —
+  two Cloud Run services, two databases, two secret sets, two deploy jobs — collapses to one.
+  Task 12's workflow does not need an environment matrix or a `staging`/`production` input.
+- **The "same mechanism in both environments" constraint is moot**, because there is only one.
+  It was the hard constraint that ruled out a Redis sidecar container. **That does not
+  reinstate the sidecar** — the reason to keep managed Redis is now simply that production
+  should not depend on a container that dies with the instance.
+- **Migrations are rehearsed locally, not on a staging box.** That path is proven: applying all
+  21 migrations in order to a fresh `postgres:16` container yields 11 tables, 0 failures
+  (re-verified 2026-09-22). This is now the *only* rehearsal, so it has to actually be run
+  before each migration ships, not assumed.
+- **It sharpens, rather than settles, the Postgres choice.** The argument for Neon was
+  copy-on-write branching to rehearse migrations against prod-shaped data. With no staging,
+  branching becomes the *only* way to rehearse against real data — so it gets **more**
+  valuable here, not less. Weigh that against every query being cross-cloud to Frankfurt.
+  This is a live trade-off, not a closed one.
+- **The "production cliff" in readiness §5 arrives on day one**, since day one *is*
+  production. Task 16 has since taken the connection half of that cliff away (4 per replica,
+  20 at `--max-instances=5`, against the free tier's 30). The throughput half is unmeasured.
+
+**2. Task 20 — CI applies, startup verifies.** `sqlx migrate run` from the deploy workflow, so
+it runs exactly once per deploy instead of racing across cold-starting instances. Plus a startup
+check that reads `sqlx::migrate!`'s applied-versions list **without applying anything** and
+refuses to serve on a mismatch. That keeps CI's single-run property while closing what the
+CI-only approach gives up: a container started outside the workflow now fails loudly instead of
+serving traffic against a schema it cannot satisfy. Recorded in `docs/deployment-readiness.md`
+B-1, which previously said "migrate at startup" and contradicted this plan.
+
+### Resume here (2026-09-22, evening)
 
 **CI on `main` is green** — all five jobs, first time since 2026-06-12, so B-2 is closed.
+**Task 16 is done** (Steps 1–3; Step 4's throughput measurement is still open).
 
-Two things gate everything else, and neither is code:
+**One thing now gates everything else, and it is not code: buy the domain.** Porkbun,
+nameservers → Cloudflare immediately. It gates TLS (B-3), Resend's DKIM/SPF, and Google OAuth,
+which rejects bare IPs as authorized origins. B-3 and B-4 both wait on it, as do Tasks 9–11.
+As of this session the domain has **not** been bought and the owner wants to decide *which*
+domain first — so that conversation is the next thing, not a purchase.
 
-1. **One question for the owner:** *is this a bounded pre-launch campaign, permanent
-   infrastructure alongside production, or should there be only ONE environment?* It decides the
-   Postgres vendor, the Redis tier, and whether Tasks 9–12 build one environment or two. It was
-   put to him on 2026-09-22 and left unanswered. **Do not reopen Cloud SQL vs Neon before it is
-   settled** — the hesitation was never about that comparison.
-2. **Buy the domain** (Porkbun, nameservers → Cloudflare immediately). Gates TLS (B-3), Resend's
-   DKIM/SPF, and Google OAuth, which rejects bare IPs as authorized origins. B-3 and B-4 both
-   wait on it.
-
-Meanwhile, three tasks are fully unblocked and independent of both, recommended in this order:
+Unblocked work, independent of the domain, in the recommended order:
 
 | Order | Task | Why this one |
 |---|---|---|
-| 1 | **16** — Redis subscriber multiplexing | Direct sibling of the pool work in Task 15, same shape, and it is the last thing tying Redis sizing to viewer count. |
-| 2 | **14** — reconcile → Cloud Scheduler | Fails *silently* in production otherwise: the hourly timer never fires under CPU throttling and Stripe state stops reconciling. |
-| 3 | **17** — Access + a smoke test that survives it | Reports a healthy service as failed on the very first deploy. |
+| 1 | **14** — reconcile → Cloud Scheduler | Fails *silently* in production otherwise: the hourly timer never fires under CPU throttling and Stripe state stops reconciling. With one environment, production is the only environment, so there is no staging run to catch it. |
+| 2 | **20** — implement the migration decision | The decision is made (above); the work is not. Also drops the stale `schema.sql` mount, which is a hard blocker for anyone setting the project up fresh. |
+| 3 | **17** — Access + a smoke test that survives it | Reports a healthy service as failed on the very first deploy. Step 1 needs the domain; the smoke-test fix does not. |
 
 **Task 20 also needs a decision rather than work:** the readiness doc's B-1 says migrate at
 startup, this plan's Task 12 migrates from CI, and **they currently contradict each other** — the
@@ -2035,27 +2067,60 @@ single shared subscriber connection with a demux by channel name takes readiness
 from `3 fixed + 2/calendar + 1/viewer` to roughly **4 flat**, which takes a free tier's
 30-connection cap off the table as a sizing constraint.
 
-- [ ] **Step 1: Replace per-channel connections with one shared subscriber**
+**DONE 2026-09-22 — Steps 1–3. Step 4 is deliberately left open; see below.**
 
-Keep the existing `HashMap<String, Sender<String>>` fan-out — that layer already does the right
-thing. What changes is beneath it: one connection, dynamic `SUBSCRIBE`/`UNSUBSCRIBE`.
+- [x] **Step 1: Replace per-channel connections with one shared subscriber**
 
-- [ ] **Step 2: Convert reaping from drop-the-connection to `UNSUBSCRIBE`**
+`PubSub::split()` gives a `(PubSubSink, PubSubStream)` pair: the sink issues
+`SUBSCRIBE`/`UNSUBSCRIBE` while the stream is being polled. One driver task owns the stream and
+demultiplexes on `Msg::get_channel_name()` into the existing
+`HashMap<String, Sender<String>>`, which is untouched as the plan intended.
 
-`:232` breaks the listener at `receiver_count() == 0` and `:321` removes the map entry. With a
-shared connection the listener must not exit — it issues `UNSUBSCRIBE` and keeps running.
+Two things the vendored crate settled that the published docs did not. `PubSubSink::subscribe`
+takes `impl ToRedisArgs` in **redis 1.0.3** (`aio/pubsub.rs:297`), not the
+`IntoIterator<Item = Into<Bytes>>` that docs.rs/latest shows — a newer signature that has not
+shipped here. And `PubSubSink::send_recv` goes through an internally-spawned `PipelineSink`
+rather than through whoever polls the stream, which is what makes it safe for `subscribe()` to
+await the `SUBSCRIBE` ack while the driver task is between polls. Guessing either would have
+produced a deadlock or a type error.
 
-- [ ] **Step 3: Preserve the reconnect path**
+The connection is opened **lazily**, on the first `subscribe()`. An instance with no SSE viewers
+holds no subscriber connection at all, which is strictly better than the per-channel design and
+matters under scale-to-zero.
 
-The subscriber task holds the URL to reconnect after a drop. With one connection, a drop now
-costs *every* channel, so reconnect must re-`SUBSCRIBE` the full live set, not just one.
-This is the part most likely to be got wrong — write the test that kills the connection with
-two live channels and asserts both resume.
+Lock ordering is `subscribers` before `sink`, everywhere. The reconnect path originally read the
+channel set while holding the `sink` write lock, which deadlocks against `subscribe()` holding
+`subscribers` and wanting `sink`; each acquisition is now separately scoped.
+
+- [x] **Step 2: Convert reaping from drop-the-connection to `UNSUBSCRIBE`**
+
+The driver never exits. A channel whose last receiver has gone is removed from the map and
+`UNSUBSCRIBE`d; the connection carries on serving every other channel.
+
+One hole the plan did not name: the driver only learns a broadcast is empty when the **next
+message arrives on it**, so a channel that simply goes quiet would keep its subscription — and
+be restored on every reconnect — for the life of the process. A sweep on the `subscribe` slow
+path closes it without adding a timer.
+
+- [x] **Step 3: Preserve the reconnect path**
+
+`reconnect()` re-`SUBSCRIBE`s the full live set read from `subscribers`, in one command, which is
+why that map is the authoritative record rather than a cache of one.
+
+Tested, and the tests were **confirmed by mutation, not by passing**. Breaking `reconnect` to
+restore only `&channels[0..1]` fails `reconnect_restores_every_live_channel` and nothing else;
+disabling the sweep fails `dropping_a_receiver_unsubscribes_without_closing_the_connection` and
+nothing else. The reconnect test kills the real socket with `CLIENT KILL ID`, targeting the id it
+identified by diffing `CLIENT LIST TYPE pubsub` around its own setup, so it cannot collaterally
+kill a parallel test's connection.
 
 - [ ] **Step 4: Confirm the ops/sec ceiling is now the binding limit, not connections**
 
-With connections no longer scaling per viewer, the free tier's 100 ops·s⁻¹ and 5 GB·mo⁻¹ become
-the caps that matter. Measure before assuming they are comfortable.
+**Still open, and deliberately not ticked.** The connection half is measured — a test diffs
+`CLIENT LIST TYPE pubsub` across five `subscribe()` calls and requires growth of exactly one, so
+4 flat per replica is a finding rather than a claim. The **throughput** half is not: nothing has
+measured the app's actual ops·s⁻¹ against the free tier's 100, and multiplexing changed the
+connection count, not the message count. Do not read "Task 16 done" as "the free tier fits".
 
 ---
 

@@ -1,10 +1,11 @@
-# Deployment Readiness — Staging & Production
+# Deployment Readiness — Production
 
-**Date:** 2026-09-10 · **Revised:** 2026-09-22
-**Status:** B-2 closed (CI green). Blocked on one question from the owner —
-*is this a bounded pre-launch campaign, permanent infrastructure alongside
-production, or should there be only one environment?* — and on buying the
-domain, which no code can move. Unblocked work: plan Tasks 16, 14, 17.
+**Date:** 2026-09-10 · **Revised:** 2026-09-22 (evening)
+**Status:** B-2 closed (CI green). Task 16 done. The environment-shape question
+is **settled — one environment, production only, no staging** — and Task 20 is
+**settled — CI applies migrations, startup verifies them.** The single remaining
+blocker is **buying the domain**, which no code can move and which the owner
+wants to choose before registering. Unblocked work: plan Tasks 14, 20, 17.
 
 > **2026-09-22 revision.** Cloud sessions implemented Tasks 1–8 of
 > `docs/superpowers/plans/2026-04-20-deployment.md` without access to this
@@ -16,8 +17,24 @@ domain, which no code can move. Unblocked work: plan Tasks 16, 14, 17.
 > B-2 (three advisories, not one), §2 (the Redis budget is an artifact; Postgres
 > pooling is unbudgeted), §3 (the `environment = "staging"` workaround is
 > withdrawn), §5 (Redis Cloud tier evidence), §6 (`lcov.info` is now tracked).
-**Context:** Pre-deploy assessment. Goal is a gated staging environment (Stripe
-test mode, a handful of friend testers) followed by production.
+**Context:** Pre-deploy assessment. ~~Goal is a gated staging environment (Stripe
+test mode, a handful of friend testers) followed by production.~~ **Revised
+2026-09-22: there is no staging.** The goal is one production environment, gated
+by Cloudflare Access while it is shown to friend testers, then opened. The
+friend-testing phase is a *policy* on one environment, not a second environment.
+
+> **Consequence not yet decided — Stripe mode.** The original plan put friend
+> testers on Stripe *test* mode, which was a property of staging being separate.
+> With one environment there are two options and nobody has picked one: run the
+> single environment in test mode until launch and cut over to live keys (a
+> cutover that discards test-mode subscription state), or run live from day one
+> and give testers paid features through the comp path (Task 18, shipped, which
+> exists precisely for this). **Decide before Task 10 populates secrets** — that
+> is the step where the choice becomes concrete.
+
+Wherever the text below still says "staging", read it as production unless it is
+explicitly contrasting the two; the sections revised this evening (header, B-1,
+§2, §5) use the corrected framing.
 
 The audit docket (`AUDIT.md`) is fully closed — every CRITICAL/HIGH/MEDIUM/LOW
 from the 2026-05-07 sweep and 2026-06-11 follow-up is resolved. **Nothing below
@@ -55,25 +72,42 @@ The file's own header claims it is *"kept in sync manually whenever a migration
 changes the schema"* — that manual sync stopped around migration 4 of 21. This
 is the failure mode the manual-sync convention guarantees eventually.
 
-**Decision taken:** run `sqlx::migrate!` at server startup and drop the
-`schema.sql` mount. Migrations become the single source of truth so the drift
-cannot recur. Note `sqlx` is already built with the `migrate` feature
-(`server/Cargo.toml:42`). This is **mandatory** under Cloud Run, where there is
-no host to shell into.
+**DECISION OF RECORD (settled 2026-09-22 evening, Task 20): CI applies,
+startup verifies.** This supersedes the earlier "migrate at startup" decision
+recorded here, and it is what the deployment plan now says too — the two
+documents agreed to disagree for a fortnight, which is exactly the condition
+that produced the `schema.sql` drift in the first place.
 
-> **Contested, 2026-09-22.** The deployment plan instead runs `sqlx migrate run`
-> from a GitHub Actions step before each deploy. That is not obviously worse —
-> it runs exactly once per deploy rather than racing across cold-starting
-> instances — but **the two documents currently assert different things, which
-> is how the `schema.sql` drift started.** Settle it and record the answer here:
-> Task 20 of the plan.
+1. **`sqlx migrate run --source ./migrations` from the deploy workflow**, before
+   the new revision takes traffic. It runs exactly once per deploy instead of
+   racing across however many instances cold-start at the same moment — a race
+   `_sqlx_migrations` handles correctly but noisily.
+2. **A startup check that verifies and does not apply.** `sqlx::migrate!`
+   exposes the applied-versions list without running anything; the server
+   compares it to the embedded set and **refuses to serve on a mismatch**. This
+   closes the one thing the CI-only approach gives up: a container started
+   outside the workflow — a local `docker run`, a manual `gcloud run deploy` of
+   an older image — otherwise gets no migration at all and serves traffic
+   against a schema it cannot satisfy, silently.
+3. **Drop the `schema.sql` mount from `docker-compose.yml` either way.** It is a
+   hard blocker for anyone setting the project up fresh, independent of which
+   strategy won.
+
+`sqlx` is already built with the `migrate` feature (`server/Cargo.toml:42`), so
+(2) needs no dependency change. **The decision is made; the work is not done** —
+it is Task 20 of the plan.
+
+> Two facts established 2026-09-22 that this decision rests on. (a) The plan's
+> three migration commands pointed at `server/migrations`, **which does not
+> exist** — the 21 migrations are at `./migrations`. Every deploy would have
+> failed on it. Corrected in the plan. (b) Applying all 21 in order to a fresh
+> PostgreSQL 16 container succeeds: 21 applied, 0 failures, 11 tables
+> (re-verified 2026-09-22 evening). **The migration set is sound from zero**;
+> the drift is a property of `schema.sql` alone.
 >
-> Two facts established the same day. (a) The plan's three migration commands
-> pointed at `server/migrations`, **which does not exist** — the 21 migrations
-> are at `./migrations`. Every deploy would have failed on it. Corrected in the
-> plan. (b) Applying all 21 in order to a fresh PostgreSQL 16 container
-> succeeds: 21 applied, 0 failures, 11 tables. **The migration set is sound from
-> zero**; the drift is a property of `schema.sql` alone.
+> With the single-environment decision (below), local containers are the *only*
+> migration rehearsal there is. That raises the stakes on actually running (b)
+> before each migration ships rather than trusting it.
 
 ### ~~B-2. CI on `main` is red~~ — CLOSED 2026-09-22
 
@@ -178,36 +212,47 @@ under-enforces — a soft limit, not a correctness bug.
 lines 64–69 explicitly document relying on browser auto-retry. A platform
 request cap (e.g. Cloud Run's 60 min) produces a transparent reconnect.
 
-### Redis connections are per-channel, not per-client
+### ~~Redis connections are per-channel, not per-client~~ — FIXED 2026-09-22 (Task 16)
 
-`redis_pubsub.rs:150` fast-paths to an existing `tokio::broadcast::Sender`;
-only the first subscriber for a channel opens a dedicated connection (`:243`).
-Reaping works: `:232` breaks the listener at `receiver_count() == 0`, `:321`
-removes the map entry. No leak.
+**Redis connections are now flat.** `redis_pubsub.rs` holds **one** shared
+`PubSub` connection for the whole process, split into a sink
+(`SUBSCRIBE`/`UNSUBSCRIBE`) and a stream, with a single driver task
+demultiplexing messages by channel name into the existing per-channel
+`tokio::broadcast` fan-out. The connection is opened lazily on the first
+`subscribe()`, so a replica with no SSE viewers holds none at all.
 
 `Cache` (`cache.rs:44`) and `PresenceService` (`presence.rs:50`) each hold a
 single `get_multiplexed_async_connection()`.
 
-**Connection budget:**
+**Connection budget (current):**
 
 ```
-fixed:                ~3   (cache + presence + publisher)
-per viewed calendar:   2   (cal:{id}, presence:{id})
-per active viewer:     1   (kick:{actor_id})
+fixed:                 3   (cache + presence + publisher)
+shared subscriber:     1   (only while ≥1 SSE viewer is connected)
+per viewed calendar:   0
+per active viewer:     0
 ```
 
-5 calendars / 10 viewers = ~23 connections. 10 calendars / 20 viewers = ~43.
+**4 connections per replica at any load**, 3 with no viewers. At
+`--max-instances=5` that is a ceiling of 20 — inside the free tier's 30 with
+room to spare, and inside the 256 of the ~$5 tier by two orders of magnitude.
 
-> **Correction, 2026-09-22 — this budget is an implementation artifact, not a
-> property of the app, and it should not be treated as an input to a vendor
-> decision.** `redis_pubsub.rs:235-237` opens a fresh `Client::open` +
-> `get_async_pubsub()` **per channel**. Redis pub/sub permits one connection to
-> `SUBSCRIBE` to many channels; the per-channel connection is a choice.
-> Multiplexing onto one shared subscriber collapses the whole table above to
-> **~4 connections flat, regardless of load** — see Task 16 of the deployment
-> plan. With that done, a free tier's connection cap stops being the binding
-> constraint and throughput (e.g. Redis Cloud free: 100 ops·s⁻¹, 5 GB·mo⁻¹)
-> becomes the limit that matters instead.
+Asserted against Redis rather than against belief: the test
+`many_channels_share_one_connection` diffs `CLIENT LIST TYPE pubsub` around five
+`subscribe()` calls and requires the count to grow by exactly one.
+
+**Historical (2026-09-10), kept because the vendor analysis below was written
+against it:** the old code opened a fresh `Client::open` + `get_async_pubsub()`
+per channel, giving `~3 fixed + 2/calendar + 1/viewer` — 5 calendars / 10 viewers
+= ~23 connections, 10 calendars / 20 viewers = ~43. That was an implementation
+artifact, never a property of the app, and it is gone.
+
+> **Still unmeasured — Task 16 Step 4.** With connections no longer scaling per
+> viewer, the binding limit moves to **throughput**: Redis Cloud free is
+> 100 ops·s⁻¹ and 5 GB·mo⁻¹. Nothing here has measured the app's actual ops rate,
+> so treat "comfortable" as an assumption, not a finding. Every published event
+> still costs one `PUBLISH` plus the cache's own traffic; multiplexing changed
+> the *connection* count, not the *message* count.
 
 ### Postgres connections are unbudgeted, and this is the sharper constraint
 
@@ -322,10 +367,18 @@ run against real Stripe test mode in a browser — which is what staging is for.
 | `2026-05-co-editor-sharing-uat.md` | 23 |
 | `2026-05-legal-pre-release.md` | 18 |
 
-**Legal blocks production, not staging.** `/privacy` and `/terms` render
-literally `"Privacy policy coming soon."`
-(`frontend/src/locales/en.json:542,546`). Fine for friends on Stripe test mode;
-not fine for taking real money from strangers.
+~~**Legal blocks production, not staging.**~~ **Reclassified 2026-09-22: legal
+blocks the only deploy there is.** `/privacy` and `/terms` render literally
+`"Privacy policy coming soon."` (`frontend/src/locales/en.json:542,546`).
+
+The old sentence continued *"Fine for friends on Stripe test mode; not fine for
+taking real money from strangers"* — and that split was doing real work, because
+it let the legal checklist wait until after a staging deploy. **With one
+environment that deferral is gone.** The 18 unticked boxes in
+`2026-05-legal-pre-release.md` now sit on the critical path to the *first*
+deploy, not a later one, unless the Stripe-mode question above is answered with
+"test mode until launch" — in which case they move behind the cutover instead.
+The two questions are coupled; answer them together.
 
 ---
 
@@ -353,9 +406,17 @@ not fine for taking real money from strangers.
   nameservers is free and instant — registrar transfer can follow later.
 - **Email: Resend** — 3,000/mo free, SMTP credentials drop into the existing
   `[smtp]` block with no code change, no sandbox-approval delay (unlike SES).
+- **ONE environment: production, with no staging** (decided 2026-09-22). Tasks
+  9–12 of the deployment plan build a single environment; nothing is duplicated.
+  The consequences are worked through in the plan's *Decisions taken
+  2026-09-22* section — the short version is that migrations are rehearsed
+  against a local container rather than a staging box, the
+  "same-mechanism-in-both-environments" constraint below is moot, and there is
+  no soft launch: the first deploy is production.
 
 Domain is genuinely step zero: it blocks TLS certificates, email DKIM/SPF, and
-Google OAuth (which rejects bare IPs as authorized origins).
+Google OAuth (which rejects bare IPs as authorized origins). **Not bought as of
+2026-09-22** — the owner wants to settle which domain to register first.
 
 ### Open — owner sleeping on these (2026-09-10)
 
@@ -419,18 +480,36 @@ Google OAuth (which rejects bare IPs as authorized origins).
 - *Memorystore* — ~$36/mo, no constraints, exact prod rehearsal. 4x the cost of
   everything else combined.
 
-Owner constraint driving both: **staging and production should use the same
-mechanism**, not two different ones. This is what rules out a Redis sidecar
-container (which would otherwise be $0 and works fine at `max-instances=1`).
+~~Owner constraint driving both: **staging and production should use the same
+mechanism**, not two different ones.~~ **Moot as of 2026-09-22** — there is only
+one environment, so there is nothing for it to match. It was the argument that
+ruled out a Redis sidecar container. **The sidecar stays ruled out anyway**, for
+a different and now more direct reason: with no staging, that container *is*
+production, and it dies with the instance under scale-to-zero, taking the cache
+and every live `SUBSCRIBE` with it.
+
+The single-environment decision also re-weights the Postgres choice rather than
+settling it. Neon's copy-on-write branching was attractive for rehearsing
+migrations against prod-shaped data; with no staging it becomes the **only** way
+to do that, so it gains value here. Set against every query being cross-cloud to
+Frankfurt. Live trade-off — see the plan.
 
 ### Indicative cost
 
-Staging with Cloud SQL + Redis Cloud free ≈ **$9/mo**. Cloud Run at this traffic
-is ~$0–2, Cloud Scheduler free for 3 jobs, Artifact Registry ~$0.10.
-Production adds a second Cloud Run service and a ~$5 Redis tier.
+Production with Cloud SQL + Redis Cloud free ≈ **$9/mo** — one Cloud Run service,
+no second environment. Cloud Run at this traffic is ~$0–2, Cloud Scheduler free
+for 3 jobs, Artifact Registry ~$0.10.
 
-**Production cliff to be aware of:** real users mean the Redis free tier's 30
-connections and any `max-instances=1` assumption both stop holding.
+**Production cliff, which now arrives on day one** (there is no staging to meet
+it first):
+
+- ~~the Redis free tier's 30 connections~~ — **no longer the binding constraint.**
+  Task 16 made connections flat at 4 per replica, so `--max-instances=5` tops out
+  at 20 against a ceiling of 30. See §2.
+- **Throughput is now the ceiling that matters**, and it is unmeasured: free is
+  100 ops·s⁻¹ and 5 GB·mo⁻¹. The ~$5 tier lifts that to 1,000 ops·s⁻¹ / 100 GB
+  with an in-place upgrade (same endpoint, no redeploy).
+- any `max-instances=1` assumption still stops holding.
 
 ---
 
