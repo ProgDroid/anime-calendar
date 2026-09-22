@@ -4,7 +4,7 @@
 
 ## Project state & references
 
-- [DEPLOY: readiness + open decisions](project_deploy_readiness_and_open_decisions.md) — read `docs/deployment-readiness.md` first on any deploy ask; Postgres + Redis choices still open (2026-09-10).
+- [DEPLOY: readiness + open decisions](project_deploy_readiness_and_open_decisions.md) — read `docs/deployment-readiness.md` + the plan's Decisions-of-record table first; Tasks 1-8/15/18/19 shipped, Postgres + Redis vendors still open (2026-09-22).
 - [User: GCP/Cloud Run experience](user_gcp_cloud_run_experience.md) — substantial prior Cloud Run work; don't price in learning curve.
 - [Tech Stack](project_tech_stack.md) — Rust/Actix/PG/Redis backend; Vue3/TS/Tailwind/Pinia frontend (DaisyUI evicted).
 - [Conventions](project_conventions.md) — error doc comments, DI via web::Data, tests in-file, all strings i18n (both locales).
@@ -19,7 +19,7 @@
 - [2FA gate for invitations — backlog](reference_2fa_invitation_gate_backlog.md) — layer 2FA onto invite send+accept once 2FA ships.
 - [Data-source: AniList stays (2026-05-05)](project_data_source_spike_outcome.md) — MAL no episode airing; AnimeSchedule/Kitsu block commercial; AniList sole source. Spec 4 still viable.
 - [Dev DB migration drift](project_dev_db_migration_drift.md) — recurred; `sqlx migrate run` blocked again (2026-06-12). psycopg2 bypass + SHA-384 _sqlx_migrations bookkeeping (recipe in file).
-- [Backend tests need Redis :2435](project_backend_test_infra_redis.md) — `cargo test -p server --lib` needs PG + Redis(2435); lone subscribe_feed panic = Redis down, not a regression.
+- [Backend tests need PG + Redis](project_backend_test_infra_redis.md) — copy-paste throwaway-container recipe (no migration drift); lone subscribe_feed panic = Redis down, not a regression.
 - [Design tokens text variants](project_design_tokens_text_variants.md) — `--accent-1-text`/`--danger-text` for AA text on neutral bg; bare tokens for surfaces only.
 
 ## Backend / Rust / sqlx
