@@ -4,9 +4,64 @@
 
 **Goal:** Make anime-calendar deployable to GCP Cloud Run with full CI/CD automation, Cloudflare protection, and two isolated environments (staging/production).
 
-**Architecture:** Rust backend + Vue frontend as separate Cloud Run services behind Cloudflare. Staging uses Neon (free Postgres) + Upstash Redis free tier; production uses Cloud SQL db-f1-micro + Upstash pay-per-use. Secrets injected at runtime from GCP Secret Manager. No config files in production — env vars only.
+**Architecture:** Rust backend + Vue frontend as separate Cloud Run services behind Cloudflare, in `europe-west1`. Secrets injected at runtime from GCP Secret Manager. No config files in production — env vars only.
 
-**Tech Stack:** GCP Cloud Run, Cloud SQL (PostgreSQL 17), Neon, Upstash Redis, Cloudflare (free), GCP Secret Manager, GCP Artifact Registry, GitHub Actions, Workload Identity Federation, sqlx migrations, nginx envsubst, Docker multi-stage builds.
+**Tech Stack:** GCP Cloud Run, Cloudflare (free), GCP Secret Manager, GCP Artifact Registry, GitHub Actions, Workload Identity Federation, sqlx migrations, nginx envsubst, Docker multi-stage builds. Postgres and Redis vendors: see *Decisions of record* below.
+
+---
+
+## Decisions of record (2026-09-22)
+
+**This plan was written 2026-04-20 and its original platform choices are superseded.**
+The authority is `docs/deployment-readiness.md` (2026-09-10), which was written after a
+source-level assessment and was **not** available to the sessions that implemented Tasks 1–8.
+Where the two disagree, the readiness doc wins. Superseded choices, recorded so nobody
+reinstates them from an older draft:
+
+| This plan originally said | Superseded by | Why |
+|---|---|---|
+| `us-central1` | **`europe-west1`** | GDPR (EU user data stays in the EU, which shortens the legal-basis paragraph the unticked legal checklist requires); ~10–20 ms vs ~120 ms from Europe, which matters for SSE presence. Cloud Run pricing is near-flat across regions and scale-to-zero removes the idle-cost argument. |
+| Staging on Neon + Upstash, production on Cloud SQL + Upstash | **Same mechanism in both environments** | Owner's stated hard constraint. Two different backing stores means staging stops being a rehearsal. |
+| Upstash Redis | **Not Upstash** | Unresolved whether `SUBSCRIBE` works over their native TCP endpoint; their own troubleshooting docs steer you to the REST client "to avoid persistent connections". This app holds a `SUBSCRIBE` open for a user's whole browser session, which is the opposite shape. |
+
+**Still open (does not block Tasks 1–8, 12, or 13):** the Postgres vendor and the Redis
+vendor. Only **Tasks 9, 10 and 11** — infrastructure provisioning, external account setup and
+secret population — depend on the answer. Everything else is vendor-neutral, including the
+code already written: `database.url` and `redis.url` take a full connection string verbatim,
+and the vendor names that remain in doc comments and test fixtures are illustrative only.
+
+**Evidence gathered 2026-09-22 that bears on the open choices:**
+
+- **Redis Cloud Essentials scales the connection ceiling steeply and upgrades in place.**
+  30 MB free = 30 connections / 100 ops·s⁻¹ / 5 GB·mo⁻¹; 250 MB (~$5) = **256** connections /
+  1,000 ops·s⁻¹ / 100 GB·mo⁻¹. Redis documents that changing plan leaves "data and endpoints
+  ... not disrupted" with no availability impact — so outgrowing the free tier costs a console
+  click, not a migration or a redeploy.
+- **The connection budget in readiness §2 is an implementation artifact, not a floor.**
+  `server/src/redis_pubsub.rs:235-237` opens a fresh `Client::open` + `get_async_pubsub()` per
+  channel. Redis pub/sub permits one connection to `SUBSCRIBE` to many channels; multiplexing
+  collapses `3 fixed + 2/calendar + 1/viewer` to roughly **4 flat**. See Task 16.
+- **Postgres pooling is unbudgeted and is the sharper constraint.** See Task 15.
+- **Redis Cloud pub/sub is not *documented as restricted* on Essentials, which is not the same
+  as documented as supported.** Same evidential gap that left Upstash unresolved — settle it
+  with a live `SUBSCRIBE` against a real free database before committing. Essentials free is
+  single-shard, so the Redis Enterprise clustered-pub/sub caveat does not apply.
+
+### Sequencing
+
+Tasks 14–20 were appended in discovery order, **not** execution order. The numbering is an id,
+not a sequence. Real order:
+
+| When | Tasks | Why |
+|---|---|---|
+| **Before provisioning anything** | 15 (pool caps), 20 (migration strategy), 19 (cargo-deny) | 15 sets the Postgres sizing arithmetic that Task 9 provisions against; 20 decides what Task 12's workflow does; 19 is a green-CI precondition for trusting any deploy. |
+| **Blocked on the open decisions** | 9, 10, 11 | Vendor provisioning, external accounts, secret values. |
+| **Before the first public deploy** | 17 (Access), 14 (reconcile) | 17 or the smoke test reports failure on a healthy service; 14 or Stripe state silently stops reconciling. |
+| **Before letting anyone in free** | 18 (comp path) | Blocks the owner's own use and the friends allow-list. |
+| **Any time — removes a constraint, fixes no fault** | 16 (Redis multiplexing) | Worth doing before sizing Redis, since it changes the answer. |
+
+Tasks 1–8 are **done in code** on the cloud branch, verified type-clean, and the checkbox state
+in this document was never updated to reflect that — do not re-run them from the unticked boxes.
 
 **Spec note:** The design doc `docs/superpowers/specs/2026-04-20-deployment-design.md` states two frontend images (frontend-staging, frontend-prod). That is incorrect — the frontend uses `baseURL: '/api'` (relative URL via nginx proxy), so `VITE_API_BASE_URL` is never consulted at runtime. One image with runtime `BACKEND_URL` envsubst is correct.
 
@@ -49,7 +104,7 @@ the `/api` prefix, so a browser request to `/api/health` reaches actix as `/heal
 backend route follows the same convention (`#[get("/public-config")]`, `/calendars/...`).
 The public-URL smoke tests in Tasks 12 and 13 correctly keep `/api/health` — they go through nginx.
 
-- [ ] **Step 1: Write the health controller**
+- [x] **Step 1: Write the health controller**
 
 Create `server/src/controllers/health.rs`:
 
@@ -68,7 +123,7 @@ pub async fn health() -> HttpResponse {
 }
 ```
 
-- [ ] **Step 2: Register the module**
+- [x] **Step 2: Register the module**
 
 Edit `server/src/controllers.rs`, add:
 
@@ -76,7 +131,7 @@ Edit `server/src/controllers.rs`, add:
 pub mod health;
 ```
 
-- [ ] **Step 3: Register the route in server.rs**
+- [x] **Step 3: Register the route in server.rs**
 
 In `server/src/server.rs`, add to the `use crate::controllers` import:
 
@@ -88,7 +143,7 @@ use crate::controllers::{
 
 Add `.service(health::health)` to the service list (before `.service(item::get)`).
 
-- [ ] **Step 4: Verify it compiles**
+- [x] **Step 4: Verify it compiles**
 
 ```bash
 AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo check --workspace
@@ -96,7 +151,7 @@ AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo check --workspace
 
 Expected: no errors.
 
-- [ ] **Step 5: Write a test for the health endpoint**
+- [x] **Step 5: Write a test for the health endpoint**
 
 Add to `server/src/controllers/health.rs`:
 
@@ -124,7 +179,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 ```bash
 AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo test -p server controllers::health
@@ -132,7 +187,7 @@ AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo test -p server controllers::h
 
 Expected: 2 tests pass.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add server/src/controllers/health.rs server/src/controllers.rs server/src/server.rs
@@ -160,11 +215,34 @@ The `config` crate supports layered sources — file first, then env vars overri
    five construction sites (`server/src/server.rs` plus the test helpers in `controllers/auth.rs`,
    `controllers/refresh.rs`, `controllers/email_verification.rs`), or Step 6 cannot compile.
 
+**Correction applied 2026-09-22 — this one was a latent startup crash.** `allowed_origins` is a
+`Vec<String>`, and an environment variable is always a scalar. Task 12 injects
+`ALLOWED_ORIGINS=https://staging.${DOMAIN}`; measured against `config` 0.15.14, that load
+**fails outright**:
+
+```
+invalid type: string "https://staging.example.com", expected a sequence for key `allowed_origins`
+```
+
+The container would not have started on the first deploy, and the error names a config key
+rather than the deploy command, so it would not have been obvious where it came from. Fixed by
+adding `.list_separator(",").with_list_parse_key("allowed_origins")` to `Server::env_source()`.
+
+The scoping matters: a bare `list_separator` turns **every** string field into a list
+(`config/src/env.rs:47` warns about exactly this), which would silently truncate any secret
+containing a comma to its first segment. Three tests lock it in — single value, comma-separated
+list, and a comma inside `JWT_SECRET` staying intact.
+
+Why nothing caught it: the test module's `required()` fixture lists the fields the struct needs
+to *deserialize*, and `allowed_origins` has a serde default — so it was invisible to that
+question while being load-bearing for the deploy. **A config fixture should mirror the deploy
+command's env block, not the struct's mandatory fields.**
+
 **Files:**
 - Modify: `server/src/config/server.rs`
 - Modify: `server/src/config/database.rs`
 
-- [ ] **Step 1: Update Server::new() to support env vars**
+- [x] **Step 1: Update Server::new() to support env vars**
 
 In `server/src/config/server.rs`, replace the `Server::new()` implementation:
 
@@ -194,7 +272,7 @@ use config::{Config, ConfigError, File};
 
 (No change needed — `config::Environment` is accessed with the full path.)
 
-- [ ] **Step 2: Add optional redis.url field to RedisConfig**
+- [x] **Step 2: Add optional redis.url field to RedisConfig**
 
 In `server/src/config/server.rs`, update `RedisConfig`:
 
@@ -228,7 +306,7 @@ impl Default for RedisConfig {
 }
 ```
 
-- [ ] **Step 3: Add cf_origin_secret and cookie_domain to Server**
+- [x] **Step 3: Add cf_origin_secret and cookie_domain to Server**
 
 In `server/src/config/server.rs`, add two fields to `Server`:
 
@@ -291,7 +369,7 @@ impl Default for Server {
 }
 ```
 
-- [ ] **Step 4: Add cookie_domain to CookieSettings**
+- [x] **Step 4: Add cookie_domain to CookieSettings**
 
 Update the `CookieSettings` struct at the bottom of `server/src/config/server.rs`:
 
@@ -303,7 +381,7 @@ pub struct CookieSettings {
 }
 ```
 
-- [ ] **Step 5: Update Database::new() for env vars and add url field**
+- [x] **Step 5: Update Database::new() for env vars and add url field**
 
 In `server/src/config/database.rs`, replace the entire file:
 
@@ -345,7 +423,7 @@ impl Database {
 }
 ```
 
-- [ ] **Step 6: Verify compile**
+- [x] **Step 6: Verify compile**
 
 ```bash
 AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo check --workspace
@@ -353,7 +431,7 @@ AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo check --workspace
 
 Expected: no errors (some `unused field` warnings for `url` are acceptable — they disappear in the next task).
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add server/src/config/server.rs server/src/config/database.rs
@@ -362,9 +440,13 @@ git commit -m "feat: support env var config override for Cloud Run (no config fi
 
 ---
 
-## Task 3: Upstash Redis TLS Support
+## Task 3: Redis TLS + Full-URL Support
 
-Upstash requires `rediss://` (TLS). `Cache::new()` builds only `redis://`. Add `Cache::from_url()` and wire it in `main.rs`.
+*(Retitled 2026-09-22 — was "Upstash Redis TLS Support". The work is vendor-neutral and stands
+whatever vendor is chosen; every managed Redis hands out a `rediss://` string.)*
+
+Managed Redis requires `rediss://` (TLS). `Cache::new()` builds only `redis://`. Add
+`Cache::from_url()` and wire it in `main.rs`.
 
 **Corrections applied 2026-09-14:**
 
@@ -388,7 +470,7 @@ Upstash requires `rediss://` (TLS). `Cache::new()` builds only `redis://`. Add `
 - Modify: `server/src/cache.rs`
 - Modify: `server/src/main.rs`
 
-- [ ] **Step 1: Add Cache::from_url() constructor**
+- [x] **Step 1: Add Cache::from_url() constructor**
 
 In `server/src/cache.rs`, add a new constructor after `Cache::new()`:
 
@@ -404,7 +486,7 @@ pub async fn from_url(url: &str) -> RedisResult<Self> {
 }
 ```
 
-- [ ] **Step 2: Update main.rs to use from_url when redis.url is set**
+- [x] **Step 2: Update main.rs to use from_url when redis.url is set**
 
 Read the current `Cache::new` call in `server/src/main.rs` (look for the line starting `let cache = Cache::new`). Replace it with:
 
@@ -425,7 +507,7 @@ let cache = if let Some(url) = &settings.redis.url {
 };
 ```
 
-- [ ] **Step 3: Verify compile**
+- [x] **Step 3: Verify compile**
 
 ```bash
 AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo check --workspace
@@ -433,7 +515,7 @@ AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo check --workspace
 
 Expected: no errors.
 
-- [ ] **Step 4: Write a test for from_url**
+- [x] **Step 4: Write a test for from_url**
 
 In `server/src/cache.rs` inside the `#[cfg(test)] mod tests` block, add:
 
@@ -456,7 +538,7 @@ async fn from_url_connects_successfully() {
 }
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo test -p server cache
@@ -464,7 +546,7 @@ AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo test -p server cache
 
 Expected: all cache tests pass (including new `from_url` test if Redis test server is available).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add server/src/cache.rs server/src/main.rs
@@ -482,7 +564,7 @@ Requests not routed through Cloudflare are rejected with 403. The secret is inje
 - Modify: `server/src/middleware.rs`
 - Modify: `server/src/server.rs`
 
-- [ ] **Step 1: Write the middleware**
+- [x] **Step 1: Write the middleware**
 
 Create `server/src/middleware/cloudflare.rs`:
 
@@ -617,7 +699,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 2: Register the module**
+- [x] **Step 2: Register the module**
 
 Edit `server/src/middleware.rs`:
 
@@ -626,7 +708,7 @@ pub mod auth;
 pub mod cloudflare;
 ```
 
-- [ ] **Step 3: Add futures-util to Cargo.toml**
+- [x] **Step 3: Add futures-util to Cargo.toml**
 
 Check if `futures-util` is already a dependency:
 
@@ -640,7 +722,7 @@ If not present, add to `server/Cargo.toml` under `[dependencies]`:
 futures-util = "0.3"
 ```
 
-- [ ] **Step 4: Wire the middleware in server.rs conditionally**
+- [x] **Step 4: Wire the middleware in server.rs conditionally**
 
 In `server/src/server.rs`, add to the imports:
 
@@ -712,7 +794,7 @@ And in the closure:
 
 Place this `.wrap()` just after the `.wrap(cors)` line so it executes before CORS.
 
-- [ ] **Step 5: Update CookieSettings construction in server.rs**
+- [x] **Step 5: Update CookieSettings construction in server.rs**
 
 Replace the `CookieSettings` construction:
 
@@ -723,7 +805,7 @@ let cookie_settings = CookieSettings {
 };
 ```
 
-- [ ] **Step 6: Verify compile**
+- [x] **Step 6: Verify compile**
 
 ```bash
 AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo check --workspace
@@ -731,7 +813,7 @@ AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo check --workspace
 
 Expected: no errors.
 
-- [ ] **Step 7: Run middleware tests**
+- [x] **Step 7: Run middleware tests**
 
 ```bash
 AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo test -p server middleware::cloudflare
@@ -739,7 +821,7 @@ AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo test -p server middleware::cl
 
 Expected: 3 tests pass.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add server/src/middleware/cloudflare.rs server/src/middleware.rs server/src/server.rs
@@ -773,11 +855,11 @@ Cookies need `Domain=.yourdomain.com` and `SameSite=Lax` to work across subdomai
    and `Path` match, so a missed site would break logout on the deployed domain
    while still passing locally (where `domain` is `None` on both sides).
 
-- [ ] **Step 1: Find the cookie builder functions**
+- [x] **Step 1: Find the cookie builder functions**
 
 The functions are `build_auth_cookie` and `build_refresh_cookie` in `server/src/controllers/auth.rs`. Read around line 76 to locate them.
 
-- [ ] **Step 2: Update build_auth_cookie**
+- [x] **Step 2: Update build_auth_cookie**
 
 Replace `build_auth_cookie`:
 
@@ -797,7 +879,7 @@ pub fn build_auth_cookie(token: String, cookie_settings: &CookieSettings) -> Coo
 }
 ```
 
-- [ ] **Step 3: Find and update build_refresh_cookie**
+- [x] **Step 3: Find and update build_refresh_cookie**
 
 Search for `build_refresh_cookie` in the file. Apply the same pattern:
 
@@ -819,11 +901,11 @@ pub fn build_refresh_cookie(token: String, cookie_settings: &CookieSettings) -> 
 
 > **Note:** Confirm the path for `build_refresh_cookie` matches the current code before replacing. Read the function body first.
 
-- [ ] **Step 4: Check for logout cookie clearing**
+- [x] **Step 4: Check for logout cookie clearing**
 
 Search for `Cookie::build` or `build_*cookie` calls used to clear cookies at logout. They also need `SameSite::Lax` and `domain` applied. The pattern is typically a zero/negative `max_age`. Apply the same builder pattern to any clearing cookies.
 
-- [ ] **Step 5: Compile + test**
+- [x] **Step 5: Compile + test**
 
 ```bash
 AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo test -p server
@@ -831,7 +913,7 @@ AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo test -p server
 
 Expected: all existing tests pass.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add server/src/controllers/auth.rs
@@ -850,7 +932,7 @@ git commit -m "fix: cookies use SameSite=Lax and support optional domain for sub
 the three new keys; do not paste it over the file. `database.toml.dist` also gained a
 commented `url` key, which the plan omits.
 
-- [ ] **Step 1: Add new fields to config.toml.dist**
+- [x] **Step 1: Add new fields to config.toml.dist**
 
 Replace the entire `config.toml.dist` with:
 
@@ -900,7 +982,7 @@ host = "127.0.0.1"
 port = 9090
 ```
 
-- [ ] **Step 2: Commit**
+- [x] **Step 2: Commit**
 
 ```bash
 git add config.toml.dist
@@ -931,7 +1013,7 @@ The frontend nginx config has `http://server:8080` hardcoded (Docker Compose hos
    hardcoded `http://server:8080`; templating it without adding an `environment:` entry
    breaks local compose, with nginx refusing to start on `proxy_pass /;`.
 
-- [ ] **Step 1: Rename and update nginx.conf to a template**
+- [x] **Step 1: Rename and update nginx.conf to a template**
 
 Create `frontend/nginx.conf.template` with:
 
@@ -975,7 +1057,7 @@ Delete the old `frontend/nginx.conf`:
 git rm frontend/nginx.conf
 ```
 
-- [ ] **Step 2: Update frontend/Dockerfile**
+- [x] **Step 2: Update frontend/Dockerfile**
 
 Replace the entire `frontend/Dockerfile`:
 
@@ -1020,7 +1102,7 @@ CMD ["nginx", "-g", "daemon off;"]
 
 > **Why `/etc/nginx/templates/`?** The official `nginx:alpine` image ships a Docker entrypoint that automatically runs `envsubst` on every `*.template` file in `/etc/nginx/templates/` before starting nginx. No custom entrypoint script needed.
 
-- [ ] **Step 3: Test the Docker build locally**
+- [x] **Step 3: Test the Docker build locally**
 
 ```bash
 cd frontend
@@ -1036,7 +1118,7 @@ docker exec $(docker ps -q -f ancestor=frontend-test) cat /etc/nginx/conf.d/defa
 
 Verify `${BACKEND_URL}` has been replaced with `http://host.docker.internal:8080`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add frontend/nginx.conf.template frontend/Dockerfile
@@ -1057,11 +1139,11 @@ When `database.url` is set (Cloud Run uses Neon or Cloud SQL connection string),
 `mappers/database.rs::Database::new` builds the connection string. Applying the change
 there covers all eight pool constructions at once instead of one.
 
-- [ ] **Step 1: Read the current database pool creation in main.rs**
+- [x] **Step 1: Read the current database pool creation in main.rs**
 
 Find the line in `server/src/main.rs` that calls `PgPoolOptions` or `sqlx::postgres::PgPool` / `PgPoolOptions::new()`.
 
-- [ ] **Step 2: Update pool creation to use url field**
+- [x] **Step 2: Update pool creation to use url field**
 
 Locate the pool connection string construction. It should look something like:
 
@@ -1093,7 +1175,7 @@ let connection_string = db_config.url
     ));
 ```
 
-- [ ] **Step 3: Verify compile**
+- [x] **Step 3: Verify compile**
 
 ```bash
 AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo check --workspace
@@ -1101,7 +1183,7 @@ AWS_LC_SYS_PREBUILT_NASM=1 SQLX_OFFLINE=true cargo check --workspace
 
 Expected: no errors.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add server/src/main.rs
@@ -1134,7 +1216,7 @@ gcloud services enable \
 ```bash
 gcloud artifacts repositories create anime-calendar \
   --repository-format=docker \
-  --location=us-central1 \
+  --location=europe-west1 \
   --project=YOUR_PROJECT_ID
 ```
 
@@ -1144,7 +1226,7 @@ gcloud artifacts repositories create anime-calendar \
 gcloud sql instances create anime-calendar-prod \
   --database-version=POSTGRES_17 \
   --tier=db-f1-micro \
-  --region=us-central1 \
+  --region=europe-west1 \
   --storage-auto-increase \
   --backup-start-time=03:00 \
   --project=YOUR_PROJECT_ID
@@ -1271,34 +1353,62 @@ Note down (will be needed in later tasks):
 - GCP project ID
 - WIF provider resource name
 - Service account emails
-- Artifact Registry URL: `us-central1-docker.pkg.dev/YOUR_PROJECT_ID/anime-calendar`
-- Cloud SQL instance connection name: `YOUR_PROJECT_ID:us-central1:anime-calendar-prod`
+- Artifact Registry URL: `europe-west1-docker.pkg.dev/YOUR_PROJECT_ID/anime-calendar`
+- Cloud SQL instance connection name: `YOUR_PROJECT_ID:europe-west1:anime-calendar-prod`
 
 ---
 
 ## Task 10: External Services Setup
 
-- [ ] **Step 1: Create Neon account + database (staging)**
+> **BLOCKED on the two open decisions (see *Decisions of record*).** The steps below were
+> written against the superseded April choices. Do **not** execute them as written — they would
+> create an Upstash database this app's `SUBSCRIBE`-per-session shape is wrong for, and split
+> staging and production across different vendors, which violates the owner's stated constraint.
+> Settle Postgres and Redis first, then rewrite Steps 1–3 for the chosen vendors. Everything
+> from Step 4 (Cloudflare) onward is vendor-independent and can proceed.
+
+- [ ] **Step 1: Provision Postgres — SUPERSEDED, rewrite after the decision**
+
+Whatever is chosen: PostgreSQL 17, **`europe-west1` or as close as the vendor offers**, and the
+*same product* in staging and production. Capture the full connection string including any
+required query parameters (`?sslmode=require`); `mappers/database.rs::connection_string` passes
+`database.url` through verbatim precisely so those are not dropped. Size it against Task 15's
+arithmetic, not against a guess.
+
+<details><summary>Original (superseded) text</summary>
 
 1. Go to neon.tech → create account → create project named `anime-calendar-staging`
 2. Select PostgreSQL 17, region matching your GCP region
 3. Note the connection string: `postgres://...@ep-xxx.neon.tech/neondb?sslmode=require`
 
-- [ ] **Step 2: Create Upstash Redis databases**
+</details>
+
+- [ ] **Step 2: Provision Redis — SUPERSEDED, rewrite after the decision**
+
+Whatever is chosen: same vendor and product in both environments, `rediss://` TLS endpoint, in
+or near `europe-west1`. **Before committing, run a live `SUBSCRIBE` against the real endpoint**
+and confirm a published message arrives — this is the check that was never done for Upstash, and
+a docs page saying "pub/sub supported" is not it. Size against Task 16: if the multiplexing
+refactor has landed, the budget is ~4 connections flat rather than scaling per viewer.
+
+<details><summary>Original (superseded) text</summary>
 
 1. Go to upstash.com → create account
 2. Create database named `anime-calendar-staging` (free tier, region matching GCP)
 3. Create database named `anime-calendar-prod` (pay-per-use, same region)
 4. From each database page, copy the **TLS URL**: `rediss://default:...@...upstash.io:6379`
 
-- [ ] **Step 3: Run initial Neon migration**
+</details>
 
-With the Neon connection string:
+- [ ] **Step 3: Run the initial migration**
 
 ```bash
-DATABASE_URL="postgres://...@ep-xxx.neon.tech/neondb?sslmode=require" \
+DATABASE_URL="<the connection string from Step 1>" \
   cargo sqlx migrate run --source server/migrations
 ```
+
+Then **verify it applied** rather than trusting the exit code — `sqlx migrate info` should list
+all 21 as applied. A migration run against the wrong database exits 0 just as happily.
 
 - [ ] **Step 4: Configure Cloudflare**
 
@@ -1319,24 +1429,30 @@ DATABASE_URL="postgres://...@ep-xxx.neon.tech/neondb?sslmode=require" \
 
 Replace values with real credentials:
 
+**The two URL values below are placeholders pending the vendor decisions** — the secret *names*
+and the `gcloud` invocations are final, only the strings change.
+
 ```bash
 PROJECT=YOUR_PROJECT_ID
 
 # Staging secrets
-echo -n "postgres://...@ep-xxx.neon.tech/neondb?sslmode=require" | \
+echo -n "<STAGING_POSTGRES_URL — from Task 10 Step 1>" | \
   gcloud secrets create staging--database-url --data-file=- --project=$PROJECT
 
-echo -n "rediss://default:...@...upstash.io:6379" | \
+echo -n "<STAGING_REDIS_URL — rediss://…, from Task 10 Step 2>" | \
   gcloud secrets create staging--redis-url --data-file=- --project=$PROJECT
 
 echo -n "$(openssl rand -hex 32)" | \
   gcloud secrets create staging--jwt-secret --data-file=- --project=$PROJECT
 
 # Production secrets
-echo -n "postgres://anime_user:STRONG_PASSWORD@/anime_calendar?host=/cloudsql/YOUR_PROJECT_ID:us-central1:anime-calendar-prod" | \
+# If the choice lands on Cloud SQL, the Unix-socket form below is correct and needs
+# --add-cloudsql-instances on the Cloud Run service (no Serverless VPC connector, and
+# therefore no ~$8/mo connector fee). Any other vendor takes a normal TCP URL.
+echo -n "postgres://anime_user:STRONG_PASSWORD@/anime_calendar?host=/cloudsql/YOUR_PROJECT_ID:europe-west1:anime-calendar-prod" | \
   gcloud secrets create prod--database-url --data-file=- --project=$PROJECT
 
-echo -n "rediss://default:...@...upstash.io:6379" | \
+echo -n "<PROD_REDIS_URL — rediss://…, same vendor as staging>" | \
   gcloud secrets create prod--redis-url --data-file=- --project=$PROJECT
 
 echo -n "$(openssl rand -hex 32)" | \
@@ -1420,8 +1536,8 @@ jobs:
 
     env:
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-      REGION: us-central1
-      REGISTRY: us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/anime-calendar
+      REGION: europe-west1
+      REGISTRY: europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/anime-calendar
       SHA: ${{ github.sha }}
 
     steps:
@@ -1437,7 +1553,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a
 
       - name: Configure Docker auth
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
 
       - name: Build and push backend image
         run: |
@@ -1473,7 +1589,7 @@ jobs:
           echo "google_secret=$GOOGLE_SECRET" >> $GITHUB_OUTPUT
           echo "cf_secret=$CF_SECRET" >> $GITHUB_OUTPUT
 
-      - name: Run database migrations (Neon staging)
+      - name: Run database migrations (staging)
         env:
           DATABASE_URL: ${{ steps.secrets.outputs.db_url }}
         run: |
@@ -1531,8 +1647,8 @@ jobs:
 
     env:
       PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
-      REGION: us-central1
-      REGISTRY: us-central1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/anime-calendar
+      REGION: europe-west1
+      REGISTRY: europe-west1-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/anime-calendar
       SHA: ${{ github.sha }}
 
     steps:
@@ -1548,7 +1664,7 @@ jobs:
         uses: google-github-actions/setup-gcloud@6189d56e4096ee891640bb02ac264be376592d6a
 
       - name: Configure Docker auth
-        run: gcloud auth configure-docker us-central1-docker.pkg.dev --quiet
+        run: gcloud auth configure-docker europe-west1-docker.pkg.dev --quiet
 
       - name: Read production secrets from Secret Manager
         id: secrets
@@ -1723,6 +1839,264 @@ curl https://yourdomain.com/api/health
 
 ---
 
+## Task 20: Settle the Migration Strategy (B-1)
+
+**Added 2026-09-22.** The two documents disagree and the disagreement is substantive, not a slip.
+
+Readiness **B-1** records the decision as *"run `sqlx::migrate!` at server startup and drop the
+`schema.sql` mount"*, on the grounds that migrations become the single source of truth so the
+drift cannot recur, and that under Cloud Run there is no host to shell into. This plan instead
+runs `sqlx migrate run` from a **GitHub Actions step** before each deploy (Tasks 12, lines
+~1542 and ~1635).
+
+Both work. The CI approach is arguably *better* under Cloud Run, because it runs exactly once
+per deploy instead of racing across however many instances cold-start simultaneously — a race
+`_sqlx_migrations` handles, but noisily. What it gives up is that a container started outside
+the workflow (a local `docker run`, a manual `gcloud run deploy` of an older image) gets no
+migration at all.
+
+- [ ] **Step 1: Pick one and record why in `docs/deployment-readiness.md`**
+
+Do not leave both documents asserting different things — that is how the `schema.sql` drift
+happened in the first place.
+
+- [ ] **Step 2: Whichever is chosen, drop the `schema.sql` mount**
+
+`docker-compose.yml:10` still mounts `./schema.sql` into `/docker-entrypoint-initdb.d/`. It
+defines 4 tables against 21 migrations, so a fresh `docker compose up` produces an April-era
+database in which refresh, password reset, billing and all of co-editor sharing fail at runtime.
+That is true regardless of which migration strategy wins, and it is a hard blocker for anyone
+setting the project up fresh.
+
+- [ ] **Step 3: If CI-driven, make a container started without it fail loudly**
+
+Rather than serving traffic against a schema it cannot satisfy. `sqlx::migrate!` exposes the
+applied-versions list without applying anything — a startup check that refuses to serve on a
+mismatch gets the safety of the startup approach without the race.
+
+---
+
+## Task 14: Reconcile Loop → Cloud Scheduler
+
+**Added 2026-09-22.** Absent from the original plan entirely, and the one item readiness §2
+identified as the genuine serverless obstacle.
+
+`services/reconcile.rs:440` spawns an in-process `tokio::time::interval` that fires hourly,
+guarded by `pg_try_advisory_lock`. **Cloud Run throttles CPU between requests by default, so
+that timer never fires** and Stripe subscription state silently stops reconciling. Nothing
+errors; the drift just accumulates.
+
+The codebase already anticipated this. `ReconcileConfig::interval_secs = 0` disables the loop
+and is documented as *"used in tests and in deployments that don't want background work"*, and
+`run_pass` is already `pub async fn` (`reconcile.rs:149`).
+
+**Files:**
+- Create: `server/src/controllers/internal.rs` — `POST /internal/reconcile`
+- Modify: `server/src/controllers.rs`, `server/src/server.rs`
+
+- [ ] **Step 1: Expose `run_pass` behind an authenticated endpoint**
+
+`POST /internal/reconcile` calling `run_pass`. Keep the advisory lock — it stays the guard
+against overlapping passes, now across instances rather than across threads. Per
+`.claude/memory/feedback_singleton_loop_advisory_lock_outside_tested_fn.md` the
+`pg_try_advisory_lock` belongs in a wrapper **outside** `run_pass`, not inside it, or parallel
+tests contend on the global key.
+
+- [ ] **Step 2: Protect it with platform OIDC, not a shared secret**
+
+Cloud Scheduler signs requests with an OIDC token for a dedicated service account. Verify the
+token rather than inventing another bearer secret. Note the Cloudflare origin middleware sits
+**outermost** (`server.rs`), so a Scheduler request arriving directly at the `*.run.app` URL
+will be refused with 403 before reaching the handler — either route Scheduler through the
+public domain with the CF header, or exempt `/internal/` in the middleware. Decide explicitly;
+both are defensible and the failure mode is a silent 403 in a log nobody reads.
+
+- [ ] **Step 3: Set `RECONCILE__INTERVAL_SECS=0` in both deploy jobs**
+
+Otherwise both mechanisms are live and they race for the same advisory lock.
+
+- [ ] **Step 4: Create the Cloud Scheduler job**
+
+Hourly, `europe-west1`, OIDC audience set to the backend service URL. Cloud Scheduler is free
+for the first 3 jobs.
+
+- [ ] **Step 5: Verify it actually fired**
+
+A scheduler job that 403s looks identical to one that succeeded if you only read the job list.
+Check the Scheduler job's *execution* status **and** grep the backend log for the pass's own
+completion line.
+
+---
+
+## Task 15: Cap the Postgres Pools
+
+**Added 2026-09-22.** Not in readiness §2, which budgeted Redis connections but not Postgres.
+
+`server/src/main.rs` calls `Database::new` **15 times**, each building an independent `PgPool`.
+Confirmed against sqlx 0.8.6 source (`sqlx-core-0.8.6/src/pool/options.rs:143-166`):
+`max_connections: 10`, `min_connections: 0`, `idle_timeout: 10 min`, `max_lifetime: 30 min`,
+`test_before_acquire: true`.
+
+So idle settles near zero, but the **ceiling is 150 connections per instance**, and Task 12
+deploys production with `--max-instances=5`. A `db-f1-micro` tops out around 25. This is a hard
+constraint on the Postgres choice and it must be settled before Task 9 provisions anything.
+
+- [ ] **Step 1: Decide whether to cap per pool or share one pool**
+
+Two shapes. Capping is a one-line `PgPoolOptions::new().max_connections(n)` in
+`mappers/database.rs::Database::new`, covering all 15 sites at once — cheap, but 15 pools each
+holding their own small budget partitions connections badly under uneven load. Sharing a single
+pool across the mappers is the better architecture and a larger change. Cap first; note the
+sharing refactor as follow-up.
+
+- [ ] **Step 2: Derive the cap from the chosen instance's real limit**
+
+`max_connections × 15 × max-instances` must sit **below** the server's limit with headroom for
+migrations, the `set_subscription` CLI and any psql session. Write the arithmetic into the
+config comment — a bare number will be raised by someone who does not know what it was derived
+from.
+
+- [ ] **Step 3: If the choice lands on Neon, also set `idle_timeout`**
+
+sqlx's 10-minute default outlives Neon's 5-minute autosuspend, so connections get killed
+underneath the pool. `test_before_acquire` is already `true` by default and catches it, but an
+`idle_timeout` below the suspend threshold avoids the churn.
+
+---
+
+## Task 16: Multiplex the Redis Subscriber Connections
+
+**Added 2026-09-22.** Not a deploy blocker — it removes a constraint rather than fixing a fault,
+and it is worth doing whichever Redis vendor is chosen.
+
+`server/src/redis_pubsub.rs:235-237` opens a dedicated TCP connection per channel:
+
+```rust
+let client = Client::open(url.expose_secret())...;
+let mut pubsub = client.get_async_pubsub().await...;
+pubsub.subscribe(channel).await...;
+```
+
+Redis pub/sub permits one connection to `SUBSCRIBE` to many channels. Multiplexing onto a
+single shared subscriber connection with a demux by channel name takes readiness §2's budget
+from `3 fixed + 2/calendar + 1/viewer` to roughly **4 flat**, which takes a free tier's
+30-connection cap off the table as a sizing constraint.
+
+- [ ] **Step 1: Replace per-channel connections with one shared subscriber**
+
+Keep the existing `HashMap<String, Sender<String>>` fan-out — that layer already does the right
+thing. What changes is beneath it: one connection, dynamic `SUBSCRIBE`/`UNSUBSCRIBE`.
+
+- [ ] **Step 2: Convert reaping from drop-the-connection to `UNSUBSCRIBE`**
+
+`:232` breaks the listener at `receiver_count() == 0` and `:321` removes the map entry. With a
+shared connection the listener must not exit — it issues `UNSUBSCRIBE` and keeps running.
+
+- [ ] **Step 3: Preserve the reconnect path**
+
+The subscriber task holds the URL to reconnect after a drop. With one connection, a drop now
+costs *every* channel, so reconnect must re-`SUBSCRIBE` the full live set, not just one.
+This is the part most likely to be got wrong — write the test that kills the connection with
+two live channels and asserts both resume.
+
+- [ ] **Step 4: Confirm the ops/sec ceiling is now the binding limit, not connections**
+
+With connections no longer scaling per viewer, the free tier's 100 ops·s⁻¹ and 5 GB·mo⁻¹ become
+the caps that matter. Measure before assuming they are comfortable.
+
+---
+
+## Task 17: Cloudflare Access + a Smoke Test That Survives It
+
+**Added 2026-09-22.** The original plan has **no Access steps at all** — Task 4's origin secret
+is a different mechanism (it stops the `*.run.app` URL bypassing the edge; it does not gate
+humans).
+
+Readiness §5 decided **Cloudflare Access** for gating: free ≤50 users, email OTP, per-person
+revocation. The collision: Task 12's post-deploy smoke test curls `https://${DOMAIN}/api/health`,
+and Access will answer that with a login redirect. The deploy will report failure on a service
+that is actually healthy.
+
+- [ ] **Step 1: Create the Access application and policy**
+
+Cover both hosts. Email OTP, allow-list the tester addresses.
+
+- [ ] **Step 2: Give CI a way through**
+
+Either an Access **service token** (`CF-Access-Client-Id` / `CF-Access-Client-Secret` headers,
+stored in Secret Manager) or a bypass policy scoped to the health path alone. Prefer the service
+token: a bypass policy is a permanent hole that outlives the reason for it.
+
+- [ ] **Step 3: Fix the smoke test to assert the body, not just the status**
+
+An Access login page can return 200. Assert `{"status":"ok"}`, not the status code — otherwise
+the test passes against the login screen. (Readiness §2's own lesson: a well-formed response to
+an adjacent question is the hardest kind of false pass to notice.)
+
+- [ ] **Step 4: Check Cloud Run's own probe is not caught by the origin middleware**
+
+`CloudflareOrigin` wraps outermost, so an **HTTP** startup probe against `/health` gets 403 —
+the container would never become ready, and the error says only "forbidden". Cloud Run's
+*default* probe is TCP, so this only bites if Task 9 or 12 configures an HTTP one. Either leave
+it TCP or exempt the path.
+
+---
+
+## Task 18: A Comp Path That Works in Production
+
+**Added 2026-09-22.** Raised by the owner's requirement to use the product himself without
+paying and to give some friends free access.
+
+Entitlement is a `tier` column on `subscriptions`, so the capability exists. The only tool that
+writes it without Stripe is the `set_subscription` CLI, and `server/src/bin/set_subscription.rs:287`
+**refuses to run when `APP_ENV` is `production` or `prod`** — a deliberate guard.
+
+The readiness doc's workaround was to set `environment = "staging"`, but that also disables the
+`cookie_secure` validation `Config::validate` enforces under production
+(`server/src/config/server.rs:619`). Trading a real safety check for a comp mechanism is the
+wrong trade.
+
+- [ ] **Step 1: Pick the mechanism**
+
+Either an explicit override flag on the CLI (so the guard stays the default and bypassing it is
+a visible, deliberate act), or an admin-only grant endpoint. The endpoint is more work and
+introduces an admin role the app does not currently have; the flag is smaller and keeps the
+blast radius in a dev-only binary.
+
+- [ ] **Step 2: Keep `environment = "production"` set correctly**
+
+Whatever is chosen, the fix must not require lying about the environment. That flag gates real
+safety checks.
+
+---
+
+## Task 19: Clear cargo-deny Before Deploying
+
+**Added 2026-09-22.** Readiness §B-2 recorded one advisory; there are now **three**, verified
+against CI run `35268609234` (2026-09-17). Frontend, Backend, OpenAPI and E2E all pass —
+cargo-deny is still the only red job.
+
+| Advisory | Crate | Note |
+|---|---|---|
+| `RUSTSEC-2026-0204` | crossbeam-epoch | Invalid pointer dereference in `fmt::Pointer`. Transitive. The one already recorded. |
+| `RUSTSEC-2026-0258` | h2 | **Unbounded empty DATA frames — remote DoS.** New, and the one that actually matters once this is publicly reachable. |
+| `RUSTSEC-2026-0285` | rustls | TLS 1.3 handshake messages accepted across encryption level boundaries. New. |
+| yanked | spin | Warning only. |
+
+- [ ] **Step 1: Try a targeted `cargo update` first**
+
+All three are transitive. Check whether the advisories are cleared by dependency bumps before
+reaching for anything else.
+
+- [ ] **Step 2: Do not add to `deny.toml`'s `ignore` list as a shortcut**
+
+`deny.toml:15-18` carries a documented convention: an entry requires a corresponding
+justification, and the existing precedent (`RUSTSEC-2023-0071`, rsa via google-oauth) explains
+why it is not exploitable *for this app's use*. `RUSTSEC-2026-0258` is a remote DoS on a
+public-facing HTTP stack and would not survive that test.
+
+---
+
 ## Spec Review
 
 After completing all tasks, the following items from `docs/superpowers/specs/2026-04-20-deployment-design.md` are implemented:
@@ -1730,9 +2104,14 @@ After completing all tasks, the following items from `docs/superpowers/specs/202
 | Spec item | Task |
 |---|---|
 | Cloud Run backend + frontend | Tasks 9, 12 |
-| Cloud SQL (prod) + Neon (staging) | Tasks 9, 10, 11 |
-| Upstash Redis (both envs) | Tasks 3, 10, 11 |
+| Postgres (vendor TBD — same in both envs) | Tasks 9, 10, 11, 15 |
+| Redis (vendor TBD — same in both envs) | Tasks 3, 10, 11, 16 |
 | Cloudflare edge | Task 10 |
+| Cloudflare Access gating | Task 17 |
+| Reconcile via Cloud Scheduler | Task 14 |
+| Migration strategy settled | Task 20 |
+| Comp path for unpaid access | Task 18 |
+| cargo-deny green | Task 19 |
 | GCP Secret Manager | Tasks 9, 11 |
 | Workload Identity Federation | Task 9 |
 | Staging auto-deploy on main | Task 12 |

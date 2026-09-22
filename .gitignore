@@ -40,3 +40,6 @@ openapi.json
 
 # Semgrep auth (OAuth access + refresh tokens)
 .semgrep/
+
+# Coverage artifacts
+lcov.info

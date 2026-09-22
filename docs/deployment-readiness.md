@@ -1,7 +1,18 @@
 # Deployment Readiness — Staging & Production
 
-**Date:** 2026-09-10
+**Date:** 2026-09-10 · **Revised:** 2026-09-22
 **Status:** Analysis complete, platform decisions partly open (see §5)
+
+> **2026-09-22 revision.** Cloud sessions implemented Tasks 1–8 of
+> `docs/superpowers/plans/2026-04-20-deployment.md` without access to this
+> document (it had not been pushed), so the plan's April-era platform choices —
+> `us-central1`, Neon for staging, Upstash for Redis — were followed. The code
+> that resulted is **vendor-neutral** and nothing needs undoing; the plan has
+> been reconciled against this document and carries a *Decisions of record*
+> table. Corrections and new findings from that review are marked inline below:
+> B-2 (three advisories, not one), §2 (the Redis budget is an artifact; Postgres
+> pooling is unbudgeted), §3 (the `environment = "staging"` workaround is
+> withdrawn), §5 (Redis Cloud tier evidence), §6 (`lcov.info` is now tracked).
 **Context:** Pre-deploy assessment. Goal is a gated staging environment (Stripe
 test mode, a handful of friend testers) followed by production.
 
@@ -49,12 +60,20 @@ no host to shell into.
 
 ### B-2. CI on `main` is red
 
-Last green run: 2026-06-12. The 2026-07-24 run failed on **`cargo-deny` only** —
-Frontend, Backend, OpenAPI Validation and Frontend E2E all passed, so this is a
-dependency advisory, not a code regression.
+Last green run: 2026-06-12. Still **`cargo-deny` only** — Frontend, Backend,
+OpenAPI Validation and Frontend E2E all pass, so this is a dependency advisory,
+not a code regression.
+
+**Updated 2026-09-22 against CI run `35268609234` (2026-09-17): three advisories
+now, not one.** Two arrived after this document was first written.
 
 - `RUSTSEC-2026-0204` — crossbeam-epoch 0.9.18, invalid pointer dereference in
-  the `fmt::Pointer` impl for `Atomic`/`Shared`. Transitive.
+  the `fmt::Pointer` impl for `Atomic`/`Shared`. Transitive. *(The original.)*
+- `RUSTSEC-2026-0258` — **h2, unbounded empty DATA frames. A remote DoS**, and
+  the only one of the three that genuinely matters once this is publicly
+  reachable. **New.**
+- `RUSTSEC-2026-0285` — rustls, TLS 1.3 handshake messages incorrectly accepted
+  across encryption level boundaries. **New.**
 - Yanked `spin` crate (warning only).
 
 Fix is a targeted `cargo update`. `deny.toml` already carries a documented
@@ -126,6 +145,39 @@ per active viewer:     1   (kick:{actor_id})
 
 5 calendars / 10 viewers = ~23 connections. 10 calendars / 20 viewers = ~43.
 
+> **Correction, 2026-09-22 — this budget is an implementation artifact, not a
+> property of the app, and it should not be treated as an input to a vendor
+> decision.** `redis_pubsub.rs:235-237` opens a fresh `Client::open` +
+> `get_async_pubsub()` **per channel**. Redis pub/sub permits one connection to
+> `SUBSCRIBE` to many channels; the per-channel connection is a choice.
+> Multiplexing onto one shared subscriber collapses the whole table above to
+> **~4 connections flat, regardless of load** — see Task 16 of the deployment
+> plan. With that done, a free tier's connection cap stops being the binding
+> constraint and throughput (e.g. Redis Cloud free: 100 ops·s⁻¹, 5 GB·mo⁻¹)
+> becomes the limit that matters instead.
+
+### Postgres connections are unbudgeted, and this is the sharper constraint
+
+Established 2026-09-22; missing from the original assessment, which costed Redis
+but not Postgres.
+
+`main.rs` calls `Database::new` **15 times**, each building an independent
+`PgPool`. Verified against sqlx 0.8.6 source
+(`sqlx-core-0.8.6/src/pool/options.rs:143-166`): `max_connections: 10`,
+`min_connections: 0`, `idle_timeout: 10 min`, `max_lifetime: 30 min`,
+`test_before_acquire: true`.
+
+So idle settles near zero — but the **ceiling is 150 connections per instance**,
+and the deployment plan runs production at `--max-instances=5`. A `db-f1-micro`
+tops out around 25. Nothing caps this today.
+
+Two consequences: any Postgres sizing must be done against
+`max_connections × 15 × max-instances`, and an explicit cap belongs in
+`mappers/database.rs::Database::new` (one line, covers all 15 sites) before
+anything is provisioned. `test_before_acquire` already defaults to `true`, which
+is the behaviour a suspend-happy serverless Postgres needs; `idle_timeout` at 10
+minutes is the value that would need lowering for one.
+
 ### The reconcile loop is the one genuine serverless obstacle
 
 `services/reconcile.rs:440` spawns an in-process `tokio::time::interval`,
@@ -159,9 +211,27 @@ feature plus a config flag.
 - **Google OAuth consent screen** — if still in Testing mode, only whitelisted
   accounts can sign in. Testers must be listed, or the app published.
 - `POSTGRES_PASSWORD: change-me` in `docker-compose.yml`.
-- Set `environment = "staging"`, not `"production"` — the `set_subscription`
+- ~~Set `environment = "staging"`, not `"production"` — the `set_subscription`
   dev CLI refuses to run under production, and it is needed to shortcut
-  §6 and §8 of the Track 4 checklist.
+  §6 and §8 of the Track 4 checklist.~~
+
+  **Superseded 2026-09-22.** This workaround trades a real safety check for a
+  comp mechanism and should not be used on anything publicly reachable:
+  `Config::validate` (`config/server.rs:619`) only enforces
+  `cookie_secure = true` *when `environment == "production"`*, so setting
+  `"staging"` to placate the CLI silently disarms the check that stops the
+  session cookie being discarded over plain HTTP — the exact failure mode B-3
+  describes, now with no guard rail.
+
+  The underlying need is real and newly explicit: the owner wants to use the
+  product himself without paying (self-subscribing is redundant) and to comp a
+  few friends. Entitlement is just a `tier` column on `subscriptions`, so the
+  capability exists; the only non-Stripe writer is the `set_subscription` CLI,
+  guarded at `bin/set_subscription.rs:287` against `APP_ENV=production|prod`.
+  **Needed: a comp path that works with `environment` set truthfully** — either
+  an explicit override flag on the CLI (so bypassing the guard stays a visible,
+  deliberate act) or an admin-only grant endpoint. Task 18 of the deployment
+  plan.
 - No Postgres backup story exists.
 
 ---
@@ -236,11 +306,35 @@ Google OAuth (which rejects bare IPs as authorized origins).
 
 **Redis.** Same — sleeping on it.
 
-- *Redis Cloud free tier* — real Redis Enterprise so native-protocol pub/sub is
-  unambiguous; **available in GCP `europe-west1`** so it co-locates with Cloud
-  Run; free forever, no card. 30 MB (ample — TTL'd cache blobs only) and
-  **30 connections**, which per §2's budget holds ~a dozen concurrent users.
-  Upgrade path is the same product at ~$5/mo (Essentials, 250 MB).
+- *Redis Cloud free tier* — real Redis Enterprise, **available in GCP
+  `europe-west1`** so it co-locates with Cloud Run; free forever, no card.
+  30 MB (ample — TTL'd cache blobs only) and **30 connections**.
+
+  **Evidence added 2026-09-22 ([Essentials plan details][rc-plans],
+  [upgrade docs][rc-upgrade]):**
+
+  | Plan | Connections | Throughput | Bandwidth/mo |
+  |---|---|---|---|
+  | 30 MB (free) | 30 | 100 ops·s⁻¹ | 5 GB |
+  | 250 MB (~$5) | **256** | 1,000 ops·s⁻¹ | 100 GB |
+  | 1 GB | 1,024 | 2,000 ops·s⁻¹ | 200 GB |
+
+  The free→paid jump is 30 → 256 connections, and **the upgrade is in place**:
+  *"When you change your plan, your data and endpoints are not disrupted"*, with
+  no availability impact. Same connection string, no redeploy. That materially
+  changes the risk calculus — outgrowing the free tier costs a console click and
+  a card, not a migration under pressure.
+
+  **Not settled:** the Essentials pages state no pub/sub restriction, but they
+  also never affirm pub/sub *for Essentials specifically*. That is the same
+  evidential gap that left Upstash unresolved, and it deserves the same
+  treatment — a live `SUBSCRIBE` against a real free database before committing.
+  The test is nearly free here (no card). One caveat ruled out: Redis
+  Enterprise's clustered-pub/sub sharding caveat does not apply, as Essentials
+  free is single-shard.
+
+  [rc-plans]: https://redis.io/docs/latest/operate/rc/subscriptions/view-essentials-subscription/essentials-plan-details/
+  [rc-upgrade]: https://redis.io/docs/latest/operate/rc/subscriptions/view-essentials-subscription/
 - *Upstash* — **UNRESOLVED**: whether `SUBSCRIBE` works over their *native TCP*
   endpoint. Their compatibility page lists Pub/Sub as a category and says both
   TCP and REST are supported but never states it for the native protocol; their
@@ -271,7 +365,11 @@ connections and any `max-instances=1` assumption both stop holding.
 
 - 9 stale TODOs in source, all low-stakes; one (`controllers/user.rs:431`,
   "refactor frontend, it's a mess rn") predates the redesign that already shipped.
-- `lcov.info` untracked and unignored at repo root.
+- ~~`lcov.info` untracked and unignored at repo root.~~ **Worse as of `dab3a7c`
+  (2026-09-22): it is now *tracked*** — 22,092 lines of coverage artifact
+  committed. The intended fix was a `.gitignore` entry; this needs
+  `git rm --cached lcov.info` plus the ignore line. (The `.semgrep/` entry added
+  in the same commit is correct and wanted.)
 - Leftover agent worktrees under `.claude/worktrees/` consuming disk.
 - `.semgrep/` added to `.gitignore` 2026-09-10 — it had written
   `guardian.yml` (OAuth access **and** refresh token) untracked and unignored.

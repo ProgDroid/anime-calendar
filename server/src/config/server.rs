@@ -471,6 +471,47 @@ mod tests {
         );
     }
 
+    /// The deploy workflow injects `ALLOWED_ORIGINS` as a single scalar. Before
+    /// `list_separator` was configured this failed the whole load with
+    /// *"invalid type: string ..., expected a sequence"* — the container would
+    /// not start, and nothing in the suite noticed because every other test
+    /// let `allowed_origins` fall back to its serde default.
+    #[test]
+    fn allowed_origins_accepts_a_single_env_value() {
+        let mut vars = required();
+        vars.push(("ALLOWED_ORIGINS", "https://staging.example.com"));
+        let cfg = Server::from_env_map(&vars).expect("single-origin env load should succeed");
+        assert_eq!(cfg.allowed_origins, vec!["https://staging.example.com"]);
+    }
+
+    /// Production fronts both the apex and the `www` host.
+    #[test]
+    fn allowed_origins_splits_on_commas() {
+        let mut vars = required();
+        vars.push((
+            "ALLOWED_ORIGINS",
+            "https://example.com,https://www.example.com",
+        ));
+        let cfg = Server::from_env_map(&vars).expect("multi-origin env load should succeed");
+        assert_eq!(
+            cfg.allowed_origins,
+            vec!["https://example.com", "https://www.example.com"]
+        );
+    }
+
+    /// The split is scoped to `allowed_origins` on purpose: a bare
+    /// `list_separator` turns every string field into a list, so a secret that
+    /// happens to contain a comma would be silently truncated to its first
+    /// segment.
+    #[test]
+    fn a_comma_in_a_scalar_field_is_not_split() {
+        use secrecy::ExposeSecret as _;
+        let mut vars = required();
+        vars.push(("JWT_SECRET", "abc,def"));
+        let cfg = Server::from_env_map(&vars).expect("load should succeed");
+        assert_eq!(cfg.jwt_secret.expose_secret(), "abc,def");
+    }
+
     /// Both new fields default to None so existing deployments are unaffected.
     #[test]
     fn cf_origin_secret_and_cookie_domain_default_to_none_and_accept_env() {
@@ -586,10 +627,21 @@ impl Server {
 
     /// The env layer, shared by `new` and the tests so they exercise the real
     /// separator rather than a copy that could drift.
+    ///
+    /// `allowed_origins` is a `Vec<String>`, and an env var is always a scalar:
+    /// without `list_separator` the load fails outright with *"invalid type:
+    /// string ..., expected a sequence"*, so a container told
+    /// `ALLOWED_ORIGINS=https://example.com` refuses to start. The split is
+    /// scoped with `with_list_parse_key` rather than applied globally —
+    /// a bare `list_separator` turns **every** string field into a list, which
+    /// would break `jwt_secret`, `log_level` and any other value containing a
+    /// comma.
     fn env_source() -> config::Environment {
         config::Environment::default()
             .separator("__")
             .try_parsing(true)
+            .list_separator(",")
+            .with_list_parse_key("allowed_origins")
     }
 
     /// Env-only load for tests: deliberately skips the file source so results
