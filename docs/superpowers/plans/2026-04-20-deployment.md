@@ -17,7 +17,7 @@
 ## File Map
 
 **Created:**
-- `server/src/controllers/health.rs` — `GET /api/health` handler
+- `server/src/controllers/health.rs` — `GET /health` handler (nginx strips the `/api` prefix)
 - `server/src/middleware/cloudflare.rs` — CF origin secret middleware
 
 **Modified:**
@@ -43,6 +43,12 @@
 - Modify: `server/src/controllers.rs`
 - Modify: `server/src/server.rs`
 
+**Route prefix (corrected 2026-09-14):** register the handler at `/health`, **not** `/api/health`.
+`frontend/nginx.conf` proxies `location /api/` to `http://server:8080/` — the trailing slash strips
+the `/api` prefix, so a browser request to `/api/health` reaches actix as `/health`. Every other
+backend route follows the same convention (`#[get("/public-config")]`, `/calendars/...`).
+The public-URL smoke tests in Tasks 12 and 13 correctly keep `/api/health` — they go through nginx.
+
 - [ ] **Step 1: Write the health controller**
 
 Create `server/src/controllers/health.rs`:
@@ -56,7 +62,7 @@ struct HealthResponse {
     status: &'static str,
 }
 
-#[get("/api/health")]
+#[get("/health")]
 pub async fn health() -> HttpResponse {
     HttpResponse::Ok().json(HealthResponse { status: "ok" })
 }
@@ -103,7 +109,7 @@ mod tests {
     #[actix_web::test]
     async fn health_returns_200_ok() {
         let app = test::init_service(App::new().service(health)).await;
-        let req = test::TestRequest::get().uri("/api/health").to_request();
+        let req = test::TestRequest::get().uri("/health").to_request();
         let resp = test::call_service(&app, req).await;
         assert_eq!(resp.status(), 200);
     }
@@ -111,7 +117,7 @@ mod tests {
     #[actix_web::test]
     async fn health_returns_status_ok_json() {
         let app = test::init_service(App::new().service(health)).await;
-        let req = test::TestRequest::get().uri("/api/health").to_request();
+        let req = test::TestRequest::get().uri("/health").to_request();
         let body: serde_json::Value = test::call_and_read_body_json(&app, req).await;
         assert_eq!(body["status"], "ok");
     }
@@ -130,7 +136,7 @@ Expected: 2 tests pass.
 
 ```bash
 git add server/src/controllers/health.rs server/src/controllers.rs server/src/server.rs
-git commit -m "feat: add GET /api/health endpoint"
+git commit -m "feat: add GET /health endpoint"
 ```
 
 ---
@@ -138,6 +144,21 @@ git commit -m "feat: add GET /api/health endpoint"
 ## Task 2: Environment Variable Config Override
 
 The `config` crate supports layered sources — file first, then env vars override. Cloud Run has no config files, so env vars must work standalone.
+
+**Corrections applied 2026-09-14** (all three verified against `config` 0.15.14 and covered by tests):
+
+1. **`Database::new()` must use `Environment::with_prefix("DATABASE")`, not `Environment::default()`.**
+   Task 12 injects `DATABASE__URL`. Unprefixed, that splits on `__` into `database` -> `url` — a map
+   landing on the `database: String` field — and the load *fails* rather than populating `url`.
+   Prefixing also stops ambient `USER` / `HOST` / `PORT` / `PASS` (present in most shells and in CI
+   runners) from silently overriding `database.toml`, since the crate skips any key not matching the
+   prefix. `Server::new()` stays unprefixed on purpose: Cloud Run injects `PORT` itself.
+2. **The `Server` struct block in Step 3 is stale.** It predates `trust_proxy_header`, `app`,
+   `stripe`, `reconcile`, `cache`, `limits` and `sharing`. Add the two new fields; do not paste the
+   block over the current struct or you will delete seven.
+3. **Step 4 breaks the build on its own.** Adding `domain` to `CookieSettings` requires updating all
+   five construction sites (`server/src/server.rs` plus the test helpers in `controllers/auth.rs`,
+   `controllers/refresh.rs`, `controllers/email_verification.rs`), or Step 6 cannot compile.
 
 **Files:**
 - Modify: `server/src/config/server.rs`
@@ -314,7 +335,7 @@ impl Database {
         Config::builder()
             .add_source(File::with_name(DATABASE_FILE).required(false))
             .add_source(
-                config::Environment::default()
+                config::Environment::with_prefix("DATABASE")
                     .separator("__")
                     .try_parsing(true),
             )
@@ -344,6 +365,24 @@ git commit -m "feat: support env var config override for Cloud Run (no config fi
 ## Task 3: Upstash Redis TLS Support
 
 Upstash requires `rediss://` (TLS). `Cache::new()` builds only `redis://`. Add `Cache::from_url()` and wire it in `main.rs`.
+
+**Corrections applied 2026-09-14:**
+
+1. **The `redis` crate had no TLS feature at all.** It was declared
+   `features = ["aio", "tokio-comp"]`, so `rediss://` failed with
+   `InvalidClientConfig: "can't connect with TLS, the feature is not enabled"`
+   *before any network I/O* — the whole point of this task would have panicked at
+   startup on first deploy. Fixed by adding `tokio-native-tls-comp` (native-tls to
+   match sqlx and lettre, rather than pulling rustls in as a second TLS stack).
+   Locked in by `cache::tls_support::rediss_scheme_is_supported_by_the_enabled_feature_set`.
+2. **There are three Redis consumers, not one.** `main.rs` also builds
+   `RedisPubSub` (co-editor SSE fan-out) and `PresenceService`, both of which
+   assembled their own `redis://` URL from host/port/password. Honouring `redis.url`
+   in `Cache` alone would have left those two dialling `127.0.0.1:6379` and
+   panicking at startup, taking co-editor sharing down. All three now take a URL;
+   `RedisConfig::connection_url()` resolves it once in `main.rs`.
+   `RedisPubSub` additionally stored host/port/password to rebuild the URL for each
+   subscriber reconnect — it now stores the resolved URL as a `SecretString`.
 
 **Files:**
 - Modify: `server/src/cache.rs`
@@ -716,6 +755,24 @@ Cookies need `Domain=.yourdomain.com` and `SameSite=Lax` to work across subdomai
 **Files:**
 - Modify: `server/src/controllers/auth.rs`
 
+**Corrections applied 2026-09-14:**
+
+1. **The plan's stated reason for `SameSite=Lax` is wrong.** Lax is *not* needed for
+   subdomain auth — `app.example.com` and `api.example.com` are same-site under any
+   SameSite value; sharing cookies across them is what `Domain` does. The real reason
+   to leave `Strict` is cross-site *top-level navigation*: returning from Stripe
+   Checkout, and opening a co-editor invitation link from an email client. Under
+   `Strict` the user lands logged out in both. Lax still withholds cookies on
+   cross-site POST/PUT/DELETE, so CSRF protection for mutations is unchanged — worth
+   stating explicitly because `.claude/memory/feedback_httponly_cookie_migration.md`
+   records `Strict` as a deliberate anti-CSRF choice.
+2. **There are four cookie sites, not two.** Besides `build_auth_cookie` and
+   `build_refresh_cookie` there is `clear_refresh_cookie` *and* an inline removal
+   cookie built directly in the `logout` handler. All four now go through one
+   `build_cookie` helper — a removal cookie only clears the original when `Domain`
+   and `Path` match, so a missed site would break logout on the deployed domain
+   while still passing locally (where `domain` is `None` on both sides).
+
 - [ ] **Step 1: Find the cookie builder functions**
 
 The functions are `build_auth_cookie` and `build_refresh_cookie` in `server/src/controllers/auth.rs`. Read around line 76 to locate them.
@@ -788,6 +845,11 @@ git commit -m "fix: cookies use SameSite=Lax and support optional domain for sub
 **Files:**
 - Modify: `config.toml.dist`
 
+**Correction applied 2026-09-14:** the replacement block below is stale — it predates
+`trust_proxy_header`, `[app]`, `[stripe]`, `[cache]`, `[limits]` and `[sharing]`. **Add**
+the three new keys; do not paste it over the file. `database.toml.dist` also gained a
+commented `url` key, which the plan omits.
+
 - [ ] **Step 1: Add new fields to config.toml.dist**
 
 Replace the entire `config.toml.dist` with:
@@ -854,6 +916,20 @@ The frontend nginx config has `http://server:8080` hardcoded (Docker Compose hos
 **Files:**
 - Rename: `frontend/nginx.conf` → `frontend/nginx.conf.template`
 - Modify: `frontend/Dockerfile`
+
+**Corrections applied 2026-09-14:**
+
+1. **The template below is a rewrite, not a port.** The real `nginx.conf` carries the
+   SSE proxy settings (H-14), the `add_header` inheritance workaround, the security
+   headers, and the `/invite/` and `/api/invitations/` location blocks. Convert the
+   existing file by replacing the two `http://server:8080` occurrences with
+   `${BACKEND_URL}`; do not swap in the simplified version.
+2. **`/etc/nginx/conf.d` must be chowned to `nginx`.** The image runs as `USER nginx`,
+   and the entrypoint writes the substituted config into that directory as that user.
+   Without the chown the container fails to start.
+3. **`docker-compose.yml` needs `BACKEND_URL` too.** Its frontend service relied on the
+   hardcoded `http://server:8080`; templating it without adding an `environment:` entry
+   breaks local compose, with nginx refusing to start on `proxy_pass /;`.
 
 - [ ] **Step 1: Rename and update nginx.conf to a template**
 
@@ -975,6 +1051,11 @@ When `database.url` is set (Cloud Run uses Neon or Cloud SQL connection string),
 
 **Files:**
 - Modify: `server/src/main.rs`
+
+**Correction applied 2026-09-14:** the DSN is not built in `main.rs` — there is no
+`PgPoolOptions` call there. `main.rs` passes `db_config` to the mappers, and
+`mappers/database.rs::Database::new` builds the connection string. Applying the change
+there covers all eight pool constructions at once instead of one.
 
 - [ ] **Step 1: Read the current database pool creation in main.rs**
 

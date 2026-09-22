@@ -51,6 +51,20 @@ Design redesign: a 4-track plan from `design_handoff_anime_calendar/` is in flig
 AWS_LC_SYS_PREBUILT_NASM=1 cargo build
 ```
 
+### Backend in sandboxes without github.com egress
+`utoipa-swagger-ui` fetches the Swagger UI archive from github.com **in its build
+script**, so the `server` crate cannot build at all where that host is blocked —
+Claude Code cloud sessions included. The failure is opaque: the proxy's 403 JSON
+body gets saved as `v5.17.14.zip` and the build panics with
+`InvalidArchive("Could not find EOCD")`. Build and test there with:
+```bash
+SQLX_OFFLINE=true cargo test -p server --no-default-features
+```
+That drops only the `/swagger-ui/` route, which is dev-only and already gated at
+runtime behind `enable_docs` (a build without the feature logs a warning if
+`enable_docs = true`). CI and local dev use default features, so the Swagger path
+stays fully covered — don't "simplify" the feature away.
+
 ### Frontend
 ```bash
 cd frontend
@@ -79,6 +93,8 @@ Copy `config.toml.dist` → `config.toml` and `database.toml.dist` → `database
 - All `Error` variants must return `{"error":"..."}` JSON — never plain text
 - Auth failures: always return `Error::Unauthorised` regardless of whether the user exists
 - sqlx: regenerate and commit `.sqlx/` after any query change (`DATABASE_URL=... cargo sqlx prepare --workspace -- --all-targets`). The trailing `-- --all-targets` flag is required — `prepare` walks default targets only by default, and CI's `cargo test --workspace` step needs cached entries for test-module `sqlx::query!` calls or it fails with "no cached data for this query".
+- Config is layered: `config.toml` / `database.toml` first, then environment variables override (both files are optional, so a container with no config files works). `Server` reads env **unprefixed** with `__` for nesting (`PORT`, `LOG_LEVEL`, `REDIS__URL`) so a platform-injected `PORT` is honoured; `Database` reads env **prefixed** (`DATABASE__URL`, `DATABASE__HOST`) because its field names (`user`, `host`, `pass`) would otherwise collide with ambient shell/CI variables. Don't unify them — `config/database.rs` has a test locking in why.
+- Redis has three independent consumers (`Cache`, `RedisPubSub`, `PresenceService`). They all take a URL from `RedisConfig::connection_url()`, resolved once in `main.rs` — if you add a fourth, use the same helper or it will quietly dial localhost when `redis.url` is set.
 - Migrations are **up-only** (sqlx simple style); there are no `down.sql` files by design. Rollback is via PostgreSQL backup / point-in-time recovery, not down migrations — several migrations are destructive to reverse. See `docs/rollback-strategy.md` (the inventory + reverse-safety table) before adding or reversing a migration. Do **not** rename migrations to `.up/.down` style: it invalidates every `_sqlx_migrations` checksum and deepens the known dev-DB drift.
 
 ### CI/CD

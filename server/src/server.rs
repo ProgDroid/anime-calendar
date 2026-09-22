@@ -10,7 +10,9 @@ use actix_web::{
 };
 use env_logger::Builder;
 use log::{LevelFilter, error};
+#[cfg(feature = "swagger-ui")]
 use utoipa::OpenApi as _;
+#[cfg(feature = "swagger-ui")]
 use utoipa_swagger_ui::SwaggerUi;
 
 use crate::{
@@ -18,7 +20,7 @@ use crate::{
     cache::Cache,
     config::server::{AppBaseUrl, CookieSettings, JwtSecret, Server as ServerConfig, StripeConfig},
     controllers::{
-        account, auth, calendar, email_verification, item, items, oauth, password_reset,
+        account, auth, calendar, email_verification, health, item, items, oauth, password_reset,
         public_config, refresh, stripe as stripe_controller,
         stripe_webhook as stripe_webhook_controller, subscription as subscription_controller, user,
     },
@@ -29,7 +31,6 @@ use crate::{
         refresh_token::RefreshTokenMapper, stripe_event::StripeEventMapper,
         subscription::SubscriptionMapper, user::UserMapper, user_settings::UserSettingsMapper,
     },
-    openapi::ApiDoc,
     services::{
         cached_anilist::CachedAnilist, calendar_events::CalendarEventPublisher,
         email::EmailService, entitlement::EntitlementService, frozen_ics::FrozenIcsService,
@@ -37,6 +38,9 @@ use crate::{
     },
 };
 use stripe::Client as StripeClient;
+
+#[cfg(feature = "swagger-ui")]
+use crate::openapi::ApiDoc;
 
 #[allow(clippy::too_many_arguments, clippy::too_many_lines)]
 /// # Errors
@@ -98,7 +102,10 @@ pub fn start(
     }
     let cookie_settings = CookieSettings {
         secure: config.cookie_secure,
+        domain: config.cookie_domain.clone(),
     };
+    // Origin lock. `None` leaves it disabled, which is the local-dev default.
+    let cf_origin_secret = config.cf_origin_secret.clone();
     let app_base_url = AppBaseUrl::new(config.app_base_url);
     let sharing_config = config.sharing.clone();
 
@@ -136,14 +143,7 @@ pub fn start(
         };
 
         App::new()
-            .configure(move |cfg| {
-                if enable_docs {
-                    cfg.service(
-                        SwaggerUi::new("/swagger-ui/{_:.*}")
-                            .url("/api-docs/openapi.json", ApiDoc::openapi()),
-                    );
-                }
-            })
+            .configure(move |cfg| configure_docs(cfg, enable_docs))
             .wrap(Condition::new(compress, Compress::default()))
             .wrap(crate::metrics::http::HttpMetrics)
             .wrap(
@@ -152,6 +152,12 @@ pub fn start(
             )
             .wrap(rate_limit.clone())
             .wrap(cors)
+            // Registered last so it wraps outermost and runs first: a request
+            // that did not come through Cloudflare is refused before it can
+            // consume a rate-limit token or touch any handler.
+            .wrap(crate::middleware::cloudflare::CloudflareOrigin::new(
+                cf_origin_secret.clone(),
+            ))
             .wrap(
                 DefaultHeaders::new()
                     .add(("X-Content-Type-Options", "nosniff"))
@@ -193,6 +199,7 @@ pub fn start(
             .app_data(web::Data::new(presence_service.clone()))
             .app_data(web::Data::new(sse_connection_tracker.clone()))
             .service(public_config::get)
+            .service(health::health)
             .service(item::get)
             .service(items::get)
             .service(items::search)
@@ -243,6 +250,28 @@ pub fn start(
     })
     .bind(format!("{host}:{port}"))?
     .run())
+}
+
+/// Mount the Swagger UI when the build includes it and `enable_docs` is set.
+#[cfg(feature = "swagger-ui")]
+fn configure_docs(cfg: &mut web::ServiceConfig, enable_docs: bool) {
+    if enable_docs {
+        cfg.service(
+            SwaggerUi::new("/swagger-ui/{_:.*}").url("/api-docs/openapi.json", ApiDoc::openapi()),
+        );
+    }
+}
+
+/// Stand-in for builds without the `swagger-ui` feature. Warns rather than
+/// failing silently: `enable_docs = true` in a binary that cannot serve the UI
+/// is a config mistake worth surfacing, not a no-op.
+#[cfg(not(feature = "swagger-ui"))]
+fn configure_docs(_cfg: &mut web::ServiceConfig, enable_docs: bool) {
+    if enable_docs {
+        log::warn!(
+            "enable_docs = true but this binary was built without the `swagger-ui` feature — /swagger-ui/ will not be served"
+        );
+    }
 }
 
 /// Scrub high-entropy URL-segment secrets from a request path before it

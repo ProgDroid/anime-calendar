@@ -2,6 +2,7 @@ pub mod account;
 pub mod auth;
 pub mod calendar;
 pub mod email_verification;
+pub mod health;
 pub mod item;
 pub mod items;
 pub mod oauth;

@@ -50,11 +50,11 @@ fn build_url(host: &str, port: u16, password: &SecretString) -> String {
 pub struct RedisPubSub {
     publisher: MultiplexedConnection,
     subscribers: Arc<RwLock<HashMap<String, Sender<String>>>>,
-    /// Connection host — stored separately so subscriber tasks can rebuild the
-    /// URL without embedding credentials in a plain-text struct field.
-    host: String,
-    port: u16,
-    password: SecretString,
+    /// Connection URL, kept so subscriber tasks can reconnect after a drop.
+    /// Held as [`SecretString`] because it embeds the password — same
+    /// protection the separate password field used to provide, now covering
+    /// the whole string.
+    url: SecretString,
 }
 
 impl RedisPubSub {
@@ -68,8 +68,16 @@ impl RedisPubSub {
     /// established.
     pub async fn new(host: &str, port: u16, password: &str) -> ServerResult<Self> {
         let password = SecretString::from(password.to_owned());
-        let url = build_url(host, port, &password);
+        Self::from_url(&build_url(host, port, &password)).await
+    }
 
+    /// Create a `RedisPubSub` from a full Redis URL. `rediss://` selects TLS,
+    /// which managed providers generally require.
+    ///
+    /// # Errors
+    /// Returns [`Error::Redis`] if the publisher connection cannot be
+    /// established.
+    pub async fn from_url(url: &str) -> ServerResult<Self> {
         let client = Client::open(url).map_err(|e| Error::Redis(e.to_string()))?;
         let publisher = client
             .get_multiplexed_async_connection()
@@ -79,9 +87,7 @@ impl RedisPubSub {
         Ok(Self {
             publisher,
             subscribers: Arc::new(RwLock::new(HashMap::new())),
-            host: host.to_owned(),
-            port,
-            password,
+            url: SecretString::from(url.to_owned()),
         })
     }
 
@@ -173,24 +179,14 @@ impl RedisPubSub {
         // lock would be held across the network round-trip.
         drop(map);
 
-        let host = self.host.clone();
-        let port = self.port;
-        let password = self.password.clone();
+        let url = self.url.clone();
         let channel_owned = channel.to_owned();
         let subscribers = self.subscribers.clone();
         let tx_for_task = tx.clone();
 
         tokio::spawn(async move {
-            Self::run_subscriber_task(
-                host,
-                port,
-                password,
-                &channel_owned,
-                tx_for_task,
-                subscribers,
-                ready_tx,
-            )
-            .await;
+            Self::run_subscriber_task(url, &channel_owned, tx_for_task, subscribers, ready_tx)
+                .await;
         });
 
         // Wait for the background task to confirm the SUBSCRIBE handshake.
@@ -215,9 +211,7 @@ impl RedisPubSub {
     /// dropped — in which case the task exits cleanly.
     #[allow(clippy::too_many_arguments)]
     async fn run_subscriber_task(
-        host: String,
-        port: u16,
-        password: SecretString,
+        url: SecretString,
         channel: &str,
         tx: Sender<String>,
         subscribers: Arc<RwLock<HashMap<String, Sender<String>>>>,
@@ -237,9 +231,8 @@ impl RedisPubSub {
                 break;
             }
 
-            let url = build_url(&host, port, &password);
             let connect_result = async {
-                let client = Client::open(url).map_err(|e| e.to_string())?;
+                let client = Client::open(url.expose_secret()).map_err(|e| e.to_string())?;
                 let mut pubsub = client.get_async_pubsub().await.map_err(|e| e.to_string())?;
                 pubsub.subscribe(channel).await.map_err(|e| e.to_string())?;
                 Ok::<_, String>(pubsub)

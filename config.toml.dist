@@ -11,13 +11,30 @@ cookie_secure = false
 # clients connect directly a forged header must never pick the bucket.
 trust_proxy_header = false
 # Set to true only in development — exposes full API surface at /swagger-ui/
+# Requires the `swagger-ui` cargo feature (on by default); a binary built with
+# --no-default-features logs a warning and serves nothing here.
 enable_docs = false
+
+# Cookie domain for cross-subdomain auth (e.g. ".yourdomain.com"), so the app
+# and api subdomains share one session. Leave unset in local dev — host-only
+# cookies are correct there.
+# cookie_domain = ".yourdomain.com"
+
+# Shared secret Cloudflare injects as X-CF-Origin-Secret. When set, requests
+# without a matching header are rejected with 403, so the origin cannot be
+# reached directly, bypassing the edge. Leave unset in local dev: unset or
+# empty disables the check.
+# cf_origin_secret = ""
 
 [redis]
 host = "127.0.0.1"
 port = 6379
 password = ""
 db = 0
+# Full connection URL, overriding host/port/password above. Required for
+# managed providers, which mandate TLS (`rediss://`). Used by the cache, the
+# Pub/Sub client and the presence service alike.
+# url = "rediss://default:<token>@<host>:6379"
 
 app_base_url = "http://localhost:5173"
 

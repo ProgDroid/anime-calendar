@@ -45,6 +45,15 @@ impl PresenceService {
                 pw_val = pw.expose_secret()
             )
         };
+        Self::from_url(&url, ttl_seconds).await
+    }
+
+    /// Create a `PresenceService` from a full Redis URL. `rediss://` selects
+    /// TLS, which managed providers generally require.
+    ///
+    /// # Errors
+    /// Returns [`crate::error::Error::Redis`] if the connection fails.
+    pub async fn from_url(url: &str, ttl_seconds: u64) -> ServerResult<Self> {
         let client = Client::open(url).map_err(|e| crate::error::Error::Redis(e.to_string()))?;
         let redis = client
             .get_multiplexed_async_connection()

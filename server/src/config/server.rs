@@ -49,6 +49,16 @@ pub struct Server {
     pub limits: LimitsConfig,
     #[serde(default)]
     pub sharing: SharingConfig,
+    /// Shared secret injected by Cloudflare via the `X-CF-Origin-Secret`
+    /// header. When set, requests arriving without it are rejected — this is
+    /// what stops traffic bypassing Cloudflare and hitting Cloud Run directly.
+    #[serde(default)]
+    pub cf_origin_secret: Option<String>,
+    /// Cookie domain (e.g. `.yourdomain.com`). When set, auth cookies carry
+    /// `Domain=<value>` so they are shared across subdomains. Leave unset in
+    /// local dev, where host-only cookies are correct.
+    #[serde(default)]
+    pub cookie_domain: Option<String>,
 }
 
 #[must_use]
@@ -66,6 +76,10 @@ pub struct RedisConfig {
     pub port: u16,
     pub password: String,
     pub db: u8,
+    /// Full Redis URL (e.g. `rediss://...` for Upstash TLS). When set, the
+    /// individual host/port/password/db fields above are ignored.
+    #[serde(default)]
+    pub url: Option<String>,
 }
 
 impl Default for Server {
@@ -91,7 +105,36 @@ impl Default for Server {
             cache: CacheConfig::default(),
             limits: LimitsConfig::default(),
             sharing: SharingConfig::default(),
+            cf_origin_secret: None,
+            cookie_domain: None,
         }
+    }
+}
+
+impl RedisConfig {
+    /// The URL every Redis consumer should connect with: the explicit `url`
+    /// when set (Upstash and friends hand out a full `rediss://` string),
+    /// otherwise one assembled from the individual fields.
+    ///
+    /// Returned as a `SecretString` because it embeds the password. Resolving
+    /// this in one place matters: the cache, the Pub/Sub client and the
+    /// presence service each open their own connection, and if only some of
+    /// them honoured `url` the rest would quietly dial localhost.
+    #[must_use]
+    pub fn connection_url(&self) -> SecretString {
+        self.url.clone().map_or_else(
+            || {
+                if self.password.is_empty() {
+                    SecretString::from(format!("redis://{}:{}", self.host, self.port))
+                } else {
+                    SecretString::from(format!(
+                        "redis://:{}@{}:{}",
+                        self.password, self.host, self.port
+                    ))
+                }
+            },
+            SecretString::from,
+        )
     }
 }
 
@@ -102,6 +145,7 @@ impl Default for RedisConfig {
             port: 6379,
             password: String::new(),
             db: 0,
+            url: None,
         }
     }
 }
@@ -378,6 +422,70 @@ impl Default for MetricsConfig {
 mod tests {
     use super::*;
 
+    /// Every field `Server` requires, so the env layer is exercised standalone.
+    fn required() -> Vec<(&'static str, &'static str)> {
+        vec![
+            ("HOST", "0.0.0.0"),
+            ("PORT", "8080"),
+            ("LOG_LEVEL", "info"),
+            ("GOOGLE_CLIENT_ID", "cid.apps.googleusercontent.com"),
+            ("JWT_SECRET", "s3cret"),
+            ("COMPRESS", "true"),
+            ("REDIS__HOST", "127.0.0.1"),
+            ("REDIS__PORT", "6379"),
+            ("REDIS__PASSWORD", ""),
+            ("REDIS__DB", "0"),
+        ]
+    }
+
+    /// The whole point of Task 2: Cloud Run mounts no config.toml, so the env
+    /// layer alone has to produce a usable Server config.
+    #[test]
+    fn loads_from_environment_with_no_config_file() {
+        let cfg = Server::from_env_map(&required()).expect("env-only load should succeed");
+        assert_eq!(cfg.host, "0.0.0.0");
+        assert_eq!(cfg.port, 8080);
+        assert_eq!(cfg.log_level, "info");
+        assert!(cfg.compress, "try_parsing should coerce \"true\" to a bool");
+    }
+
+    /// `__` is the nesting separator; a single underscore is part of the name.
+    /// If that ever flipped, `LOG_LEVEL` would become `log.level` and silently
+    /// stop applying.
+    #[test]
+    fn single_underscore_is_part_of_the_name_not_a_separator() {
+        let cfg = Server::from_env_map(&required()).expect("load should succeed");
+        assert_eq!(cfg.log_level, "info");
+    }
+
+    /// The deploy workflow injects `REDIS__URL` for Upstash TLS; it must land on
+    /// the nested redis config, not a top-level key.
+    #[test]
+    fn redis_url_env_var_maps_to_nested_redis_url() {
+        let mut vars = required();
+        vars.push(("REDIS__URL", "rediss://default:tok@eu1.upstash.io:6379"));
+        let cfg = Server::from_env_map(&vars).expect("load should succeed");
+        assert_eq!(
+            cfg.redis.url.as_deref(),
+            Some("rediss://default:tok@eu1.upstash.io:6379")
+        );
+    }
+
+    /// Both new fields default to None so existing deployments are unaffected.
+    #[test]
+    fn cf_origin_secret_and_cookie_domain_default_to_none_and_accept_env() {
+        let cfg = Server::from_env_map(&required()).expect("load should succeed");
+        assert!(cfg.cf_origin_secret.is_none());
+        assert!(cfg.cookie_domain.is_none());
+
+        let mut vars = required();
+        vars.push(("CF_ORIGIN_SECRET", "cf-shared-secret"));
+        vars.push(("COOKIE_DOMAIN", ".example.com"));
+        let cfg = Server::from_env_map(&vars).expect("load should succeed");
+        assert_eq!(cfg.cf_origin_secret.as_deref(), Some("cf-shared-secret"));
+        assert_eq!(cfg.cookie_domain.as_deref(), Some(".example.com"));
+    }
+
     #[test]
     fn metrics_config_defaults_to_loopback_9090_enabled() {
         let cfg = MetricsConfig::default();
@@ -453,14 +561,50 @@ impl AppBaseUrl {
 }
 
 impl Server {
+    /// Load configuration from `config.toml`, then let environment variables
+    /// override it. Cloud Run ships no config file, so the env layer has to
+    /// work standalone — hence `required(false)` on the file source.
+    ///
+    /// Env vars are read **unprefixed** with `__` as the nesting separator:
+    /// `PORT` sets `port`, `LOG_LEVEL` sets `log_level` (a single underscore
+    /// is part of the name, not a separator), and `REDIS__URL` sets
+    /// `redis.url`. Unprefixed is deliberate here: Cloud Run injects `PORT`
+    /// itself and the container must honour it. The trade-off is that an
+    /// ambient variable sharing a field's name (`HOST`, `COMPRESS`) will also
+    /// be picked up — see `Database::new`, which is prefixed precisely
+    /// because its field names are far more collision-prone.
+    ///
     /// # Errors
-    /// Returns `ConfigError` if config file is invalid or not found
+    /// Returns `ConfigError` if config is invalid
     pub fn new() -> std::result::Result<Self, ConfigError> {
-        let server_config = Config::builder()
-            .add_source(File::with_name(CONFIG_FILE))
-            .build()?;
+        Config::builder()
+            .add_source(File::with_name(CONFIG_FILE).required(false))
+            .add_source(Self::env_source())
+            .build()?
+            .try_deserialize()
+    }
 
-        server_config.try_deserialize()
+    /// The env layer, shared by `new` and the tests so they exercise the real
+    /// separator rather than a copy that could drift.
+    fn env_source() -> config::Environment {
+        config::Environment::default()
+            .separator("__")
+            .try_parsing(true)
+    }
+
+    /// Env-only load for tests: deliberately skips the file source so results
+    /// do not depend on whether a `config.toml` exists on the machine running
+    /// the suite.
+    #[cfg(test)]
+    fn from_env_map(vars: &[(&str, &str)]) -> std::result::Result<Self, ConfigError> {
+        let map: config::Map<String, String> = vars
+            .iter()
+            .map(|(k, v)| ((*k).to_owned(), (*v).to_owned()))
+            .collect();
+        Config::builder()
+            .add_source(Self::env_source().source(Some(map)))
+            .build()?
+            .try_deserialize()
     }
 
     /// Reject configurations that would be unsafe in production. Currently:
@@ -505,4 +649,7 @@ impl JwtSecret {
 #[derive(Clone)]
 pub struct CookieSettings {
     pub secure: bool,
+    /// When set, cookies are issued with `Domain=<value>` so they are valid
+    /// across subdomains (app + api). `None` yields host-only cookies.
+    pub domain: Option<String>,
 }

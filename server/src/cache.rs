@@ -40,6 +40,15 @@ impl Cache {
             format!("redis://:{password}@{host}:{port}")
         };
 
+        Self::from_url(&url).await
+    }
+
+    /// Connect using a full Redis URL. `rediss://` selects TLS, which managed
+    /// providers generally require.
+    ///
+    /// # Errors
+    /// Fails if the URL is invalid or the connection fails.
+    pub async fn from_url(url: &str) -> RedisResult<Self> {
         let client = Client::open(url)?;
         let connection = client.get_multiplexed_async_connection().await?;
 
@@ -735,6 +744,33 @@ mod tests {
         assert_eq!(
             result, 99,
             "should return cached value, not fetch_fn result"
+        );
+    }
+}
+
+#[cfg(test)]
+mod tls_support {
+    use super::*;
+
+    /// `rediss://` needs a `tls-*` feature on the `redis` crate. Without one the
+    /// client fails with `InvalidClientConfig` ("can't connect with TLS, the
+    /// feature is not enabled") *before* any network I/O — so a managed Redis
+    /// would take startup down on the first connect, not degrade quietly.
+    ///
+    /// Port 1 is closed, so a connection-level error is the success condition:
+    /// it proves TLS was compiled in and the client got as far as dialling.
+    /// Deliberately asserts on the error *kind* rather than connecting, so the
+    /// test needs no TLS server and no network.
+    #[tokio::test]
+    async fn rediss_scheme_is_supported_by_the_enabled_feature_set() {
+        let Err(err) = Cache::from_url("rediss://127.0.0.1:1/").await else {
+            panic!("port 1 should not accept connections");
+        };
+        assert_ne!(
+            err.kind(),
+            redis::ErrorKind::InvalidClientConfig,
+            "rediss:// was rejected before dialling — the redis dependency is \
+             missing a tls-* feature (see server/Cargo.toml): {err}"
         );
     }
 }

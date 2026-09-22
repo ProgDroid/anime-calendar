@@ -3,3 +3,12 @@ port = 9647
 database = "db"
 user = "user"
 pass = "pass"
+
+# Full connection string, overriding every field above. Managed Postgres
+# providers hand one out complete with required query parameters (such as
+# ?sslmode=require) that rebuilding from the fields would drop.
+# url = "postgres://user:pass@host/db?sslmode=require"
+#
+# Every field here can also be supplied by environment variable with a
+# DATABASE__ prefix (DATABASE__URL, DATABASE__HOST, ...), which is how
+# container platforms that mount no config file are expected to configure it.
