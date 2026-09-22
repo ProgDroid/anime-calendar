@@ -37,3 +37,6 @@ pnpm-debug.log*
 .ruff_cache
 
 openapi.json
+
+# Semgrep auth (OAuth access + refresh tokens)
+.semgrep/

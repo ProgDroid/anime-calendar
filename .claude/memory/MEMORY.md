@@ -4,6 +4,8 @@
 
 ## Project state & references
 
+- [DEPLOY: readiness + open decisions](project_deploy_readiness_and_open_decisions.md) — read `docs/deployment-readiness.md` first on any deploy ask; Postgres + Redis choices still open (2026-09-10).
+- [User: GCP/Cloud Run experience](user_gcp_cloud_run_experience.md) — substantial prior Cloud Run work; don't price in learning curve.
 - [Tech Stack](project_tech_stack.md) — Rust/Actix/PG/Redis backend; Vue3/TS/Tailwind/Pinia frontend (DaisyUI evicted).
 - [Conventions](project_conventions.md) — error doc comments, DI via web::Data, tests in-file, all strings i18n (both locales).
 - [Audit tracker](reference_deep_dive_plan.md) — findings + status live in `AUDIT.md` at repo root. Read first on any "continue the audit".
